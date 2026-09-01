@@ -167,11 +167,11 @@ class OmittedArgDataModel(DataModel):
     def get_argument_type(self):
         return ()
 
-    def as_argument(self, builder, val):
+    def as_argument(self, builder, value):
         return ()
 
-    def from_argument(self, builder, val):
-        assert val == (), val
+    def from_argument(self, builder, value):
+        assert value == (), value
         return None
 
 

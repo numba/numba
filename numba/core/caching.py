@@ -6,11 +6,11 @@ Caching mechanism for compiled functions.
 from abc import ABCMeta, abstractmethod
 import contextlib
 import errno
+import functools
 import hashlib
 import importlib
 import inspect
 import itertools
-from math import floor
 import os
 import pickle
 import sys
@@ -23,7 +23,7 @@ import zipfile
 from pathlib import Path
 
 import numba
-from numba.core.errors import NumbaWarning
+from numba.core.errors import NumbaWarning, NumbaDeprecationWarning
 from numba.core.base import BaseContext
 from numba.core.codegen import CodeLibrary
 from numba.core.compiler import CompileResult
@@ -157,6 +157,25 @@ class _CacheLocator(metaclass=ABCMeta):
         return '_'.join([parentdir, hashed])
 
 
+@functools.lru_cache(maxsize=None)
+def _hash_source_file(path, st_mtime, st_size):
+    # Note: keep the arguments to this function so that the memoization key is
+    # based on the file's mtime and size, so that if the file changes while
+    # the process is running, it will be re-hashed.
+    with open(path, 'rb') as f:
+        return hashlib.sha256(f.read()).digest()
+
+
+@functools.lru_cache(maxsize=None)
+def _hash_zipped_source_file(zip_path, internal_path, st_mtime, st_size):
+    # Note: keep the arguments to this function so that the memoization key is
+    # based on the zip file's mtime and size, so that if the file changes
+    # while the process is running, it will be re-hashed.
+    with zipfile.ZipFile(zip_path) as zf:
+        with zf.open(internal_path) as f:
+            return hashlib.sha256(f.read()).digest()
+
+
 class _SourceFileBackedLocatorMixin(object):
     """
     A cache locator mixin for functions which are backed by a well-known
@@ -165,12 +184,11 @@ class _SourceFileBackedLocatorMixin(object):
 
     def get_source_stamp(self):
         if getattr(sys, 'frozen', False):
-            st = os.stat(sys.executable)
+            path = sys.executable
         else:
-            st = os.stat(self._py_file)
-        # We use both timestamp and size as some filesystems only have second
-        # granularity.
-        return st.st_mtime, st.st_size
+            path = self._py_file
+        st = os.stat(path)
+        return _hash_source_file(path, st.st_mtime, st.st_size)
 
     def get_disambiguator(self):
         return str(self._lineno)
@@ -231,11 +249,21 @@ class InTreeCacheLocatorFsAgnostic(InTreeCacheLocator):
     A locator for functions backed by a regular Python module with a
     writable __pycache__ directory. This version is agnostic to filesystem differences,
     e.g. timestamp precision with milliseconds.
+
+    .. deprecated::
+        Source stamps are now content hashes, which are already
+        filesystem-agnostic. Use :class:`InTreeCacheLocator` instead.
     """
 
-    def get_source_stamp(self):
-        st = super().get_source_stamp()
-        return floor(st[0]), st[1]
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "InTreeCacheLocatorFsAgnostic is deprecated; source stamps are "
+            "now content hashes, which are already filesystem-agnostic. "
+            "Use InTreeCacheLocator instead.",
+            NumbaDeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
 
 
 class UserWideCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
@@ -357,7 +385,8 @@ class ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
 
     def get_source_stamp(self):
         st = os.stat(self._zip_path)
-        return st.st_mtime, st.st_size
+        return _hash_zipped_source_file(self._zip_path, self._internal_path,
+                                        st.st_mtime, st.st_size)
 
     @classmethod
     def from_function(cls, py_func, py_file):

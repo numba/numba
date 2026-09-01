@@ -5,7 +5,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from unittest import skip
+import textwrap
+from unittest import mock
 from ctypes import *
 
 import numpy as np
@@ -13,9 +14,11 @@ import numpy as np
 import llvmlite.binding as ll
 
 from numba.core import utils
-from numba.tests.support import (TestCase, tag, import_dynamic, temp_directory,
-                                 has_blas, needs_setuptools, skip_if_py313plus_on_windows,
-                                 skip_if_linux_aarch64, skip_if_freethreading)
+from numba.tests.support import (TestCase, import_dynamic, temp_directory, has_blas,
+                                 needs_setuptools, skip_if_py313plus_on_windows,
+                                 skip_if_linux_aarch64, skip_if_freethreading,
+                                 skip_if_windows)
+from numba import cext
 
 import unittest
 
@@ -54,6 +57,22 @@ class TestCompilerChecks(TestCase):
         if is_running_conda_build:
             if os.environ.get('VSINSTALLDIR', None) is not None:
                 self.assertTrue(external_compiler_works())
+
+
+class TestExtensionLibs(TestCase):
+
+    def test_get_extension_libs_is_sorted(self):
+        fake_listing = ['setobject.c', 'listobject.c', 'utils.c',
+                        'dictobject.c', 'README.txt']
+        base = cext.get_path()
+        with mock.patch('numba.cext.os.listdir', return_value=fake_listing):
+            libs = cext.get_extension_libs()
+
+        expected = sorted(
+            os.path.join(base, fn) for fn in fake_listing if fn.endswith('.c')
+        )
+        self.assertEqual(libs, expected)
+        self.assertEqual(libs, sorted(libs))
 
 
 @skip_if_freethreading
@@ -265,6 +284,249 @@ class TestCC(BasePYCCTest):
             got = lib.dict_usecase(arr)
             expect = arr * arr
             self.assertPreciseEqual(got, expect)
+
+    def _check_reproducible_build(self, build_script, out_name):
+        """Compile the CC defined by ``build_script`` in two fresh
+        subprocesses and return the MD5 of each produced shared object.
+
+        Re-running compilation in the same process re-uses the same
+        Python objects, so any ``id(obj)``-based names happen to match
+        by accident. To exercise the non-determinism path we must build
+        in two fresh subprocesses.
+        """
+        import hashlib
+
+        def build():
+            outdir = tempfile.mkdtemp(dir=self.tmpdir)
+            subprocess.check_call(
+                [sys.executable, "-c", build_script, outdir]
+            )
+            with open(os.path.join(outdir, out_name), "rb") as fh:
+                return hashlib.md5(fh.read()).hexdigest()
+
+        return build(), build()
+
+    # Windows needs /Brepro to get deterministic TimeDateStamp, which is not
+    # related to the non-determinism issue reported in #10610
+    @skip_if_windows
+    def test_reproducible_build(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT-compiled extensions should be byte-for-byte reproducible
+        across independent processes that compile the same source.
+        """
+        script = (
+            "import sys\n"
+            "sys.path.insert(0, %r)\n"
+            "import importlib\n"
+            "from numba.tests import compile_with_pycc\n"
+            "importlib.reload(compile_with_pycc)\n"
+            "cc = compile_with_pycc.cc\n"
+            "cc.output_dir = sys.argv[1]\n"
+            "cc.compile()\n"
+        ) % (base_path,)
+        h1, h2 = self._check_reproducible_build(
+            script, self._test_module.cc.output_file,
+        )
+        self.assertEqual(h1, h2,
+                         "AOT binary is not reproducible across builds")
+
+    @unittest.expectedFailure
+    @skip_if_windows
+    def test_reproducible_build_jitclass(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT modules that use ``@jitclass`` previously embedded
+        ``id(ClassType)`` into the mangled LLVM symbol names (via
+        ``numba.core.types.misc.ClassType.__init__``), making the
+        emitted binary non-reproducible.
+        """
+        script = textwrap.dedent("""
+            import sys
+            from numba.pycc import CC
+            from numba.experimental import jitclass
+            from numba import types
+
+            @jitclass([('x', types.int64)])
+            class Foo:
+                def __init__(self, v):
+                    self.x = v
+                def get(self):
+                    return self.x
+
+            cc = CC('aot_repro_jitclass')
+            cc.use_nrt = True
+
+            @cc.export('use_foo', 'i8(i8)')
+            def use_foo(v):
+                return Foo(v).get()
+
+            cc.output_dir = sys.argv[1]
+            cc.compile()
+        """)
+        from numba.pycc import CC
+        out_name = CC('aot_repro_jitclass').output_file
+        h1, h2 = self._check_reproducible_build(script, out_name)
+        self.assertEqual(h1, h2,
+                         "AOT jitclass binary is not reproducible")
+
+    @unittest.expectedFailure
+    @skip_if_windows
+    def test_reproducible_build_recursive_type(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT modules that use a recursive (deferred) jitclass previously
+        embedded both ``id(ClassType)`` and ``id(DeferredType)`` into
+        the mangled LLVM symbol names (see ``numba.core.types.misc``),
+        making the emitted binary non-reproducible.
+        """
+        script = textwrap.dedent("""
+            import sys
+            from numba.pycc import CC
+            from numba.experimental import jitclass
+            from numba import types, deferred_type, optional
+
+            node_type = deferred_type()
+
+            @jitclass([('value', types.int64),
+                       ('next', optional(node_type))])
+            class Node:
+                def __init__(self, v):
+                    self.value = v
+                    self.next = None
+
+            node_type.define(Node.class_type.instance_type)
+
+            cc = CC('aot_repro_recursive')
+            cc.use_nrt = True
+
+            @cc.export('mklen', 'i8(i8)')
+            def mklen(n):
+                head = Node(0)
+                cur = head
+                for i in range(1, n):
+                    nxt = Node(i)
+                    cur.next = nxt
+                    cur = nxt
+                count = 0
+                p = head
+                while p is not None:
+                    count += 1
+                    p = p.next
+                return count
+
+            cc.output_dir = sys.argv[1]
+            cc.compile()
+        """)
+        from numba.pycc import CC
+        out_name = CC('aot_repro_recursive').output_file
+        h1, h2 = self._check_reproducible_build(script, out_name)
+        self.assertEqual(h1, h2,
+                         "AOT recursive-type binary is not reproducible")
+
+    @unittest.expectedFailure
+    @skip_if_windows
+    def test_reproducible_build_stencil(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT modules that use ``@stencil`` previously embedded
+        ``hex(id(the_array))`` into the generated stencil function
+        name (see ``numba.stencils.stencil``), making the emitted
+        binary non-reproducible.
+        """
+        script = textwrap.dedent("""
+            import sys
+            from numba import stencil
+            from numba.pycc import CC
+
+            @stencil
+            def kernel(a):
+                return 0.25 * (a[-1] + a[1] + a[0] + a[0])
+
+            cc = CC('aot_repro_stencil')
+            cc.use_nrt = True
+
+            @cc.export('blur', 'f8[:](f8[:])')
+            def blur(a):
+                return kernel(a)
+
+            cc.output_dir = sys.argv[1]
+            cc.compile()
+        """)
+        from numba.pycc import CC
+        out_name = CC('aot_repro_stencil').output_file
+        h1, h2 = self._check_reproducible_build(script, out_name)
+        self.assertEqual(h1, h2,
+                         "AOT stencil binary is not reproducible")
+
+    @skip_if_windows
+    @unittest.expectedFailure
+    def test_reproducible_build_set_iteration_order(self):
+        """See https://github.com/numba/numba/issues/10610
+
+        AOT modules where two @jitclass classes share the same ``__name__``
+        and are created inside a set-of-strings iteration must produce
+        byte-for-byte identical binaries regardless of PYTHONHASHSEED.
+
+        Seeds 0 and 2 are known to produce different frozenset({"int64",
+        "float64"}) iteration orders on CPython, so they reliably expose any
+        counter-based (ordering-dependent) naming scheme.
+        """
+        import hashlib, os
+
+        script = textwrap.dedent("""
+            import sys
+            from numba.pycc import CC
+            from numba.experimental import jitclass
+            from numba import types
+
+            cc = CC('aot_counter_nondeterminism')
+            cc.use_nrt = True
+
+            # frozenset of strings: iteration order varies with PYTHONHASHSEED.
+            # Both strings map to a distinct field type; the jitclass named
+            # "Foo" is created for each in that (non-deterministic) order.
+            # A content-based naming scheme must assign the same tag to the
+            # int64 variant regardless of which string comes first.
+            int64_Foo = None
+            for key in frozenset({"int64", "float64"}):
+                ft = types.int64 if key == "int64" else types.float64
+
+                @jitclass([("x", ft)])
+                class Foo:
+                    def __init__(self, v):
+                        self.x = v
+                    def get(self):
+                        return self.x
+
+                if key == "int64":
+                    int64_Foo = Foo
+
+            @cc.export("use_int_foo", "i8(i8)")
+            def use_int_foo(v):
+                return int64_Foo(v).get()
+
+            cc.output_dir = sys.argv[1]
+            cc.compile()
+        """)
+
+        from numba.pycc import CC
+        out_name = CC('aot_counter_nondeterminism').output_file
+
+        def build_with_seed(seed):
+            outdir = tempfile.mkdtemp(dir=self.tmpdir)
+            env = {**os.environ, "PYTHONHASHSEED": str(seed)}
+            subprocess.check_call(
+                [sys.executable, "-c", script, outdir], env=env
+            )
+            with open(os.path.join(outdir, out_name), "rb") as fh:
+                return hashlib.md5(fh.read()).hexdigest()
+
+        h0 = build_with_seed(0)
+        h2 = build_with_seed(2)
+        self.assertEqual(h0, h2,
+                         "AOT binary differs across PYTHONHASHSEED values — "
+                         "ClassType naming is ordering-dependent")
 
     def test_dynamic_exc(self):
         """See https://github.com/numba/numba/issues/9948

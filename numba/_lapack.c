@@ -238,12 +238,31 @@ if (check_func(__FUNC))                   \
 
 
 /*
- * Define what a Fortran "int" is, some LAPACKs have 64 bit integer support
- * numba presently opts for a 32 bit C int.
- * This definition allows scope for later configuration time magic to adjust
- * the size of int at all the call sites.
+ * Define what a Fortran "int" is. The width is a *build-time* decision,
+ * fixed by NUMBA_LAPACK_BUILD_ILP64 -- a macro baked in via
+ * Extension(define_macros=...) in setup.py, driven by the
+ * NUMBA_LAPACK_ILP64 build-time environment variable (see the "Build time
+ * environment variables" section of the install docs). It is not
+ * re-probed or chosen at runtime.
+ *
+ * Which width is *correct* to call through is a property of the scipy
+ * actually installed: scipy.linalg.cython_blas/cython_lapack are compiled
+ * for exactly one ABI, LP64 or ILP64, recorded in
+ * scipy.__config__.CONFIG['Build Dependencies']['blas']['cython blas
+ * ilp64']. numba.np.linalg._check_lapack_int_width() compares the
+ * build-time choice made here against the scipy actually present at
+ * runtime, and raises if they disagree, rather than silently doing the
+ * wrong thing.
  */
-#define F_INT int
+#ifndef NUMBA_LAPACK_BUILD_ILP64
+#define NUMBA_LAPACK_BUILD_ILP64 0
+#endif
+
+#if NUMBA_LAPACK_BUILD_ILP64
+typedef npy_int64 F_INT;
+#else
+typedef npy_int32 F_INT;
+#endif
 
 
 typedef float (*sdot_t)(F_INT *n, void *dx, F_INT *incx, void *dy, F_INT *incy);
@@ -1090,7 +1109,7 @@ numba_ez_rsyevd(char kind, char jobz, char uplo, Py_ssize_t n, void *a, Py_ssize
     void *work = NULL;
     F_INT *iwork = NULL;
     all_dtypes stack_slot;
-    int stack_int = -1;
+    F_INT stack_int = -1;
 
     ENSURE_VALID_REAL_KIND(kind)
 
@@ -1173,7 +1192,7 @@ numba_ez_cheevd(char kind, char jobz, char uplo, Py_ssize_t n, void *a, Py_ssize
     F_INT *iwork = NULL;
     all_dtypes stack_slot1, stack_slot2;
     char uf_kind;
-    int stack_int = -1;
+    F_INT stack_int = -1;
 
     ENSURE_VALID_COMPLEX_KIND(kind)
 
@@ -1941,6 +1960,5 @@ numba_xgesv(char kind, Py_ssize_t n, Py_ssize_t nrhs, void *a, Py_ssize_t lda,
 #undef ENSURE_VALID_REAL_KIND
 #undef ENSURE_VALID_COMPLEX_KIND
 #undef ENSURE_VALID_FUNC
-#undef F_INT
 #undef EMIT_GET_CLAPACK_FUNC
 #undef CATCH_LAPACK_INVALID_ARG

@@ -66,7 +66,7 @@ del generate_version_info
 
 
 from numba.core import config
-from numba.core import types, errors
+from numba.core import errors
 
 # Re-export typeof
 from numba.misc.special import (
@@ -78,7 +78,7 @@ from numba.misc.special import (
 from numba.core.errors import *
 
 # Re-export types itself
-import numba.core.types as types
+from numba.core import types as types
 
 # Re-export all type names
 from numba.core.types import *
@@ -144,7 +144,7 @@ __all__ += types.__all__
 __all__ += errors.__all__
 
 
-_min_llvmlite_version = (0, 48, 0)
+_min_llvmlite_version = (0, 50, 0)
 _min_llvm_version = (14, 0, 0)
 
 def _ensure_llvm():

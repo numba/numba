@@ -119,6 +119,18 @@ def array_nanprod(arr):
 def array_nanstd(arr):
     return np.nanstd(arr)
 
+def array_nanstd_ddof0(arr):
+    return np.nanstd(arr, ddof=0)
+
+def array_nanstd_ddof1(arr):
+    return np.nanstd(arr, ddof=1)
+
+def array_nanvar_ddof0(arr):
+    return np.nanvar(arr, ddof=0)
+
+def array_nanvar_ddof1(arr):
+    return np.nanvar(arr, ddof=1)
+
 def array_nanvar(arr):
     return np.nanvar(arr)
 
@@ -505,6 +517,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         expected = np.mean(arr)
         self.assertPreciseEqual(cfunc(arr), expected)
 
+    def test_mean_count_rounding(self):
+        # Reproducer from issue #10647: 2**24 + 1 is the smallest length
+        # not exactly representable as float32, so any incorrect cast
+        # in the computation will mismatch the np result.
+        n = 2**24 + 1
+        for dtype in (np.float32, np.complex64):
+            arr = np.zeros(n, dtype=dtype)
+            arr[0] = dtype(2**24 - 1)
+            npr, nbr = run_comparative(array_mean, arr)
+            self.assertPreciseEqual(npr, nbr)
+
     def test_mean_empty_timedelta(self):
         """Test that mean of empty timedelta array returns NaT"""
         cfunc = jit(nopython=True)(array_mean)
@@ -595,6 +618,34 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd)
+
+    def test_nanstd_ddof(self):
+        self.check_reduction_basic(array_nanstd_ddof0)
+        self.check_reduction_basic(array_nanstd_ddof1)
+        # test complex branch
+        for arr in full_test_arrays(np.complex64):
+            for pyfunc in (array_nanstd_ddof0, array_nanstd_ddof1):
+                npr, nbr = run_comparative(pyfunc, arr.ravel())
+                self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
+        # complex array containing NaNs
+        arr = np.array([1+2j, np.nan, 3-1j, np.nan, 5+0j], dtype=np.complex64)
+        for pyfunc in (array_nanstd_ddof0, array_nanstd_ddof1):
+            npr, nbr = run_comparative(pyfunc, arr)
+            self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
+
+    def test_nanvar_ddof(self):
+        self.check_reduction_basic(array_nanvar_ddof0, prec='double')
+        self.check_reduction_basic(array_nanvar_ddof1, prec='double')
+        # test complex branch
+        for arr in full_test_arrays(np.complex64):
+            for pyfunc in (array_nanvar_ddof0, array_nanvar_ddof1):
+                npr, nbr = run_comparative(pyfunc, arr.ravel())
+                self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
+        # complex array containing NaNs
+        arr = np.array([1+2j, np.nan, 3-1j, np.nan, 5+0j], dtype=np.complex64)
+        for pyfunc in (array_nanvar_ddof0, array_nanvar_ddof1):
+            npr, nbr = run_comparative(pyfunc, arr)
+            self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
 
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')

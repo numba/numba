@@ -59,11 +59,12 @@ class Slice(ConcreteTemplate):
         signature(types.slice3_type, types.intp, types.intp, types.intp),
         signature(types.slice3_type, types.none, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.none, types.intp),
-        signature(types.slice3_type, types.intp, types.intp, types.none),
-        signature(types.slice3_type, types.intp, types.none, types.none),
-        signature(types.slice3_type, types.none, types.intp, types.none),
         signature(types.slice3_type, types.none, types.none, types.intp),
-        signature(types.slice3_type, types.none, types.none, types.none),
+        # A None step is a step of 1, i.e. a two-member slice.
+        signature(types.slice2_type, types.intp, types.intp, types.none),
+        signature(types.slice2_type, types.intp, types.none, types.none),
+        signature(types.slice2_type, types.none, types.intp, types.none),
+        signature(types.slice2_type, types.none, types.none, types.none),
     ]
 
 
@@ -845,7 +846,7 @@ class TypeRefAttribute(AttributeTemplate):
 
     def resolve___call__(self, classty):
         """
-        Resolve a core number's constructor (e.g. calling int(...))
+        Resolve a Numba type reference's constructor (e.g. calling DictType(...))
 
         Note:
 
@@ -876,7 +877,6 @@ class TypeRefAttribute(AttributeTemplate):
 
             return types.Function(make_callable_template(key=ty,
                                                          typer=Redirect(self.context)))
-
 
 #------------------------------------------------------------------------------
 

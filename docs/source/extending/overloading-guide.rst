@@ -190,3 +190,5 @@ additional things to watch out for.
   terms of accepted types and test coverage.
 
   * ``np.repeat``
+  * ``np.nanvar`` (``ddof`` argument supported; ``axis``, ``dtype``, ``out`` and ``keepdims`` are not supported)
+  * ``np.nanstd`` (``ddof`` argument supported; ``axis``, ``dtype``, ``out`` and ``keepdims`` are not supported)

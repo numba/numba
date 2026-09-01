@@ -14,7 +14,7 @@ def get_extension_libs():
         if fn.endswith('.c'):
             fn = os.path.join(base, fn)
             libs.append(fn)
-    return libs
+    return sorted(libs)
 
 
 def get_path():

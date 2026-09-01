@@ -109,9 +109,10 @@ skip_if_py313plus_on_windows = unittest.skipIf(
      "Not supported on Python 3.13+ on Windows"
  )
 
-skip_if_py314= unittest.skipIf(
-     utils.PYVERSION == (3, 14), "Test unstable on 3.14"
- )
+skip_unless_py314_or_later = unittest.skipUnless(
+    utils.PYVERSION >= (3, 14),
+    "needs Python 3.14+"
+)
 
 skip_if_linux_aarch64 = unittest.skipIf(
     sys.platform.startswith('linux') and platform.machine() == 'aarch64',
@@ -123,6 +124,16 @@ skip_if_32bit = unittest.skipIf(_32bit, "Not supported on 32 bit")
 IS_NUMPY_2 = numpy_support.numpy_version >= (2, 0)
 skip_if_numpy_2 = unittest.skipIf(IS_NUMPY_2,
                                   "Not supported on numpy 2.0+")
+
+# On Linux + x86_64 with NumPy < 1.25, NumPy's sin/cos are less accurate
+# (up to ~4 ULP). NumPy 1.25 improved these to ~1 ULP
+# (https://github.com/numpy/numpy/commit/fe5472f), so results agree more
+# closely. When this flag is True, tests comparing against NumPy sin/cos
+# allow 4 ULP of difference; otherwise they require 1 ULP.
+numpy_sincos_low_precision = (
+    sys.platform.startswith('linux') and platform.machine() == 'x86_64' and
+    numpy_support.numpy_version < (1, 25)
+)
 
 REDUCED_TESTING = bool(int(os.environ.get('_NUMBA_REDUCED_TESTING', 0)))
 """
@@ -141,11 +152,6 @@ skip_if_freethreading = unittest.skipIf(_free_threading,
                                         ("Skipped [NOT APPLICABLE] if using a "
                                          "free-threading build and "
                                          "free-threading is enabled."))
-
-
-skip_if_sysmon_unsupported = unittest.skipIf(
-    sys.version_info[:3] >= (3, 14, 4),
-    "JIT sys.monitoring is not supported on Python 3.14.4+")
 
 
 def expected_failure_py311(fn):
@@ -181,6 +187,29 @@ def expected_failure_np2(fn):
     else:
         return fn
 
+
+def available_memory_bytes():
+    """
+    Best-effort lookup of currently available system memory, in bytes.
+    Returns None if it can't be determined (psutil not installed, and not
+    running on Linux where /proc/meminfo can be read directly).
+    """
+    try:
+        import psutil
+        return psutil.virtual_memory().available
+    except ImportError:
+        pass
+    if sys.platform.startswith("linux"):
+        try:
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemAvailable:"):
+                        return int(line.split()[1]) * 1024
+        except OSError:
+            pass
+    return None
+
+
 _msg = "SciPy needed for test"
 skip_unless_scipy = unittest.skipIf(scipy is None, _msg)
 
@@ -191,6 +220,9 @@ linux_only = unittest.skipIf(not sys.platform.startswith('linux'), _lnx_reason)
 
 _win_reason = 'Windows-only test'
 windows_only = unittest.skipIf(not sys.platform.startswith('win'), _win_reason)
+
+_non_win_reason = 'non Windows test'
+skip_if_windows = unittest.skipIf(sys.platform.startswith('win'), _non_win_reason)
 
 _is_armv7l = platform.machine() == 'armv7l'
 
@@ -233,6 +265,14 @@ IS_MACOS = _uname.system == 'Darwin'
 skip_macos_fenv_errors = unittest.skipIf(IS_MACOS,
     "fenv.h-like functionality unreliable on macOS")
 IS_MACOS_ARM64 = IS_MACOS and _uname.machine == 'arm64'
+IS_WIN_ARM64 = _uname.system == 'Windows' and _uname.machine == 'ARM64'
+# AArch64 uimm12 fixup failure on win-arm64 for large UniTuple(unicode)
+# arguments. https://github.com/numba/numba/issues/10619
+skip_win_arm64_unittuple_uimm12 = unittest.skipIf(
+    IS_WIN_ARM64,
+    "AArch64 uimm12 fixup failure on win-arm64 for large UniTuple(unicode) "
+    "arguments",
+)
 
 try:
     import scipy.linalg.cython_lapack

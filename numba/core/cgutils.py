@@ -959,14 +959,16 @@ def pointer_add(builder, ptr, offset, return_type=None):
     Add an integral *offset* to pointer *ptr*, and return a pointer
     of *return_type* (or, if omitted, the same type as *ptr*).
 
-    Note the computation is done in bytes, and ignores the width of
-    the pointed item type.
+    The computation is done in bytes (ignoring the width of the pointed
+    item type) via a byte-wise getelementptr, so the result keeps the
+    provenance of *ptr*. Only valid when *offset* stays within the object
+    *ptr* points into.
     """
-    intptr = builder.ptrtoint(ptr, intp_t)
     if isinstance(offset, int):
         offset = intp_t(offset)
-    intptr = builder.add(intptr, offset)
-    return builder.inttoptr(intptr, return_type or ptr.type)
+    base = builder.bitcast(ptr, int8_t.as_pointer())
+    addr = builder.gep(base, [offset])
+    return builder.bitcast(addr, return_type or ptr.type)
 
 
 def memset(builder, ptr, size, value):

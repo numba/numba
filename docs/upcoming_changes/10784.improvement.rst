@@ -1,0 +1,7 @@
+Enable using ILP64 BLAS and LAPACK.
+-----------------------------------
+
+Users can opt in to using ILP64 (64-bit integer) LAPACK ABI. To opt in, define
+the ``NUMBA_LAPACK_ILP64=1`` environment variable at numba build time, and
+make sure that SciPy available at run time exports the ILP64 ``cython_lapack`` ABI
+(this currently requires SciPy >= 1.18, built from source).

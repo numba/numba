@@ -37,12 +37,12 @@ _Fingerprintable: TypeAlias = (
     | bytes
     | bytearray
     | memoryview
-    | _array.array
+    | _array.array[Any]
     | _mmap.mmap
     | _HasValue
     | np.generic
-    | np.dtype
-    | np.ndarray
+    | np.dtype[Any]
+    | np.typing.NDArray[Any]
     | tuple["_Fingerprintable", ...]
     | list["_Fingerprintable"]
     | set["_Fingerprintable"]

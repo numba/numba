@@ -660,6 +660,14 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
 
     # 4. replace freevar with actual closure var
     if callee_closure and replace_freevars:
+        # A nonlocal assigned more than once is SSA-versioned (``x``, ``x.1``);
+        # inlining keeps only the base name, dropping later writes (#10379).
+        for freevar in callee_code.co_freevars:
+            if callee_scope.get_versions_of(freevar):
+                msg = ("Reassigning the nonlocal variable '%s' inside an "
+                       "inlined closure is unsupported. Assign it once "
+                       "instead." % (freevar,))
+                raise errors.UnsupportedError(msg, instr.loc)
         closure = func_ir.get_definition(callee_closure)
         debug_print("callee's closure = ", closure)
         if isinstance(closure, tuple):

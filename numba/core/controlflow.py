@@ -635,6 +635,7 @@ class CFGraph(object):
         back_edges = set()
         # stack: keeps track of the traversal path
         stack = []
+        on_stack = set()
         # succs_state: keep track of unvisited successors of a node
         succs_state = {}
 
@@ -642,6 +643,7 @@ class CFGraph(object):
 
         def push_state(node):
             stack.append(node)
+            on_stack.add(node)
             succs_state[node] = [dest for dest in succs[node]]
 
         push_state(entry_point)
@@ -657,7 +659,7 @@ class CFGraph(object):
                 # Check the next successor
                 cur_node = tos_succs.pop()
                 # Is it in our traversal path?
-                if cur_node in stack:
+                if cur_node in on_stack:
                     # Yes, it's a backedge
                     back_edges.add((tos, cur_node))
                 elif cur_node not in checked:
@@ -666,6 +668,7 @@ class CFGraph(object):
             else:
                 # Checked all successors. Pop
                 stack.pop()
+                on_stack.remove(tos)
                 checked.add(tos)
 
         if stats is not None:

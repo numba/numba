@@ -3,7 +3,8 @@ import numpy as np
 
 from numba.core import types
 from numba.core.compiler import compile_extra, Flags
-from numba.tests.support import TestCase, tag, MemoryLeakMixin
+from numba.tests.support import (TestCase, tag, MemoryLeakMixin,
+                                 numpy_sincos_low_precision)
 import unittest
 
 
@@ -533,7 +534,9 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         # Ensure that is really a new overload for the lifted loop
         self.assertEqual(len(lifted.signatures), 2)
 
-
+    # Repeated sin/cos in this loop lets NumPy<1.25 error grow past ULP tolerance.
+    @unittest.skipIf(numpy_sincos_low_precision,
+                     "NumPy<1.25 sincos vs libm")
     def test_lift_objectmode_issue_4223(self):
         from numba import jit
 
@@ -551,7 +554,7 @@ class TestLoopLiftingInAction(MemoryLeakMixin, TestCase):
         got = foo(**kwargs)
         expected = foo.py_func(**kwargs)
         self.assertPreciseEqual(got[0], expected[0])
-        self .assertPreciseEqual(got[1], expected[1])
+        self.assertPreciseEqual(got[1], expected[1])
         [lifted] = foo.overloads[foo.signatures[0]].lifted
         self.assertEqual(len(lifted.nopython_signatures), 1)
 

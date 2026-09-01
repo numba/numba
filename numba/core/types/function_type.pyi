@@ -53,7 +53,6 @@ class FunctionType(Type):
     ftype: Final[FunctionPrototype]
     _key: str
 
-    @override
     def __init__(self, signature: Signature | _LiteralLike[Signature]) -> None: ...
 
     #
@@ -62,11 +61,13 @@ class FunctionType(Type):
     def key(self) -> str: ...
     @property  # type: ignore[misc]
     @override
-    def name(self) -> str: ...
+    def name(self) -> str: ...  # pyrefly:ignore[bad-override]
 
     #
+    @override
     def is_precise(self) -> bool: ...
     def get_precise(self) -> FunctionType: ...
+    @override
     def dump(self, tab: str = "") -> None: ...
     def get_call_type(
         self,
@@ -75,24 +76,19 @@ class FunctionType(Type):
         kws: dict[Never, Never] | None,  # empty dict or None
     ) -> Signature: ...
     def check_signature(self, other_sig: Signature) -> bool: ...
-    def unify(self, context: Context, other: Type) -> Self | None: ...
+    @override
+    def unify(self, typingctx: Context, other: Type) -> Self | None: ...
 
 class UndefinedFunctionType(FunctionType):
     dispatchers: Final[Collection[Dispatcher]]
 
-    @override
-    def __init__(
-        self,
-        nargs: int,
-        dispatchers: Collection[Dispatcher],
-    ) -> None: ...
+    def __init__(self, nargs: int, dispatchers: Collection[Dispatcher]) -> None: ...
 
 class FunctionPrototype(Type):
     cconv: ClassVar[None] = None
     rtype: Type
     atypes: tuple[Type, ...]
 
-    @override
     def __init__(self, rtype: Type, atypes: Iterable[Type]) -> None: ...
 
     #

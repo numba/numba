@@ -6,9 +6,10 @@ on:
   pull_request:
     paths:
       - .github/workflows/numba_linux-64_wheel_builder.yml
-      - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/evaluate.py
       - buildscripts/github/build_wheel_linux.sh
       - buildscripts/github/repair_wheel_linux.sh
+      - buildscripts/github/test_wheel_contents.py
       - setup.py
   workflow_dispatch:
     inputs:
@@ -31,6 +32,7 @@ env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
   CONDA_CHANNEL_NUMBA: numba/label/dev
+  MANYLINUX_IMAGE: "manylinux_2_28_x86_64:2026.08.08-1"
   # Set USE_TBB to true by default, only override if explicitly set to false
   USE_TBB: ${{ github.event_name == 'workflow_dispatch' && inputs.use_tbb != false || true }}
 
@@ -41,29 +43,20 @@ jobs:
       build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
       test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_WORKFLOW_INPUT: ${{ toJson(github.event.inputs) }}
+          GITHUB_PLATFORM: linux-64
+          GITHUB_PKG_TYPE: wheel
         run: |
-          BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
-          TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
-
-          # Add canonical python versions to both matrices (3.14.3t -> 3.14t, 3.14.3 -> 3.14)
-          BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | capture("^(?<v>[0-9]+\\.[0-9]+).*?(?<t>t?)$") | .v + .t)})
-          ')
-
-          TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | capture("^(?<v>[0-9]+\\.[0-9]+).*?(?<t>t?)$") | .v + .t)})
-          ')
-
-          echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
-          echo "Test Matrix JSON: $TEST_MATRIX_EXTENDED"
-          echo "build-matrix-json=$BUILD_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
-          echo "test-matrix-json=$TEST_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+          python buildscripts/github/evaluate.py
 
   linux-64-build:
-    name: linux-64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    name: linux-64-build-wheel (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
     runs-on: ubuntu-latest
     defaults:
@@ -76,7 +69,7 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -84,7 +77,7 @@ jobs:
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: llvmlite-linux-64-py${{ matrix.python_canonical }}
+          name: llvmlite-linux-64-py${{ matrix.python_major_minor }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -105,7 +98,7 @@ jobs:
           # Run the build script inside Docker container
           docker run --rm \
             -v ${{ github.workspace }}:/io \
-            quay.io/pypa/manylinux2014_x86_64 \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
             bash /io/buildscripts/github/build_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
             "${USE_TBB}" \
@@ -128,7 +121,7 @@ jobs:
           # Run the repair script in Docker
           docker run --rm \
             -v ${{ github.workspace }}:/io \
-            quay.io/pypa/manylinux2014_x86_64 \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
             bash /io/buildscripts/github/repair_wheel_linux.sh \
             "$PYTHON_EXECUTABLE" \
             "$USE_TBB" \
@@ -140,7 +133,7 @@ jobs:
       - name: Upload numba wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: numba_linux-64_wheel_py${{ matrix.python_canonical }}
+          name: numba_linux-64_wheel_py${{ matrix.python_major_minor }}
           path: wheelhouse/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -148,7 +141,7 @@ jobs:
 
 
   linux-64-test:
-    name: linux-64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    name: linux-64-test (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, linux-64-build]
     runs-on: ubuntu-latest
     env:
@@ -163,22 +156,22 @@ jobs:
 
     steps:
       - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python_version_full }}
           allow-prereleases: true
 
       - name: Download Numba wheel artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: numba_linux-64_wheel_py${{ matrix.python_canonical }}
+          name: numba_linux-64_wheel_py${{ matrix.python_major_minor }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: llvmlite-linux-64-py${{ matrix.python_canonical }}
+          name: llvmlite-linux-64-py${{ matrix.python_major_minor }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -186,7 +179,9 @@ jobs:
 
       - name: Validate and test wheel
         run: |
-          PYTHON_PATH=$(which python${{ matrix.python_canonical }})
+          # Pin to the setup-python interpreter: a login shell (bash -el) can
+          # re-source profiles and reorder PATH, so bare `python` is unreliable.
+          PYTHON_PATH=$(which python${{ matrix.python_major_minor }})
           $PYTHON_PATH -m pip install --upgrade pip twine
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
@@ -196,7 +191,7 @@ jobs:
           fi
           $PYTHON_PATH -m twine check dist/*.whl
 
-          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} setuptools
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} "setuptools>=69.0.0"
 
           if [ "$USE_TBB" = "true" ]; then
             $PYTHON_PATH -m pip install tbb

@@ -1,11 +1,10 @@
-from itertools import product, cycle
+from itertools import product, cycle, permutations, chain
 import gc
 import sys
 import unittest
 import warnings
 
 import numpy as np
-
 from numba import jit, njit, typeof
 from numba.core import types
 from numba.core.errors import TypingError, NumbaValueError
@@ -205,6 +204,9 @@ def array_sum_dtype_kws(a, dtype):
 def array_sum_axis_dtype_kws(a, dtype, axis):
     return a.sum(axis=axis, dtype=dtype)
 
+def array_cumsum_axis_dtype_kws(a, dtype, axis):
+    return a.cumsum(axis=axis, dtype=dtype)
+
 def array_sum_axis_dtype_pos(a, a1, a2):
     return a.sum(a1, a2)
 
@@ -275,6 +277,9 @@ def array_dot_chain(a, b):
 
 def array_ctor(n, dtype):
     return np.ones(n, dtype=dtype)
+
+def nb_sum_empty_axis(a):
+    return a.sum(axis=())
 
 class TestArrayMethods(MemoryLeakMixin, TestCase):
     """
@@ -1347,58 +1352,56 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         check_err(np.array([1, 2]))
         check_err(np.array([]))
+    
+    def gen_sum_array_cases(self, signed_dtypes, unsigned_dtypes):
+        for arr_dtype in signed_dtypes + unsigned_dtypes:
+            yield np.ones((5, 4, 3), arr_dtype)
+            yield np.ones(1, arr_dtype)
+
+        for arr_dtype in signed_dtypes:
+            yield np.ones((5, 4, 3), arr_dtype) * -5
 
     def test_sum(self):
         """ test sum over a whole range of dtypes, no axis or dtype parameter
         """
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
-                      np.complex64, np.complex128, np.timedelta64]
-        all_test_arrays = [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
-            for arr_dtype in all_dtypes]
+        signed_dtypes = [
+            np.float64, np.float32, np.int64, np.int32,
+            np.complex64, np.complex128,
+            #   TODO: Once hashing of timedelta64 is implemented,
+            #   we can add it to the list of tested dtypes in this test.
+            #   np.timedelta64
+        ]
 
         unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
-        all_test_arrays = [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype)]
-            for arr_dtype in unsigned_dtypes]
 
-        for arr_list in all_test_arrays:
-            for arr in arr_list:
-                with self.subTest("Test np.sum with {} input ".format(arr.dtype)):
-                    self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            with self.subTest("Test np.sum with {} input ".format(arr.dtype)):
+                self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
     def test_sum_axis_kws1(self):
         """ test sum with axis parameter over a whole range of dtypes  """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.complex64,
-                      np.complex128, TIMEDELTA_M]
-        all_test_arrays = [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
-            for arr_dtype in all_dtypes]
+        signed_dtypes_no_int32 = [
+            np.float64, np.float32, np.int64, np.complex64,
+            np.complex128,
+            #   TODO: Once hashing of timedelta64 is implemented,
+            #   we can add it to the list of tested dtypes in this test.
+            #   TIMEDELTA_M
+        ]
 
-        unsigned_dtypes = [np.uint64, np.bool_]
-        all_test_arrays += [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype)]
-            for arr_dtype in unsigned_dtypes]
+        unsigned_dtypes_no_uint32 = [np.uint64, np.bool_]
 
-        for arr_list in all_test_arrays:
-            for arr in arr_list:
-                for axis in (0, 1, 2):
-                    if axis > len(arr.shape)-1:
-                        continue
-                    with self.subTest("Testing np.sum(axis) with {} "
-                                      "input ".format(arr.dtype)):
-                        self.assertPreciseEqual(pyfunc(arr, axis=axis),
-                                                cfunc(arr, axis=axis))
+        for arr in self.gen_sum_array_cases(signed_dtypes_no_int32, unsigned_dtypes_no_uint32):
+            for axis in (0, 1, 2):
+                if axis > len(arr.shape)-1:
+                    continue
+                with self.subTest("Testing np.sum(axis) with {} "
+                                    "input ".format(arr.dtype)):
+                    self.assertPreciseEqual(pyfunc(arr, axis=axis),
+                                            cfunc(arr, axis=axis))
 
     def test_sum_axis_kws2(self):
         """  testing uint32 and int32 separately
@@ -1411,57 +1414,38 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.int32]
+        signed_dtypes_only_int32 = [np.int32]
         # expected return dtypes in Numba
         out_dtypes = {np.dtype('int32'): np.int64, np.dtype('uint32'): np.uint64,
                       np.dtype('int64'): np.int64,
                       np.dtype(TIMEDELTA_M): np.dtype(TIMEDELTA_M)}
-        all_test_arrays = [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
-            for arr_dtype in all_dtypes]
 
-        unsigned_dtypes = [np.uint32]
-        all_test_arrays += [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype)]
-            for arr_dtype in unsigned_dtypes]
+        unsigned_dtypes_only_uint32 = [np.uint32]
 
-        for arr_list in all_test_arrays:
-            for arr in arr_list:
-                for axis in (0, 1, 2):
-                    if axis > len(arr.shape)-1:
-                        continue
-                    with self.subTest("Testing np.sum(axis) with {} "
-                                      "input ".format(arr.dtype)):
-                        npy_res = pyfunc(arr, axis=axis)
-                        numba_res = cfunc(arr, axis=axis)
-                        if isinstance(numba_res, np.ndarray):
-                            self.assertPreciseEqual(
-                                npy_res.astype(out_dtypes[arr.dtype]),
-                                numba_res.astype(out_dtypes[arr.dtype]))
-                        else:
-                            # the results are scalars
-                            self.assertEqual(npy_res, numba_res)
+        for arr in self.gen_sum_array_cases(signed_dtypes_only_int32, unsigned_dtypes_only_uint32):
+            for axis in (0, 1, 2):
+                if axis > len(arr.shape)-1:
+                    continue
+                with self.subTest("Testing np.sum(axis) with {} "
+                                    "input ".format(arr.dtype)):
+                    npy_res = pyfunc(arr, axis=axis)
+                    numba_res = cfunc(arr, axis=axis)
+                    if isinstance(numba_res, np.ndarray):
+                        self.assertPreciseEqual(
+                            npy_res.astype(out_dtypes[arr.dtype]),
+                            numba_res.astype(out_dtypes[arr.dtype]))
+                    else:
+                        # the results are scalars
+                        self.assertEqual(npy_res, numba_res)
 
     def test_sum_dtype_kws(self):
         """ test sum with dtype parameter over a whole range of dtypes """
         pyfunc = array_sum_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
                       np.complex64, np.complex128]
-        all_test_arrays = [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
-            for arr_dtype in all_dtypes]
 
         unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
-        all_test_arrays = [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype)]
-            for arr_dtype in unsigned_dtypes]
 
         out_dtypes = {np.dtype('float64'): [np.float64],
                       np.dtype('float32'): [np.float64, np.float32],
@@ -1473,32 +1457,22 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128]}
 
-        for arr_list in all_test_arrays:
-            for arr in arr_list:
-                for out_dtype in out_dtypes[arr.dtype]:
-                    subtest_str = ("Testing np.sum with {} input and {} output"
-                                   .format(arr.dtype, out_dtype))
-                    with self.subTest(subtest_str):
-                            self.assertPreciseEqual(pyfunc(arr, dtype=out_dtype),
-                                                    cfunc(arr, dtype=out_dtype))
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            for out_dtype in out_dtypes[arr.dtype]:
+                subtest_str = ("Testing np.sum with {} input and {} output"
+                                .format(arr.dtype, out_dtype))
+                with self.subTest(subtest_str):
+                        self.assertPreciseEqual(pyfunc(arr, dtype=out_dtype),
+                                                cfunc(arr, dtype=out_dtype))
 
     def test_sum_axis_dtype_kws(self):
         """ test sum with axis and dtype parameters over a whole range of dtypes """
         pyfunc = array_sum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
-        all_dtypes = [np.float64, np.float32, np.int64, np.int32,
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
                       np.complex64, np.complex128]
-        all_test_arrays = [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype),
-             np.ones((7, 3), arr_dtype) * -5]
-            for arr_dtype in all_dtypes]
 
         unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
-        all_test_arrays = [
-            [np.ones((7, 6, 5, 4, 3), arr_dtype),
-             np.ones(1, arr_dtype)]
-            for arr_dtype in unsigned_dtypes]
 
         out_dtypes = {np.dtype('float64'): [np.float64],
                       np.dtype('float32'): [np.float64, np.float32],
@@ -1510,26 +1484,109 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128]}
 
-        for arr_list in all_test_arrays:
-            for arr in arr_list:
-                for out_dtype in out_dtypes[arr.dtype]:
-                    for axis in (0, 1, 2):
-                        if axis > len(arr.shape) - 1:
-                            continue
-                        subtest_str = ("Testing np.sum with {} input and {} output "
-                                       .format(arr.dtype, out_dtype))
-                        with self.subTest(subtest_str):
-                            py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
-                            nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
-                            self.assertPreciseEqual(py_res, nb_res)
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            for out_dtype in out_dtypes[arr.dtype]:
+                for axis in (0, 1, 2):
+                    if axis > len(arr.shape) - 1:
+                        continue
+                    subtest_str = ("Testing np.sum with {} input and {} output "
+                                    .format(arr.dtype, out_dtype))
+                    with self.subTest(subtest_str):
+                        py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
+                        nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
+                        self.assertPreciseEqual(py_res, nb_res)
 
+    def test_sum_axis_tuple(self):
+        """ test sum with axis as a tuple """
+        pyfunc = array_sum_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(2 * 3 * 4).reshape(2, 3, 4)
+
+        data = [-2, -1, 0, 1, 2]
+        all_perms = list(chain.from_iterable(
+            permutations(data, r) for r in range(len(data) + 1)
+        ))
+        for axes in all_perms:
+            with self.subTest(axes=axes):
+                # Check for duplicate axis
+                np_axes = (np.array(axes) % 3)
+                if len(np_axes) == len(np.unique(np_axes)):
+                    self.assertPreciseEqual(pyfunc(a, axes), cfunc(a, axes))
+
+    def test_sum_axis_tuple_duplicates(self):
+        """ test sum with axis as a tuple """
+        self.disable_leak_check()
+        pyfunc = array_sum_axis_kws
+        err = ValueError if numpy_version < (1, 25) else np.exceptions.AxisError
+        cfunc = jit(nopython=True)(pyfunc)
+        a = np.arange(2 * 3 * 4).reshape(2, 3, 4)
+
+        data = [-3, -2, -1, 0, 1, 2, 3]
+        all_perms = list(chain.from_iterable(
+            permutations(data, r) for r in range(len(data) + 1)
+        ))
+        for axes in all_perms:
+            with self.subTest(axes=axes):
+                # Check for duplicate axis
+                if 3 in axes:
+                    # 3 is out of bounds for an array of dimension 3
+                    # but -3 is not.
+                    with self.assertRaises(err) as c_raises:
+                        cfunc(a, axes)
+                    # This will raise a different exception than the duplicate
+                    # axis case, so we need to check for the correct error
+                    # message.
+                    self.assertIn(
+                        "out of bounds for array of dimension 3",
+                        str(c_raises.exception)
+                    )
+                    with self.assertRaises(err) as py_raises:
+                        pyfunc(a, axes)
+                    self.assertEqual(
+                        str(c_raises.exception),
+                        str(py_raises.exception)
+                    )
+                    continue
+                np_axes = (np.array(axes) % 3)
+                if len(np_axes) != len(np.unique(np_axes)):
+                    with self.assertRaises(ValueError) as c_raises:
+                        cfunc(a, axes)
+                    self.assertIn(
+                        "duplicate value in 'axis'",
+                        str(c_raises.exception)
+                    )
+                    with self.assertRaises(ValueError) as py_raises:
+                        pyfunc(a, axes)
+                    self.assertEqual(
+                        str(c_raises.exception),
+                        str(py_raises.exception)
+                    )
+
+    def test_sum_empty_order_layout(self):
+        pyfunc = nb_sum_empty_axis
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # C ordered array
+        a = np.arange(6).reshape(2, 3)
+        self.assertPreciseEqual(pyfunc(a),
+                                cfunc(a))
+
+        # NumPy returns an F-contiguous array here; Numba returns C-order.
+        a = np.asfortranarray(np.arange(6).reshape(2, 3))
+
+        expected = pyfunc(a)
+        got = cfunc(a)
+
+        self.assertEqual(expected.flags.f_contiguous,
+                         got.flags.f_contiguous)
+        
     def test_sum_axis_dtype_pos_arg(self):
         """ testing that axis and dtype inputs work when passed as positional """
         pyfunc = array_sum_axis_dtype_pos
         cfunc = jit(nopython=True)(pyfunc)
         dtype = np.float64
         # OK
-        a = np.ones((7, 6, 5, 4, 3))
+        a = np.ones((2, 3, 4))
         self.assertPreciseEqual(pyfunc(a, 1, dtype),
                                 cfunc(a,  1, dtype))
 
@@ -1563,17 +1620,25 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         pyfunc = array_sum
         cfunc = jit(nopython=True)(pyfunc)
 
-        a = np.ones((7, 6, 5, 4, 3))
         b = np.ones((4, 3))
         # BAD: axis > dimensions
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError) as raises:
             cfunc(b, 2)
+        self.assertIn(
+            "axis 2 is out of bounds "
+            "for array of dimension 2",
+            str(raises.exception)
+        )
         # BAD: negative axis
-        with self.assertRaises(ValueError):
-            cfunc(a, -1)
-        # BAD: axis greater than 3
-        with self.assertRaises(ValueError):
-            cfunc(a, 4)
+        with self.assertRaises(ValueError) as raises:
+            cfunc(b, -5)
+        self.assertIn(
+            "axis -5 is out of bounds "
+            "for array of dimension 2",
+            str(raises.exception)
+        )
+        # Good for negative axis == -1
+        self.assertPreciseEqual(cfunc(b, -2), pyfunc(b, -2))
 
     def test_sum_const_negative(self):
         # Exceptions leak references
@@ -1591,28 +1656,47 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(foo(a), foo.py_func(a))
         # ndim == 2, axis == -3, BAD
         a = np.ones((1, 2))
-        with self.assertRaises(NumbaValueError) as raises:
+        with self.assertRaises(ValueError) as raises:
             foo(a)
-        errmsg = "'axis' entry (-1) is out of bounds"
+        errmsg = "axis -3 is out of bounds for array of dimension 2"
         self.assertIn(errmsg, str(raises.exception))
         with self.assertRaises(ValueError) as raises:
             foo.py_func(a)
-        self.assertIn("out of bounds", str(raises.exception))
+        self.assertIn(
+            "axis -3 is out of bounds for array of dimension 2",
+            str(raises.exception)
+        )
 
     def test_cumsum(self):
-        pyfunc = array_cumsum
+        """ test cumsum with axis and dtype parameters over a whole range of dtypes """
+        pyfunc = array_cumsum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
-        # OK
-        a = np.ones((2, 3))
-        self.assertPreciseEqual(pyfunc(a), cfunc(a))
-        # BAD: with axis
-        with self.assertRaises(TypingError):
-            cfunc(a, 1)
-        # BAD: with kw axis
-        pyfunc = array_cumsum_kws
-        cfunc = jit(nopython=True)(pyfunc)
-        with self.assertRaises(TypingError):
-            cfunc(a, axis=1)
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                      np.complex64, np.complex128]
+
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
+
+        out_dtypes = {np.dtype('float64'): [np.float64],
+                      np.dtype('float32'): [np.float64, np.float32],
+                      np.dtype('int64'): [np.float64, np.int64, np.float32],
+                      np.dtype('int32'): [np.float64, np.int64, np.float32, np.int32],
+                      np.dtype('uint32'): [np.float64, np.int64, np.float32],
+                      np.dtype('uint64'): [np.float64, np.uint64],
+                      np.dtype('bool'): [np.float64, np.int64, np.float32, np.int32, np.bool_],
+                      np.dtype('complex64'): [np.complex64, np.complex128],
+                      np.dtype('complex128'): [np.complex128]}
+
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            for out_dtype in out_dtypes[arr.dtype]:
+                for axis in (0, 1, 2):
+                    if axis > len(arr.shape) - 1:
+                        continue
+                    subtest_str = ("Testing np.cumsum with {} input and {} output "
+                                    .format(arr.dtype, out_dtype))
+                    with self.subTest(subtest_str):
+                        py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
+                        nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
+                        self.assertPreciseEqual(py_res, nb_res)
 
     def test_take(self):
         pyfunc = array_take
@@ -1821,6 +1905,56 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         msg = "array_clip: must set either max or min"
                         with self.assertRaisesRegex(ValueError, msg):
                             cfunc(a, None, None)
+
+    def test_clip_out_shape_mismatch(self):
+        # Issue #10682: an `out` that does not match the shape of the result
+        # used to be written past its end, silently returning a wrong array.
+        # NumPy raises instead, because it never broadcasts `out` itself.
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
+        has_out = (np_clip, np_clip_kwargs, array_clip, array_clip_kwargs)
+
+        a = np.linspace(-10, 10, 5)
+        a_min_arr = np.zeros_like(a)
+        a_max_arr = np.full_like(a, 5)
+        # covers every implementation branch: scalar/scalar, scalar/None,
+        # None/scalar, scalar/array, array/scalar, None/array, array/None
+        # and array/array
+        min_max = ((-5, 5), (-5, None), (None, 5), (-5, a_max_arr),
+                   (a_min_arr, 5), (None, a_max_arr), (a_min_arr, None),
+                   (a_min_arr, a_max_arr))
+
+        msg = "clip: the shape of the 'out' array does not match"
+        for pyfunc in has_out:
+            cfunc = jit(nopython=True)(pyfunc)
+            for a_min, a_max in min_max:
+                # too small, and too large: NumPy rejects both
+                for bad in (np.empty(a.size - 1), np.empty(a.size + 1)):
+                    with self.assertRaisesRegex(ValueError, msg):
+                        cfunc(a, a_min, a_max, bad)
+
+    def test_clip_out_no_out_of_bounds_write(self):
+        # Issue #10682: writing past the end of a too-small `out` corrupted
+        # whatever followed it in memory. Clip into a view of a larger
+        # buffer and check the rest of that buffer is left alone.
+        # Disable leak check since we expect an error to be raised
+        self.disable_leak_check()
+
+        cfunc = jit(nopython=True)(np_clip)
+
+        a = np.arange(5.0)
+        buf = np.full(8, 999.0)
+        with self.assertRaises(ValueError):
+            cfunc(a, 0.0, 3.0, buf[:3])
+
+        np.testing.assert_equal(buf, np.full(8, 999.0))
+
+    def test_clip_out_bad_ndim(self):
+        cfunc = jit(nopython=True)(np_clip)
+        msg = '.*The argument "out" must have the same number of dimensions.*'
+        with self.assertRaisesRegex(TypingError, msg):
+            cfunc(np.arange(5.0), 0.0, 3.0, np.empty((2, 5)))
 
     def test_clip_bad_array(self):
         cfunc = jit(nopython=True)(np_clip)

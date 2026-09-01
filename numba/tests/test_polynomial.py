@@ -6,6 +6,7 @@ from numpy.polynomial import polynomial as poly
 from numpy.polynomial import polyutils as pu
 
 from numba import jit, njit
+from numba.np.numpy_support import numpy_version
 from numba.tests.support import (TestCase, needs_lapack,
                                  EnableNRTStatsMixin, MemoryLeakMixin)
 from numba.core.errors import TypingError
@@ -166,7 +167,12 @@ class TestPoly1D(TestPolynomialBase):
 
         # check real input with complex roots raises
         x = np.array([7., 2., 0., 1.])
-        self.assert_no_domain_change("eigvals", cfunc, (x,))
+        if numpy_version < (2, 5):
+            self.assert_no_domain_change("eigvals", cfunc, (x,))
+        else:
+            msg = ("a real domain argument to roots cannot produce "
+                   "a complex domain result")
+            self.assert_error(cfunc, (x,), msg)
         # but works fine if type conv to complex first
         cfunc(x.astype(np.complex128))
 

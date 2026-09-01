@@ -3,8 +3,10 @@
 Thanks for wanting to contribute to Numba :)
 
 First, if you need some help or want to chat to the core developers, please
-visit https://gitter.im/numba/numba for real time chat or post to the Numba
-forum https://numba.discourse.group/.
+post to the Numba forum https://numba.discourse.group/.
+
+Second, please ensure that you have read and understood Numba's AI tool use
+policy: https://numba.readthedocs.io/en/stable/reference/ai_tools_policy.html
 
 Here's some guidelines to help the review process go smoothly.
 

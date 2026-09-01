@@ -24,6 +24,7 @@ from numba.tests.support import (
     override_config,
     run_in_new_process_in_cache_dir,
     skip_if_typeguard,
+    numpy_sincos_low_precision,
 )
 from numba.core.errors import LoweringError
 import unittest
@@ -637,7 +638,9 @@ class TestPandasLike(TestCase):
         cfunc = jit(nopython=True)(npyufunc_usecase)
         ii = cfunc(i)
         self.assertIsInstance(ii, Index)
-        self.assertPreciseEqual(ii._data, np.cos(np.sin(i._data)))
+        ulps = 4 if numpy_sincos_low_precision else 1
+        self.assertPreciseEqual(ii._data, np.cos(np.sin(i._data)),
+                                prec='double', ulps=ulps)
 
     def test_index_get_data(self):
         # The _data attribute is exposed with make_attribute_wrapper()
@@ -684,7 +687,9 @@ class TestPandasLike(TestCase):
         self.assertIsInstance(ss, Series)
         self.assertIsInstance(ss._index, Index)
         self.assertIs(ss._index._data, i._data)
-        self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)))
+        ulps = 4 if numpy_sincos_low_precision else 1
+        self.assertPreciseEqual(ss._values, np.cos(np.sin(s._values)),
+                                prec='double', ulps=ulps)
 
     def test_series_constructor(self):
         i = Index(np.int32([42, 8, -5]))

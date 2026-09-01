@@ -151,6 +151,23 @@ otherwise build by default along with information on configuration options.
   variable to provide the location of the TBB installation. For more
   information about setting ``TBBROOT`` see the `Intel documentation <https://software.intel.com/content/www/us/en/develop/documentation/advisor-user-guide/top/appendix/adding-parallelism-to-your-program/adding-the-parallel-framework-to-your-build-environment/defining-the-tbbroot-environment-variable.html>`_.
 
+.. envvar:: NUMBA_LAPACK_ILP64 (default: not set)
+
+  Selects, at build time, whether Numba's BLAS/LAPACK C wrappers are built
+  to call through to a 64-bit ("ILP64") Fortran integer ABI rather than the
+  usual 32-bit ("LP64") one. This must match the ABI of
+  ``scipy.linalg.cython_blas`` / ``cython_lapack`` at *runtime*, not just at
+  build time -- a mismatch produces wrong results or a crash rather than a
+  clean error, so Numba checks this the first time BLAS/LAPACK support is
+  used and raises if the two disagree.
+
+  The default is to use LP64 ABI, which matches SciPy's default. To override
+  the default, set ``NUMBA_LAPACK_ILP64=1`` when building numba.
+
+  The choice made is recorded in the built package (it cannot drift from
+  the compiled binary independently) and can be inspected via ``numba -s``,
+  under "SciPy / LAPACK Information".
+
 .. _numba-source-install-check:
 
 Dependency List
@@ -245,6 +262,12 @@ information.
 +----------++--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
 | Numba     | Release date | Python                    | NumPy                                       | llvmlite                     | LLVM              | TBB                         |
 +===========+==============+===========================+=============================================+==============================+===================+=============================+
+| 0.67.0    | 2026-08-11   | 3.10.x <= version < 3.15  | 1.22 <= version < 1.27 ;                    | 0.49.x                       | 22.x              | 2021.6 <= version           |
+|           |              |                           | 2.0 <= version < 2.6 ;                      |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
+| 0.66.0    | 2026-06-30   | 3.10.x <= version < 3.15  | 1.22 <= version < 1.27 ;                    | 0.48.x                       | 22.x              | 2021.6 <= version           |
+|           |              |                           | 2.0 <= version < 2.5 ;                      |                              |                   |                             |
++-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+
 | 0.65.1    | 2026-04-23   | 3.10.x <= version < 3.15  | 1.22 <= version < 1.27 ;                    | 0.47.x                       | 20.x              | 2021.6 <= version           |
 |           |              |                           | 2.0 <= version < 2.5 ;                      |                              |                   |                             |
 +-----------+--------------+---------------------------+---------------------------------------------+------------------------------+-------------------+-----------------------------+

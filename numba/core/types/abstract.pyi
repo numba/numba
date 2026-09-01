@@ -3,7 +3,6 @@ import functools
 from collections.abc import Hashable as _CanHash, Mapping, Sequence as _Sequence
 from typing import (
     Any,
-    Final,
     Literal as _Literal,
     Protocol,
     TypeAlias,
@@ -31,7 +30,7 @@ class _CanCastPythonValue(Protocol[_T_contra, _T_co]):
 # the step is `Any` instead of `Literal[1] | None` so we can use it as invariant `list`
 # element type
 _SpecSlice: TypeAlias = slice[None, None, Any]
-_Layout: TypeAlias = _Literal["F", "C", "A"]
+_Layout: TypeAlias = _Literal["C", "F", "CS", "FS", "A"]
 
 ###
 
@@ -42,10 +41,10 @@ class _TypeMetaclass(abc.ABCMeta):
     def __call__(cls, *args: Any, **kwargs: Any) -> Any: ...
 
 class Type(metaclass=_TypeMetaclass):
-    mutable: ClassVar[bool] = False
     reflected: ClassVar[bool] = False
 
-    name: Final[str]
+    name: str
+    mutable: bool = False
 
     def __init__(self, name: str) -> None: ...
 
@@ -59,7 +58,7 @@ class Type(metaclass=_TypeMetaclass):
 
     #
     def __getitem__(
-        self, args: _SpecSlice | tuple[_SpecSlice, ...] | list[_SpecSlice]
+        self, args: _SpecSlice | tuple[_SpecSlice, ...] | list[_SpecSlice], /
     ) -> Array: ...
 
     #
@@ -81,7 +80,7 @@ class Type(metaclass=_TypeMetaclass):
         typingctx: context.Context,
         other: Type,
     ) -> castgraph.Conversion | None: ...
-    def cast_python_value(self, args: Never) -> Any: ...
+    def cast_python_value(self, args: Never, /) -> Any: ...
 
     #
     def is_precise(self) -> bool: ...
@@ -93,6 +92,7 @@ class Dummy(Type): ...
 class Hashable(Type): ...
 
 class Number(Hashable):
+    @override
     @overload
     def unify(self, typingctx: context.Context, other: Number) -> Number: ...
     @overload
@@ -111,12 +111,12 @@ class Callable(Type):
 class DTypeSpec(Type):
     @property
     @abc.abstractmethod
-    def dtype(self) -> Type: ...
+    def dtype(self) -> Any: ...
 
-class IterableType(Type):
+class IterableType(Type, Generic[_TypeT_co]):
     @property
     @abc.abstractmethod
-    def iterator_type(self) -> Type: ...
+    def iterator_type(self) -> IteratorType[_TypeT_co]: ...
 
 class Sized(Type): ...
 
@@ -124,19 +124,26 @@ class ConstSized(Sized):
     @abc.abstractmethod
     def __len__(self) -> int: ...
 
-class IteratorType(IterableType):
+class IteratorType(IterableType[_TypeT_co], Generic[_TypeT_co]):
     def __init__(self, name: str, **kwargs: Never) -> None: ...
     @property
     @abc.abstractmethod
-    def yield_type(self) -> Type: ...
+    def yield_type(self) -> _TypeT_co: ...
     @property
+    @override
     def iterator_type(self) -> Self: ...
 
-class Container(Sized, IterableType): ...
-class Sequence(Container): ...
+# pyrefly: ignore[invalid-inheritance]
+class Container(
+    Sized,
+    IterableType[_TypeT_co],
+    Generic[_TypeT_co],
+    metaclass=abc.ABCMeta,
+): ...
+class Sequence(Container[_TypeT_co], Generic[_TypeT_co], metaclass=abc.ABCMeta): ...
 
-class MutableSequence(Sequence):
-    mutable: ClassVar[bool] = True
+class MutableSequence(Sequence[_TypeT_co], Generic[_TypeT_co], metaclass=abc.ABCMeta):
+    mutable: bool = True
 
 class ArrayCompatible(Type):
     array_priority: ClassVar[float] = 0.0
