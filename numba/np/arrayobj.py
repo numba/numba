@@ -6982,6 +6982,9 @@ def get_sort_func(kind, lt_impl, is_argsort=False):
     """
     Get a sort implementation of the given kind.
     """
+    if kind == 'stable':
+        # NumPy treats 'stable' as an alias for 'mergesort'
+        kind = 'mergesort'
     key = kind, lt_impl.__name__, is_argsort
 
     try:
@@ -7014,11 +7017,12 @@ def lt_implementation(dtype):
 @lower_builtin("array.sort", types.Array, types.StringLiteral)
 def array_sort(context, builder, sig, args):
     arytype, kind = sig.args
+    kind = kind.literal_value
 
-    sort_func = get_sort_func(kind=kind.literal_value,
+    sort_func = get_sort_func(kind=kind,
                               lt_impl=lt_implementation(arytype.dtype))
 
-    if kind.literal_value == 'mergesort' and arytype.ndim > 1:
+    if kind in ('mergesort', 'stable') and arytype.ndim > 1:
         def array_sort_impl(arr):
             # mergesort only sorts 1D arrays, so sort each slice along
             # the last axis as quicksort does for multidimensional arrays

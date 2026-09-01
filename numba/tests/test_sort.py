@@ -1307,6 +1307,28 @@ class TestArraySort(MemoryLeakMixin, TestCase):
         expect = "Unsupported keywords: ['foo']"
         self.assertIn(expect, str(raises.exception))
 
+        @jit
+        def unsupported_kind():
+            np.arange(5).sort(kind='heapsort')
+
+        with self.assertRaises(errors.TypingError) as raises:
+            unsupported_kind()
+
+        expect = "Unsupported \"kind\": 'heapsort'"
+        self.assertIn(expect, str(raises.exception))
+
+    def test_kinds(self):
+        for kind in ('quicksort', 'mergesort', 'stable'):
+            @jit
+            def sort_kind(arr):
+                arr.sort(kind=kind)
+
+            for arr in (np.array([3, 1, 4, 1, 5, 9, 2, 6]),
+                        np.array([[3, 1, 4, 1], [5, 9, 2, 6]])):
+                expected = np.sort(arr, kind=kind)
+                sort_kind(arr)
+                self.assertPreciseEqual(arr, expected)
+
 
 class TestArrayArgsort(MemoryLeakMixin, TestCase):
     """Tests specific to array.argsort"""
@@ -1334,6 +1356,43 @@ class TestArrayArgsort(MemoryLeakMixin, TestCase):
 
         expect = "Unsupported keywords: ['foo']"
         self.assertIn(expect, str(raises.exception))
+
+        @jit
+        def unsupported_kind():
+            np.arange(5).argsort(kind='heapsort')
+
+        with self.assertRaises(errors.TypingError) as raises:
+            unsupported_kind()
+
+        expect = "Unsupported \"kind\": 'heapsort'"
+        self.assertIn(expect, str(raises.exception))
+
+    def test_kinds(self):
+        arr = np.array([3, 1, 4, 7, 5, 9, 2, 6])
+        for kind in ('quicksort', 'mergesort', 'stable'):
+            @jit
+            def argsort_kind(arr):
+                return arr.argsort(kind=kind)
+
+            expected = np.argsort(arr, kind=kind)
+            self.assertPreciseEqual(argsort_kind(arr), expected)
+
+        # ties and more than SMALL_QUICKSORT elements, so only a stable
+        # sort reproduces numpy's index order
+        arr = np.array([3, 2, 2, 1, 1, 0, 0, 0, 0, 3,
+                        2, 3, 2, 2, 3, 2, 2, 2, 2, 3])
+        expected = np.argsort(arr, kind='stable')
+        for kind in ('mergesort', 'stable'):
+            @jit
+            def argsort_stable(arr):
+                return arr.argsort(kind=kind)
+
+            @jit
+            def np_argsort_stable(arr):
+                return np.argsort(arr, kind=kind)
+
+            self.assertPreciseEqual(argsort_stable(arr), expected)
+            self.assertPreciseEqual(np_argsort_stable(arr), expected)
 
 
 if __name__ == '__main__':
