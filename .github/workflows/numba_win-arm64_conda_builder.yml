@@ -21,22 +21,26 @@ concurrency:
 env:
   CONDA_CHANNEL_LLVMLITE: numba/label/dev
   WIN_ARM64_CONDA_CHANNEL: bootstrap-win-arm64-round-2-native
-  PYTHON_VERSION: "3.14"
   NUMPY_VERSION: "2.3"
 
 jobs:
   win-arm64-build-conda:
-    name: win-arm64-build-conda (py 3.14, np 2.3)
+    name: win-arm64-build-conda (py ${{ matrix.python_version }}, np 2.3)
     runs-on: windows-11-arm
+    strategy:
+      matrix:
+        python_version: ["3.12", "3.13", "3.14"]
+      fail-fast: false
     env:
       EXTRA_CHANNELS: ''
+      PYTHON_VERSION: ${{ matrix.python_version }}
     defaults:
       run:
         shell: bash -elx {0}
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -105,18 +109,23 @@ jobs:
           if-no-files-found: error
 
   win-arm64-test:
-    name: win-arm64-test-conda (py 3.14, np 2.3)
+    name: win-arm64-test-conda (py ${{ matrix.python_version }}, np 2.3)
     needs: win-arm64-build-conda
     runs-on: windows-11-arm
+    strategy:
+      matrix:
+        python_version: ["3.12", "3.13", "3.14"]
+      fail-fast: false
     env:
       EXTRA_CHANNELS: ''
+      PYTHON_VERSION: ${{ matrix.python_version }}
     defaults:
       run:
         shell: bash -elx {0}
 
     steps:
       - name: Clone repository (ci_artifacts only)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # sparse checkout so the numba source tree cannot shadow the
           # installed package during tests

@@ -557,7 +557,7 @@ class CPUCallConv(BaseCallConv):
         #                          ^ Number of dynamic arguments = 2
         #
 
-        _hash = hashlib.sha1(str(st_type).encode()).hexdigest()
+        _hash = hashlib.sha1(str((st_type, nb_types)).encode()).hexdigest()
         name = f'__excinfo_unwrap_args{_hash}'
         if name in module.globals:
             return module.globals.get(name)

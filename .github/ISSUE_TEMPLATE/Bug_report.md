@@ -26,6 +26,8 @@ Before submitting a bug report please ensure that you can check off these boxes:
   (https://numba.readthedocs.io/en/stable/release-notes-overview.html).
 - [ ] I have included a self contained code sample to reproduce the problem.
   i.e. it's possible to run as 'python bug.py'.
+- [ ] I have read and understood Numba's AI tool use policy
+  (https://numba.readthedocs.io/en/stable/reference/ai_tools_policy.html)
 
 <!--
 

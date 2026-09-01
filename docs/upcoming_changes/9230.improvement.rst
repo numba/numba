@@ -1,0 +1,5 @@
+Added support for using IntEnum as NumPy array's index.
+-------------------------------------------------------
+
+``IntEnum`` members can now be used directly as array indices, for
+example ``a[MyEnum.FOO]``, without an explicit cast to an integer.

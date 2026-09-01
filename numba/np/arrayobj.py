@@ -2645,10 +2645,25 @@ def array_flatten(context, builder, sig, args):
 
 
 @register_jitable
+def _np_clip_prepare_out(a, shape, out):
+    # Returns the array the result is written into. NumPy broadcasts the
+    # inputs onto a caller-provided output but never stretches the output
+    # itself, so its shape has to match the shape of the result exactly.
+    # Without this check the callers loop over the result shape and write
+    # past the end of a too-small `out` (issue #10682).
+    if out is None:
+        return np.empty_like(a)
+    if out.shape != shape:
+        raise ValueError("clip: the shape of the 'out' array does not "
+                         "match the shape of the result")
+    return out
+
+
+@register_jitable
 def _np_clip_impl(a, a_min, a_max, out):
     # Both a_min and a_max are numpy arrays
-    ret = np.empty_like(a) if out is None else out
     a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
+    ret = _np_clip_prepare_out(a, a_b.shape, out)
     for index in np.ndindex(a_b.shape):
         val_a = a_b[index]
         val_a_min = a_min_b[index]
@@ -2689,6 +2704,14 @@ def np_clip(a, a_min, a_max, out=None):
         msg = 'The argument "out" must be an array if it is provided'
         raise errors.TypingError(msg)
 
+    # The result has as many dimensions as the widest operand, and `out` is
+    # never broadcast, so a mismatch here can be reported at compile time.
+    result_ndim = max(getattr(t, 'ndim', 0) for t in (a, a_min, a_max))
+    if isinstance(out, types.Array) and out.ndim != result_ndim:
+        msg = ('The argument "out" must have the same number of dimensions '
+               'as the result')
+        raise errors.TypingError(msg)
+
     # TODO: support scalar a (issue #3469)
     a_min_is_none = a_min is None or isinstance(a_min, types.NoneType)
     a_max_is_none = a_max is None or isinstance(a_max, types.NoneType)
@@ -2708,7 +2731,7 @@ def np_clip(a, a_min, a_max, out=None):
             # a_min and a_max are scalars
             # since their shape will be empty
             # so broadcasting is not needed at all
-            ret = np.empty_like(a) if out is None else out
+            ret = _np_clip_prepare_out(a, a.shape, out)
             for index in np.ndindex(a.shape):
                 val_a = a[index]
                 ret[index] = min(max(val_a, a_min), a_max)
@@ -2722,7 +2745,7 @@ def np_clip(a, a_min, a_max, out=None):
                 # a_min is a scalar
                 # since its shape will be empty
                 # so broadcasting is not needed at all
-                ret = np.empty_like(a) if out is None else out
+                ret = _np_clip_prepare_out(a, a.shape, out)
                 for index in np.ndindex(a.shape):
                     val_a = a[index]
                     ret[index] = max(val_a, a_min)
@@ -2746,7 +2769,7 @@ def np_clip(a, a_min, a_max, out=None):
                 # a_max is a scalar
                 # since its shape will be empty
                 # so broadcasting is not needed at all
-                ret = np.empty_like(a) if out is None else out
+                ret = _np_clip_prepare_out(a, a.shape, out)
                 for index in np.ndindex(a.shape):
                     val_a = a[index]
                     ret[index] = min(val_a, a_max)
@@ -2769,16 +2792,16 @@ def np_clip(a, a_min, a_max, out=None):
         if a_min_is_none:
             def np_clip_na(a, a_min, a_max, out=None):
                 # a_max is a numpy array but a_min is None
-                ret = np.empty_like(a) if out is None else out
                 a_b, a_max_b = np.broadcast_arrays(a, a_max)
+                ret = _np_clip_prepare_out(a, a_b.shape, out)
                 return _np_clip_impl_none(a_b, a_max_b, True, ret)
 
             return np_clip_na
         elif a_max_is_none:
             def np_clip_an(a, a_min, a_max, out=None):
                 # a_min is a numpy array but a_max is None
-                ret = np.empty_like(a) if out is None else out
                 a_b, a_min_b = np.broadcast_arrays(a, a_min)
+                ret = _np_clip_prepare_out(a, a_b.shape, out)
                 return _np_clip_impl_none(a_b, a_min_b, False, ret)
 
             return np_clip_an
@@ -6639,7 +6662,8 @@ def impl_np_vstack(tup):
         return impl
 
 
-if numpy_version >= (2, 0):
+if numpy_version >= (2, 0) and numpy_version < (2, 5):
+    # Numpy 2.5 removed np.row_stack, so only test it if it's present.
     overload(np.row_stack)(impl_np_vstack)
 
 

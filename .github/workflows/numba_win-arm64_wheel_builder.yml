@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/numba_win-arm64_wheel_builder.yml
+      - buildscripts/github/test_wheel_contents.py
       - setup.py
   workflow_dispatch:
     inputs:
@@ -23,20 +24,25 @@ env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
   WIN_ARM64_CONDA_CHANNEL: bootstrap-win-arm64-round-2-native
-  PYTHON_VERSION: "3.14"
   NUMPY_VERSION: "2.3.5"
 
 jobs:
   win-arm64-build:
-    name: win-arm64-build-wheel (py 3.14, np 2.3.5)
+    name: win-arm64-build-wheel (py ${{ matrix.python_version }}, np 2.3.5)
     runs-on: windows-11-arm
+    strategy:
+      matrix:
+        python_version: ["3.12", "3.13", "3.14"]
+      fail-fast: false
+    env:
+      PYTHON_VERSION: ${{ matrix.python_version }}
     defaults:
       run:
         shell: bash -el {0}
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -71,13 +77,16 @@ jobs:
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
           python -m pip install --pre numpy==${NUMPY_VERSION}
-          python -m pip install build setuptools wheel
+          python -m pip install build "setuptools>=69.0.0" wheel
 
       - name: Build wheel
         run: python -m build --wheel --no-isolation
+
+      - name: Test wheel contents
+        run: python buildscripts/github/test_wheel_contents.py dist/*.whl
 
       - name: Upload numba wheel
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -89,9 +98,15 @@ jobs:
           if-no-files-found: error
 
   win-arm64-test:
-    name: win-arm64-test-wheel (py 3.14, np 2.3.5)
+    name: win-arm64-test-wheel (py ${{ matrix.python_version }}, np 2.3.5)
     needs: win-arm64-build
     runs-on: windows-11-arm
+    strategy:
+      matrix:
+        python_version: ["3.12", "3.13", "3.14"]
+      fail-fast: false
+    env:
+      PYTHON_VERSION: ${{ matrix.python_version }}
     defaults:
       run:
         shell: bash -el {0}

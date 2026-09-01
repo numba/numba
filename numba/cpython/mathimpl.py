@@ -286,6 +286,12 @@ def ldexp_impl(context, builder, sig, args):
         "double": "numba_ldexp",
         }[str(fltty)]
     fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
+    # The exponent is a C `int`, and ABIs such as PowerPC64LE ELFv2
+    # require the caller to sign-extend it into the full argument
+    # register.  A bare i32 parameter carries no signedness, so LLVM
+    # does not, and a negative exponent reaches the callee as a large
+    # positive one.  See issue #8489.
+    fn.args[1].add_attribute('signext')
     res = builder.call(fn, (val, exp))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 

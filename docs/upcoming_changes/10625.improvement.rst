@@ -1,7 +1,0 @@
-``np.sum`` now supports dynamic ``axis`` argument.
---------------------------------------------------
-
-The ``np.sum`` function now supports a dynamic ``axis`` argument,
-allowing users to specify the axis along which to perform the
-operation at runtime. The limitation of only supporting a static
-axis up to ``axis=3`` has also been removed.

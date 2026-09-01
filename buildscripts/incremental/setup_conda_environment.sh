@@ -65,7 +65,7 @@ fi
 
 # Python 3.14+ requires setuptools
 if [ ! $PYTHON \< "3.14" ]; then
-    $CONDA_INSTALL ${EXTRA_CHANNELS} setuptools
+    $CONDA_INSTALL ${EXTRA_CHANNELS} "setuptools>=69.0.0"
 fi
 
 # Install the compiler toolchain and gdb (if available)
@@ -85,7 +85,7 @@ elif  [[ $(uname) == Darwin ]]; then
 fi
 
 # Install latest correct build
-$CONDA_INSTALL -c numba/label/dev llvmlite=0.49
+$CONDA_INSTALL -c numba/label/dev llvmlite=0.50
 
 # Install dependencies for building the documentation
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx sphinx_rtd_theme pygments numpydoc; fi

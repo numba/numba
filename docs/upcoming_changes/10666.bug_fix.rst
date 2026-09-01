@@ -1,8 +1,0 @@
-Sort ``numba.cext`` C sources for reproducible AOT builds
----------------------------------------------------------
-
-``numba.pycc`` collected its C mixin sources via ``os.listdir``, whose
-order is filesystem-defined and varies across hosts. This made the source
-(and hence symbol) order of AOT-compiled binaries non-deterministic across
-build machines. The sources are now sorted so independent builds produce
-byte-for-byte identical binaries.

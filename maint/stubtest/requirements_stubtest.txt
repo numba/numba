@@ -1,4 +1,4 @@
-mypy >=2, <2.2
+mypy >=2.3, <2.4
 scipy-stubs
 types-cffi
 types-psutil
