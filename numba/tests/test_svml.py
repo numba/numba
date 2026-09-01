@@ -205,7 +205,7 @@ class TestSVMLGeneration(TestCase):
                 try:
                     jitted_fn = njit(sig, fastmath=flags['fastmath'],
                                      error_model=flags['error_model'],)(fn)
-                except:
+                except Exception:
                     raise Exception("raised while compiling "+fn.__doc__)
             asm = jitted_fn.inspect_asm(sig)
             missed = [pattern for pattern in contains if not pattern in asm]

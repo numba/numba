@@ -481,7 +481,7 @@ class BaseContext(object):
 
     def _load_builtins(self):
         # Initialize declarations
-        from numba.core.typing import builtins, arraydecl, npdatetime  # noqa: F401, E501
+        from numba.core.typing import builtins, arraydecl  # noqa: F401, E501
         from numba.core.typing import ctypes_utils, bufproto           # noqa: F401, E501
         from numba.core.unsafe import eh                    # noqa: F401
 

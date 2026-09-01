@@ -13,7 +13,8 @@ from numba import jit, typeof, njit, typed
 from numba.core import errors, types, config
 from numba.tests.support import (TestCase, tag, ignore_internal_warnings,
                                  MemoryLeakMixin)
-from numba.core.extending import overload_method, box, register_jitable
+from numba.core.extending import (overload_method, box, register_jitable,
+                                  overload)
 
 
 forceobj_flags = {'forceobj': True}
@@ -680,6 +681,29 @@ class TestBuiltins(TestCase):
         with self.assertTypingError():
             self.test_int(flags=no_pyobj_flags)
 
+    def test_int_kws(self):
+        cfunc = njit(int_usecase)
+        with self.assertRaises(errors.TypingError):
+            cfunc('1234', base=10)
+
+    def test_int_preserve_type_usecase(self):
+        def pyfunc(x):
+            return int(x)
+
+        cfunc = njit(pyfunc)
+
+        for typ in [types.int32, types.int64, types.uint32, types.uint64]:
+            v = typ(1234)
+            self.assertEqual(cfunc(v), pyfunc(v))
+
+        for i in range(len(cfunc.signatures)):
+            sig = cfunc.signatures[i]
+            ov = cfunc.overloads[sig]
+
+            # Check that the return type is the same as the argument type,
+            # i.e. that int(x) does not widen the type of x.
+            self.assertIs(ov.signature.return_type, ov.signature.args[0])
+
     def test_iter_next(self, flags=forceobj_flags):
         pyfunc = iter_next_usecase
         cfunc = jit((types.UniTuple(types.int32, 3),), **flags)(pyfunc)
@@ -875,7 +899,20 @@ class TestBuiltins(TestCase):
 
     def test_min_empty_tuple(self):
         self.check_min_max_empty_tuple(min_usecase4, "min")
+    
+    def check_min_max_type_unification(self, pyfunc, func_name):
+        with self.assertTypingError() as raises:
+            njit(pyfunc)(np.bool_(True), np.datetime64('2020', 'Y'))
+        self.assertIn(
+            "Given types cannot be unified: [bool, datetime64[Y]]",
+            str(raises.exception)
+        )
 
+    def test_max_type_unification(self):
+        self.check_min_max_type_unification(max_usecase1, "max")
+
+    def test_min_type_unification(self):
+        self.check_min_max_type_unification(min_usecase1, "min")
 
     def test_oct(self, flags=forceobj_flags):
         pyfunc = oct_usecase
@@ -1176,6 +1213,44 @@ class TestOperatorMixedTypes(TestCase):
             things = (1, 0, True, False, 1.0, 2.0, 1.1, 1j, None, "", "1")
             for x, y in itertools.product(things, things):
                 self.assertPreciseEqual(func.py_func(x, y), func(x, y))
+
+    def test_eq_ne_returns_literal_on_none(self):
+
+        def check(operator):
+            for (x, y) in ((None, None), (None, 1), (1, None)):
+
+                def bar(result):
+                    pass
+
+                @overload(bar, prefer_literal=True)
+                def ol_bar(result):
+                    # compile expected result
+                    expect = types.literal(operator(x,y))
+                    # Assert that result has the correct literal_value
+                    self.assertEqual(result, expect)
+                    return lambda result: None
+
+                @jit
+                def check_eq(x, y):
+                    bar(operator(x, y))
+
+                check_eq(x, y)
+
+        check(operator.ne)
+        check(operator.eq)
+
+    def test_10414(self):
+        # test for https://github.com/numba/numba/issues/10414
+
+        @njit
+        def func(x):
+            a = None
+            if x:
+                a = 0
+            return a == None, a != None
+
+        self.assertEqual(func(True), func.py_func(True))
+        self.assertEqual(func(False), func.py_func(False))
 
     def test_cmp(self):
         for opstr in ('gt', 'lt', 'ge', 'le', 'eq', 'ne'):

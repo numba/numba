@@ -14,3 +14,5 @@ Reference Manual
    pysemantics.rst
    fpsemantics.rst
    deprecation.rst
+   support_tiers.rst
+   ai_tools_policy.rst

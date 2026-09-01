@@ -4,66 +4,42 @@ import re
 
 import numpy as np
 
-from numba.core import errors, types, config
+from numba.core import errors, types
 from numba.core.typing.templates import signature
-from numba.np import npdatetime_helpers
 from numba.core.errors import TypingError
+from numba.np import types as npy_types
+from numba.np.npdatetime_helpers import combine_datetime_timedelta_units
 
 # re-export
 from numba.core.cgutils import is_nonelike   # noqa: F401
 
-
 numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 
 
-if config.USE_LEGACY_TYPE_SYSTEM:
-    FROM_DTYPE = {
-        np.dtype('bool'): types.boolean,
-        np.dtype('int8'): types.int8,
-        np.dtype('int16'): types.int16,
-        np.dtype('int32'): types.int32,
-        np.dtype('int64'): types.int64,
+FROM_DTYPE = {
+    np.dtype('bool'): types.boolean,
+    np.dtype('int8'): types.int8,
+    np.dtype('int16'): types.int16,
+    np.dtype('int32'): types.int32,
+    np.dtype('int64'): types.int64,
 
-        np.dtype('uint8'): types.uint8,
-        np.dtype('uint16'): types.uint16,
-        np.dtype('uint32'): types.uint32,
-        np.dtype('uint64'): types.uint64,
+    np.dtype('uint8'): types.uint8,
+    np.dtype('uint16'): types.uint16,
+    np.dtype('uint32'): types.uint32,
+    np.dtype('uint64'): types.uint64,
 
-        np.dtype('float32'): types.float32,
-        np.dtype('float64'): types.float64,
-        np.dtype('float16'): types.float16,
-        np.dtype('complex64'): types.complex64,
-        np.dtype('complex128'): types.complex128,
+    np.dtype('float32'): types.float32,
+    np.dtype('float64'): types.float64,
+    np.dtype('float16'): types.float16,
+    np.dtype('complex64'): types.complex64,
+    np.dtype('complex128'): types.complex128,
 
-        np.dtype(object): types.pyobject,
-    }
-else:
-    FROM_DTYPE = {
-        np.dtype('bool'): types.np_bool_,
-        np.dtype('int8'): types.np_int8,
-        np.dtype('int16'): types.np_int16,
-        np.dtype('int32'): types.np_int32,
-        np.dtype('int64'): types.np_int64,
-
-        np.dtype('uint8'): types.np_uint8,
-        np.dtype('uint16'): types.np_uint16,
-        np.dtype('uint32'): types.np_uint32,
-        np.dtype('uint64'): types.np_uint64,
-
-        np.dtype('float32'): types.np_float32,
-        np.dtype('float64'): types.np_float64,
-        np.dtype('float16'): types.np_float16,
-        np.dtype('complex64'): types.np_complex64,
-        np.dtype('complex128'): types.np_complex128,
-
-        np.dtype(object): types.pyobject,
-    }
+    np.dtype(object): types.pyobject,
+}
 
 
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
 re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
-
-sizeof_unicode_char = np.dtype('U1').itemsize
 
 
 def _from_str_dtype(dtype):
@@ -77,7 +53,7 @@ def _from_str_dtype(dtype):
         if dtype.byteorder not in '=|':
             raise errors.NumbaNotImplementedError("Does not support non-native "
                                                   "byteorder")
-        count = dtype.itemsize // sizeof_unicode_char
+        count = dtype.itemsize // types.sizeof_unicode_char
         assert count == int(groups[1]), "Unicode char size mismatch"
         return types.UnicodeCharSeq(count)
 
@@ -99,9 +75,9 @@ def _from_datetime_dtype(dtype):
     typecode = groups[0]
     unit = groups[2] or ''
     if typecode == 'm':
-        return types.NPTimedelta(unit)
+        return npy_types.NPTimedelta(unit)
     elif typecode == 'M':
-        return types.NPDatetime(unit)
+        return npy_types.NPDatetime(unit)
     else:
         raise errors.NumbaNotImplementedError(dtype)
 
@@ -137,25 +113,25 @@ def from_dtype(dtype):
     raise errors.NumbaNotImplementedError(dtype)
 
 
-_as_dtype_letters = {
-    types.NPDatetime: 'M8',
-    types.NPTimedelta: 'm8',
-    types.CharSeq: 'S',
-    types.UnicodeCharSeq: 'U',
-}
-
-
 def as_dtype(nbtype):
     """
     Return a numpy dtype instance corresponding to the given Numba type.
     NumbaNotImplementedError is if no correspondence is known.
     """
+
+    _as_dtype_letters = {
+        npy_types.NPDatetime: 'M8',
+        npy_types.NPTimedelta: 'm8',
+        types.CharSeq: 'S',
+        types.UnicodeCharSeq: 'U',
+    }
+
     nbtype = types.unliteral(nbtype)
     if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
         return np.dtype(str(nbtype))
     if isinstance(nbtype, (types.Boolean)):
         return np.dtype('?')
-    if isinstance(nbtype, (types.NPDatetime, types.NPTimedelta)):
+    if isinstance(nbtype, (npy_types.NPDatetime, npy_types.NPTimedelta)):
         letter = _as_dtype_letters[type(nbtype)]
         if nbtype.unit:
             return np.dtype('%s[%s]' % (letter, nbtype.unit))
@@ -387,7 +363,6 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     return value - A UFuncLoopSpec identifying the loop, or None
                    if no matching loop is found.
     """
-
     # Separate logical input from explicit output arguments
     input_types = arg_types[:ufunc.nin]
     output_types = arg_types[ufunc.nin:]
@@ -449,8 +424,8 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         def make_specific(outputs, unit):
             new_outputs = []
             for out in outputs:
-                if isinstance(out, types.NPTimedelta) and out.unit == "":
-                    new_outputs.append(types.NPTimedelta(unit))
+                if isinstance(out, npy_types.NPTimedelta) and out.unit == "":
+                    new_outputs.append(npy_types.NPTimedelta(unit))
                 else:
                     new_outputs.append(out)
             return new_outputs
@@ -458,8 +433,8 @@ def ufunc_find_matching_loop(ufunc, arg_types):
         def make_datetime_specific(outputs, dt_unit, td_unit):
             new_outputs = []
             for out in outputs:
-                if isinstance(out, types.NPDatetime) and out.unit == "":
-                    unit = npdatetime_helpers.combine_datetime_timedelta_units(
+                if isinstance(out, npy_types.NPDatetime) and out.unit == "":
+                    unit = combine_datetime_timedelta_units(
                         dt_unit, td_unit)
                     if unit is None:
                         raise TypingError(f"ufunc '{ufunc_name}' is not " +
@@ -467,7 +442,7 @@ def ufunc_find_matching_loop(ufunc, arg_types):
                                           f"datetime64[{dt_unit}] " +
                                           f"and timedelta64[{td_unit}]"
                                           )
-                    new_outputs.append(types.NPDatetime(unit))
+                    new_outputs.append(npy_types.NPDatetime(unit))
                 else:
                     new_outputs.append(out)
             return new_outputs
@@ -745,7 +720,7 @@ def type_is_scalar(typ):
     """
 
     ok = (types.Boolean, types.Number, types.UnicodeType, types.StringLiteral,
-          types.NPTimedelta, types.NPDatetime)
+          npy_types.NPTimedelta, npy_types.NPDatetime)
     return isinstance(typ, ok)
 
 

@@ -159,17 +159,11 @@ def make_range_impl(int_type, range_state_type, range_iter_type):
                 builder.store(builder.sub(count, one, flags=["nsw"]), countptr)
                 builder.store(builder.add(value, self.step), self.iter)
 
-
-if config.USE_LEGACY_TYPE_SYSTEM:
-    range_impl_map = {
-        types.int32 : (types.range_state32_type, types.range_iter32_type),
-        types.int64 : (types.range_state64_type, types.range_iter64_type),
-        types.uint64 : (types.unsigned_range_state64_type, types.unsigned_range_iter64_type)
-    }
-else:
-    range_impl_map = {
-        types.py_int: (types.range_state_type, types.range_iter_type),
-    }
+range_impl_map = {
+    types.int32 : (types.range_state32_type, types.range_iter32_type),
+    types.int64 : (types.range_state64_type, types.range_iter64_type),
+    types.uint64 : (types.unsigned_range_state64_type, types.unsigned_range_iter64_type)
+}
 
 for int_type, state_types in range_impl_map.items():
     make_range_impl(int_type, *state_types)

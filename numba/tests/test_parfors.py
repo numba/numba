@@ -2047,6 +2047,14 @@ class TestParfors(TestParforsBase):
             return x
         self.check(test_impl, np.zeros((10, 10)), 3)
 
+    def test_partial_sum_1d_parallel(self):
+        def test_impl(A):
+            result = np.zeros(A.shape, dtype=A.dtype)
+            for idx in numba.pndindex(A.shape):
+                result[idx] = A[idx]
+            return result
+        self.check(test_impl, np.random.random((2,)))
+
     def test_prange_unknown_call1(self):
         @register_jitable
         def issue7854_proc(u, i, even, size):

@@ -111,5 +111,6 @@ cp "$WHEEL_REPACKED" "$WHEEL_DIR/"
 
 # Verify the final wheel (in the temp dir before cleanup)
 $PYTHON_EXECUTABLE -m twine check "$WHEEL_REPACKED"
+$PYTHON_EXECUTABLE /io/buildscripts/github/test_wheel_contents.py "$WHEEL_DIR/$WHEEL_REPACKED"
 
 echo "Wheel repair and patch completed successfully"

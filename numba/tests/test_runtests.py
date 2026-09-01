@@ -218,12 +218,12 @@ class TestCase(unittest.TestCase):
         pipe_yml = yaml.load(data, Loader=Loader)
 
         templates = pipe_yml['jobs']
-        # first look at the items in the first two templates, this is osx/linux
+        # first look at the items in the first template, this is linux.
         start_indexes = []
-        for tmplt in templates[:2]:
-            matrix = tmplt['parameters']['matrix']
-            for setup in matrix.values():
-                start_indexes.append(setup['TEST_START_INDEX'])
+        tmplt = templates[0]
+        matrix = tmplt['parameters']['matrix']
+        for setup in matrix.values():
+            start_indexes.append(setup['TEST_START_INDEX'])
 
         # next look at the items in the windows only template
         winpath = ['..', '..', 'buildscripts', 'azure', 'azure-windows.yml']

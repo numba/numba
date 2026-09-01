@@ -23,8 +23,22 @@ min_python_version = "3.10"
 max_python_version = "3.15"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.22"
-min_llvmlite_version = "0.46.0dev0"
-max_llvmlite_version = "0.47"
+min_llvmlite_version = "0.50.0dev0"
+max_llvmlite_version = "0.51"
+
+
+def _detect_lapack_ilp64():
+    """
+    Decide, at build time, whether to use ILP64 BLAS/LAPACK ABI.
+
+    Set NUMBA_LAPACK_ILP64 environment variable to 1 to enable ILP64, see
+    "Build time environment variables" section of the install docs for
+    details.
+    """
+    return os.environ.get("NUMBA_LAPACK_ILP64") == "1"
+
+
+lapack_build_ilp64 = _detect_lapack_ilp64()
 
 if sys.platform.startswith('linux'):
     # Patch for #2555 to make wheels without libpython
@@ -118,12 +132,13 @@ def is_building():
         # User forgot to give an argument probably, let setuptools handle that.
         return True
 
-    build_commands = ['build', 'build_py', 'build_ext', 'build_clib'
+    build_commands = ['build', 'build_py', 'build_ext', 'build_clib',
                       'build_scripts', 'install', 'install_lib',
                       'install_headers', 'install_scripts', 'install_data',
                       'sdist', 'bdist', 'bdist_dumb', 'bdist_rpm',
                       'bdist_wininst', 'check', 'build_doc', 'bdist_wheel',
-                      'bdist_egg', 'develop', 'easy_install', 'test']
+                      'bdist_egg', 'develop', 'easy_install', 'test',
+                      'editable_wheel', ]
     return any(bc in sys.argv[1:] for bc in build_commands)
 
 
@@ -171,7 +186,12 @@ def get_ext_modules():
                                        "numba/cext/utils.c",
                                        "numba/cext/dictobject.c",
                                        "numba/cext/listobject.c",
+                                       "numba/cext/setobject.c",
                                        ],
+                              define_macros=[
+                                  ("NUMBA_LAPACK_BUILD_ILP64",
+                                   int(lapack_build_ilp64)),
+                              ],
                               # numba/_random.c needs pthreads
                               extra_link_args=install_name_tool_fixer +
                               extra_link_args,
@@ -255,17 +275,29 @@ def get_ext_modules():
         # They are binary compatible and may not safely coexist in a process, as
         # libiomp5 is more prevalent and often linked in for NumPy it is used
         # here!
-        ompcompileflags = ['-fopenmp']
-        omplinkflags = ['-fopenmp=libiomp5']
+        # Apple clang requires -Xclang -fopenmp, conda clang uses -fopenmp
+        try:
+            is_apple_clang = b'Apple' in subprocess.check_output(['clang', '--version'])
+        except Exception:
+            is_apple_clang = False
+
+        if is_apple_clang:
+            ompcompileflags = ['-Xclang', '-fopenmp']
+            omplinkflags = ['-Xclang', '-fopenmp', '-liomp5']
+        else:
+            ompcompileflags = ['-fopenmp']
+            omplinkflags = ['-fopenmp=libiomp5']
         omppath = ['lib', 'clang', '*', 'include', 'omp.h']
         have_openmp = check_file_at_path(omppath)
     else:
         cpp11flags = ['-std=c++11']
         ompcompileflags = ['-fopenmp']
+        # -ldl is needed because omppool.cpp uses dlsym() to probe for
+        # OpenMP 5.0+ symbols at runtime.
         if platform.machine() == 'ppc64le':
-            omplinkflags = ['-fopenmp']
+            omplinkflags = ['-fopenmp', '-ldl']
         else:
-            omplinkflags = ['-fopenmp']
+            omplinkflags = ['-fopenmp', '-ldl']
 
     # Disable tbb if forced by user with NUMBA_DISABLE_TBB=1
     if os.getenv("NUMBA_DISABLE_TBB"):
@@ -399,13 +431,12 @@ metadata = dict(
         "numba.cuda.tests.doc_examples.ffi": ["*.cu"],
         "numba.tests": ["pycc_distutils_usecase/*.py"],
         # Some C files are needed by pycc
-        "numba": ["*.c", "*.h"],
+        "numba": ["*.c", "*.h", "py.typed"],
         "numba.pycc": ["*.c", "*.h"],
         "numba.core.runtime": ["*.cpp", "*.c", "*.h"],
         "numba.cext": ["*.c", "*.h"],
         # numba gdb hook init command language file
         "numba.misc": ["cmdlang.gdb"],
-        "numba.typed": ["py.typed"],
         "numba.cuda" : ["cpp_function_wrappers.cu", "cuda_fp16.h",
                         "cuda_fp16.hpp"]
     },

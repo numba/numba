@@ -802,7 +802,7 @@ class ParallelTestRunner(runner.TextTestRunner):
                 pool = spawnctx.Pool(self.nprocs)
                 try:
                     self._run_parallel_tests(result, pool, child_runner, tests)
-                except:
+                except Exception:
                     # On exception, kill still active workers immediately
                     pool.terminate()
                     # Make sure exception is reported and not ignored

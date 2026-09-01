@@ -114,6 +114,13 @@ e.g. declaring the type of a :ref:`typed.List <feature-typed-list>`.::
 Note that this feature is only supported for simple numerical types. Application
 to compound types, e.g. record types, is not supported.
 
+Container Types
+---------------
+
+* ``numba.types.ListType``: Represents the type of the experimental typed list container. See :ref:`feature-typed-list`.
+* ``numba.types.DictType``: Represents the type of the experimental typed dictionary container. See :ref:`feature-typed-dict`.
+* ``numba.types.SetType``: Represents the type of the experimental typed set container. See :ref:`feature-typed-set`.
+
 Functions
 ---------
 

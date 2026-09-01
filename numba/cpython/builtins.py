@@ -131,14 +131,34 @@ def gen_non_eq(val):
     def none_equality(a, b):
         a_none = isinstance(a, types.NoneType)
         b_none = isinstance(b, types.NoneType)
+        # Case: both are None.
         if a_none and b_none:
             def impl(a, b):
                 return val
             return impl
+        # Case: only one is None.
         elif a_none ^ b_none:
-            def impl(a, b):
-                return not val
-            return impl
+            a_optional = isinstance(a, types.Optional)
+            b_optional = isinstance(b, types.Optional)
+            # Special case, one optional, needs a runtime check.
+            # Using the implementation for `is` as the distinction between `is`
+            # and `==` is semantically irrelevant in the Numba context. Numba
+            # types can not override `__eq__` like Python objects can so the
+            # two comparisons are semantically equivalent.
+            if a_optional or b_optional:
+                if val:
+                    def impl(a, b):
+                        return a is b
+                else:
+                    def impl(a, b):
+                        return not a is b
+                return impl
+            # Otherwise one is None, the other isn't.
+            else:
+                nval = not val
+                def impl(a, b):
+                    return nval
+                return impl
     return none_equality
 
 overload(operator.eq)(gen_non_eq(True))
@@ -215,28 +235,6 @@ def do_minmax(context, builder, argtys, args, cmpop):
     resty, resval = reduce(binary_minmax, typvals)
     return resval
 
-
-@lower_builtin(max, types.BaseTuple)
-def max_iterable(context, builder, sig, args):
-    argtys = list(sig.args[0])
-    args = cgutils.unpack_tuple(builder, args[0])
-    return do_minmax(context, builder, argtys, args, operator.gt)
-
-@lower_builtin(max, types.VarArg(types.Any))
-def max_vararg(context, builder, sig, args):
-    return do_minmax(context, builder, sig.args, args, operator.gt)
-
-@lower_builtin(min, types.BaseTuple)
-def min_iterable(context, builder, sig, args):
-    argtys = list(sig.args[0])
-    args = cgutils.unpack_tuple(builder, args[0])
-    return do_minmax(context, builder, argtys, args, operator.lt)
-
-@lower_builtin(min, types.VarArg(types.Any))
-def min_vararg(context, builder, sig, args):
-    return do_minmax(context, builder, sig.args, args, operator.lt)
-
-
 def _round_intrinsic(tp):
     # round() rounds half to even
     return "llvm.rint.f%d" % (tp.bitwidth,)
@@ -291,14 +289,36 @@ def round_impl_binary(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # Numeric constructors
 
-@lower_builtin(int, types.Any)
 @lower_builtin(float, types.Any)
-def int_impl(context, builder, sig, args):
+def float_impl(context, builder, sig, args):
     [ty] = sig.args
     [val] = args
     res = context.cast(builder, val, ty, sig.return_type)
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
+@intrinsic
+def cast_int(typingctx, x):
+    if isinstance(x, types.Integer):
+        retty = x
+    else:
+        retty = types.intp
+
+    def impl(context, builder, signature, args):
+        [ty] = signature.args
+        [val] = args
+        res = context.cast(builder, val, ty, signature.return_type)
+        return impl_ret_untracked(context, builder, signature.return_type, res)
+
+    sig = signature(retty, x)
+    return sig, impl
+
+@overload(int)
+def ol_int(x):
+    if isinstance(x, (types.Integer, types.Boolean, types.Float)):
+        def impl(x):
+            return cast_int(x)
+
+        return impl
 
 @lower_builtin(float, types.StringLiteral)
 def float_literal_impl(context, builder, sig, args):
@@ -456,6 +476,7 @@ def bool_sequence(x):
         types.UnicodeCharSeq,
         types.DictType,
         types.ListType,
+        types.SetType,
         types.UnicodeType,
         types.Set,
     )
@@ -469,85 +490,6 @@ def bool_sequence(x):
 def bool_none(x):
     if isinstance(x, types.NoneType) or x is None:
         return lambda x: False
-
-# -----------------------------------------------------------------------------
-
-def get_type_max_value(typ):
-    if isinstance(typ, types.Float):
-        return np.inf
-    if isinstance(typ, types.Integer):
-        return typ.maxval
-    raise NotImplementedError("Unsupported type")
-
-def get_type_min_value(typ):
-    if isinstance(typ, types.Float):
-        return -np.inf
-    if isinstance(typ, types.Integer):
-        return typ.minval
-    raise NotImplementedError("Unsupported type")
-
-@infer_global(get_type_min_value)
-@infer_global(get_type_max_value)
-class MinValInfer(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        assert len(args) == 1
-        if isinstance(args[0], (types.DType, types.NumberClass)):
-            return signature(args[0].dtype, *args)
-
-@lower_builtin(get_type_min_value, types.NumberClass)
-@lower_builtin(get_type_min_value, types.DType)
-def lower_get_type_min_value(context, builder, sig, args):
-    typ = sig.args[0].dtype
-
-    if isinstance(typ, types.Integer):
-        bw = typ.bitwidth
-        lty = ir.IntType(bw)
-        val = typ.minval
-        res = ir.Constant(lty, val)
-    elif isinstance(typ, types.Float):
-        bw = typ.bitwidth
-        if bw == 32:
-            lty = ir.FloatType()
-        elif bw == 64:
-            lty = ir.DoubleType()
-        else:
-            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
-        npty = getattr(np, 'float{}'.format(bw))
-        res = ir.Constant(lty, -np.inf)
-    elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
-        bw = 64
-        lty = ir.IntType(bw)
-        val = types.int64.minval + 1 # minval is NaT, so minval + 1 is the smallest value
-        res = ir.Constant(lty, val)
-    return impl_ret_untracked(context, builder, lty, res)
-
-@lower_builtin(get_type_max_value, types.NumberClass)
-@lower_builtin(get_type_max_value, types.DType)
-def lower_get_type_max_value(context, builder, sig, args):
-    typ = sig.args[0].dtype
-
-    if isinstance(typ, types.Integer):
-        bw = typ.bitwidth
-        lty = ir.IntType(bw)
-        val = typ.maxval
-        res = ir.Constant(lty, val)
-    elif isinstance(typ, types.Float):
-        bw = typ.bitwidth
-        if bw == 32:
-            lty = ir.FloatType()
-        elif bw == 64:
-            lty = ir.DoubleType()
-        else:
-            raise NotImplementedError("llvmlite only supports 32 and 64 bit floats")
-        npty = getattr(np, 'float{}'.format(bw))
-        res = ir.Constant(lty, np.inf)
-    elif isinstance(typ, (types.NPDatetime, types.NPTimedelta)):
-        bw = 64
-        lty = ir.IntType(bw)
-        val = types.int64.maxval
-        res = ir.Constant(lty, val)
-    return impl_ret_untracked(context, builder, lty, res)
 
 # -----------------------------------------------------------------------------
 
@@ -639,6 +581,94 @@ def boolval_max(val1, val2):
         def bool_max_impl(val1, val2):
             return val1 or val2
         return bool_max_impl
+
+# -----------------------------------------------------------------------------
+
+@overload(max)
+def ol_max(*x):
+    if len(x) == 1 and (
+        (
+            isinstance(x[0], types.UniTuple) and
+            isinstance(x[0].dtype, (types.Number, types.Boolean))
+        ) or (
+            isinstance(x[0], types.BaseTuple) and
+            all(isinstance(ty, (types.Number, types.Boolean)) for ty in x[0].types)
+        )
+    ):
+        def impl(*x):
+            return max_vararg(x[0])
+        return impl
+    else:
+        for ty in x:
+            if not isinstance(ty, (types.Number, types.Boolean)):
+                return None
+
+        def impl(*x):
+            return max_vararg(x)
+        return impl
+
+
+@overload(min)
+def ol_min(*x):
+    if len(x) == 1 and (
+        (
+            isinstance(x[0], types.UniTuple) and
+            isinstance(x[0].dtype, (types.Number, types.Boolean))
+        ) or (
+            isinstance(x[0], types.BaseTuple) and
+            all(isinstance(ty, (types.Number, types.Boolean)) for ty in x[0].types)
+        )
+    ):
+        def impl(*x):
+            return min_vararg(x[0])
+        return impl
+    else:
+        for ty in x:
+            if not isinstance(ty, (types.Number, types.Boolean)):
+                return None
+
+        def impl(*x):
+            return min_vararg(x)
+        return impl
+
+
+@intrinsic
+def max_vararg(context, x):
+    if len(x) == 0:
+        raise TypingError("max() argument is an empty tuple")
+
+    def impl(context, builder, sig, args):
+        argtys = list(sig.args[0])
+        args = cgutils.unpack_tuple(builder, args[0])
+        return do_minmax(context, builder, argtys, args, operator.gt)
+
+    retty = context.unify_types(*x)
+    if retty is not None:
+        sig = signature(retty, x)
+        return sig, impl
+    else:
+        raise TypingError(f"Given types cannot be unified: {[ty for ty in x]}")
+
+
+@intrinsic
+def min_vararg(context, x):
+    if len(x) == 0:
+        raise TypingError("min() argument is an empty tuple")
+
+    def impl(context, builder, sig, args):
+        argtys = list(sig.args[0])
+        args = cgutils.unpack_tuple(builder, args[0])
+        return do_minmax(context, builder, argtys, args, operator.lt)
+
+    retty = context.unify_types(*x)
+    if retty is not None:
+        sig = signature(retty, x)
+        return sig, impl
+    else:
+        raise TypingError(f"Given types cannot be unified: {[ty for ty in x]}")
+
+
+# -----------------------------------------------------------------------------
 
 
 greater_than = register_jitable(lambda a, b: a > b)
@@ -790,7 +820,8 @@ def ol_isinstance(var, typs):
                         types.Function, types.ClassType, types.UnicodeType,
                         types.ClassInstanceType, types.NoneType, types.Array,
                         types.Boolean, types.Float, types.UnicodeCharSeq,
-                        types.Complex, types.NPDatetime, types.NPTimedelta,)
+                        types.Complex, types.NPDatetime, types.NPTimedelta,
+                        types.SetType)
     if not isinstance(var_ty, supported_var_ty):
         msg = f'isinstance() does not support variables of type "{var_ty}".'
         raise NumbaTypeError(msg)
@@ -833,7 +864,7 @@ def ol_isinstance(var, typs):
         if isinstance(typ, types.TypeRef):
             # Use of Numba type classes is in general not supported as they do
             # not work when the jit is disabled.
-            if key not in (types.ListType, types.DictType):
+            if key not in (types.ListType, types.DictType, types.SetType):
                 msg = ("Numba type classes (except numba.typed.* container "
                        "types) are not supported.")
                 raise NumbaTypeError(msg)

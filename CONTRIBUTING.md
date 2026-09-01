@@ -4,10 +4,7 @@ Even simple documentation improvements are encouraged.
 
 # Asking questions
 
-Numba has a [discourse forum](https://numba.discourse.group/) for longer/more
-involved questions and an IRC channel on
-[gitter.im](https://gitter.im/numba/numba) for quick questions and interactive
-help.
+Numba has a [discourse forum](https://numba.discourse.group/) for questions.
 
 # Ways to help:
 
@@ -16,8 +13,7 @@ changes, see **contributing patches** below.
 
 ## Quick things:
 
-* Answer a question asked on [discourse](https://numba.discourse.group/) or
-  [gitter.im](https://gitter.im/numba/numba).
+* Answer a question asked on [discourse](https://numba.discourse.group/).
 * Review a page of documentation, check it makes sense, that it's clear and
   still relevant, that the examples are present, good and working. Fix anything
   that needs updating in a pull request.

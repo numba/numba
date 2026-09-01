@@ -1336,6 +1336,17 @@ class TestMixedInts(TestCase):
         self.run_binary(pyfunc, control_signed,
                         samples, signed_pairs, **extra_cast)
 
+    def test_pow_precision(self):
+        @njit
+        def pow2(x):
+            return x ** 2
+
+        x = 94906267
+        expected = x * x
+        result = pow2(x)
+        self.assertEqual(result, expected)
+        self.assertEqual(result, pow2.py_func(x))
+
     def test_truediv(self):
 
         def control(a, b):

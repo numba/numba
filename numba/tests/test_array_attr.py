@@ -269,7 +269,7 @@ class TestArrayCTypes(MemoryLeakMixin, TestCase):
                 b = np.ndarray(1, buffer=outbuf, dtype=np.float64)
                 b[0] = (a + a.size)[0]
                 return True
-            except:
+            except Exception:
                 import traceback
                 traceback.print_exception()
                 return False

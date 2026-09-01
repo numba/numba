@@ -20,6 +20,7 @@ from numba.core.errors import TypingError, NumbaTypeError, \
     NumbaPerformanceWarning
 from .arrayobj import make_array, _empty_nd_impl, array_copy
 from numba.np import numpy_support as np_support
+from numba import _helperlib
 
 ll_char = ir.IntType(8)
 ll_char_p = ll_char.as_pointer()
@@ -30,30 +31,76 @@ intp_t = cgutils.intp_t
 ll_intp_p = intp_t.as_pointer()
 
 
-# fortran int type, this needs to match the F_INT C declaration in
-# _lapack.c and is present to accommodate potential future 64bit int
-# based LAPACK use.
-F_INT_nptype = np.int32
-if config.USE_LEGACY_TYPE_SYSTEM:
-    F_INT_nbtype = types.int32
+def _lapack_runtime_is_ilp64():
+    """
+    Whether the scipy actually installed *right now* provides ILP64 (64-bit
+    Fortran integer) scipy.linalg.cython_blas / cython_lapack, as opposed to
+    the usual 32-bit ("LP64") ones. This may differ from what numba's own
+    _lapack.c wrappers were *built* for (see _LAPACK_BUILD_ILP64 below and
+    _check_lapack_int_width()) -- scipy can be upgraded/downgraded/swapped
+    independently of numba. SciPy records which ABI it built for in
+    scipy.__config__ (see scipy.linalg.blas.HAS_LP64, which reads the same
+    flag).
+    """
+    try:
+        from scipy.__config__ import CONFIG
+        return bool(CONFIG['Build Dependencies']['blas']['cython blas ilp64'])
+    except (ImportError, KeyError, TypeError):
+        # scipy predates this __config__ entry (pre-Meson builds); those
+        # releases only ever shipped LP64 cython_blas/cython_lapack.
+        return False
 
-    # BLAS kinds as letters
-    _blas_kinds = {
-        types.float32: 's',
-        types.float64: 'd',
-        types.complex64: 'c',
-        types.complex128: 'z',
-    }
-else:
-    F_INT_nbtype = types.np_int32
 
-    # BLAS kinds as letters
-    _blas_kinds = {
-        types.np_float32: 's',
-        types.np_float64: 'd',
-        types.np_complex64: 'c',
-        types.np_complex128: 'z',
-    }
+# Which Fortran integer width numba/_lapack.c was built to target (see
+# NUMBA_LAPACK_ILP64 in the "Build time environment variables" install
+# docs, and setup.py). numba/_lapack.c is only ever compiled for this one
+# width -- it is fixed at build time, not re-probed on every import, and is
+# compiled into numba._helperlib itself so it can't drift from the actual
+# binary.
+_LAPACK_BUILD_ILP64 = bool(getattr(_helperlib, "LAPACK_BUILD_ILP64", False))
+_LAPACK_ILP64 = _LAPACK_BUILD_ILP64
+
+_LAPACK_INSTALL_DOCS_URL = (
+    "https://numba.readthedocs.io/en/stable/user/installing.html"
+    "#numba-source-install-env_vars"
+)
+
+
+def _check_lapack_int_width():
+    """
+    Guard against a numba built for one Fortran integer width being used
+    against a scipy providing the other one: the compiled numba_* wrappers
+    assume a fixed width, so calling through the wrong one is silent memory
+    corruption or wrong answers, not a clean error -- refuse outright
+    instead. Called from ensure_blas()/ensure_lapack(), once scipy is
+    confirmed importable.
+    """
+    runtime_ilp64 = _lapack_runtime_is_ilp64()
+    if runtime_ilp64 != _LAPACK_BUILD_ILP64:
+        built_as = "ILP64" if _LAPACK_BUILD_ILP64 else "LP64"
+        found_as = "ILP64" if runtime_ilp64 else "LP64"
+        raise RuntimeError(
+            f"This copy of Numba was built for {built_as} BLAS/LAPACK, but "
+            f"the scipy installed now provides {found_as} "
+            f"scipy.linalg.cython_blas/cython_lapack. Numba's compiled "
+            f"BLAS/LAPACK wrappers assume a fixed integer width and will "
+            f"produce wrong results or crash if called against the wrong "
+            f"one. Either install a matching SciPy or rebuild Numba "
+            f"-- see {_LAPACK_INSTALL_DOCS_URL} for details."
+        )
+
+
+# fortran int type, this needs to match the F_INT typedef in _lapack.c.
+F_INT_nptype = np.int64 if _LAPACK_ILP64 else np.int32
+F_INT_nbtype = types.int64 if _LAPACK_ILP64 else types.int32
+
+# BLAS kinds as letters
+_blas_kinds = {
+    types.float32: 's',
+    types.float64: 'd',
+    types.complex64: 'c',
+    types.complex128: 'z',
+}
 
 
 def get_blas_kind(dtype, func_name="<BLAS function>"):
@@ -68,6 +115,7 @@ def ensure_blas():
         import scipy.linalg.cython_blas
     except ImportError:
         raise ImportError("scipy 0.16+ is required for linear algebra")
+    _check_lapack_int_width()
 
 
 def ensure_lapack():
@@ -75,6 +123,7 @@ def ensure_lapack():
         import scipy.linalg.cython_lapack
     except ImportError:
         raise ImportError("scipy 0.16+ is required for linear algebra")
+    _check_lapack_int_width()
 
 
 def make_constant_slot(context, builder, ty, val):
@@ -534,26 +583,26 @@ def dot_2_vv(context, builder, sig, args, conjugate=False):
 
 
 @overload(np.dot)
-def dot_2(left, right):
+def dot_2(a, b):
     """
     np.dot(a, b)
     """
-    return dot_2_impl('np.dot()', left, right)
+    return dot_2_impl('np.dot()', a, b)
 
 
 @overload(operator.matmul)
-def matmul_2(left, right):
+def matmul_2(a, b):
     """
     a @ b
     """
-    return dot_2_impl("'@'", left, right)
+    return dot_2_impl("'@'", a, b)
 
 
-def dot_2_impl(name, left, right):
-    if isinstance(left, types.Array) and isinstance(right, types.Array):
+def dot_2_impl(name, a, b):
+    if isinstance(a, types.Array) and isinstance(b, types.Array):
         @intrinsic
-        def _impl(typingcontext, left, right):
-            ndims = (left.ndim, right.ndim)
+        def _impl(typingcontext, a, b):
+            ndims = (a.ndim, b.ndim)
 
             def _dot2_codegen(context, builder, sig, args):
                 ensure_blas()
@@ -570,27 +619,29 @@ def dot_2_impl(name, left, right):
                     else:
                         raise AssertionError('unreachable')
 
-            if left.dtype != right.dtype:
+            if a.dtype != b.dtype:
                 raise TypingError(
                     "%s arguments must all have the same dtype" % name)
 
             if ndims == (2, 2):
-                return_type = types.Array(left.dtype, 2, 'C')
+                return_type = types.Array(a.dtype, 2, 'C')
             elif ndims == (2, 1) or ndims == (1, 2):
-                return_type = types.Array(left.dtype, 1, 'C')
+                return_type = types.Array(a.dtype, 1, 'C')
             elif ndims == (1, 1):
-                return_type = left.dtype
+                return_type = a.dtype
             else:
                 raise TypingError(("%s: inputs must have compatible "
                                    "dimensions") % name)
-            return signature(return_type, left, right), _dot2_codegen
+            return signature(return_type, a, b), _dot2_codegen
 
-        if left.layout not in 'CF' or right.layout not in 'CF':
+        if (
+            a.layout not in "CF" or b.layout not in "CF"
+        ) and not config.DISABLE_PERFORMANCE_WARNINGS:
             warnings.warn(
                 "%s is faster on contiguous arrays, called on %s" % (
-                    name, (left, right),), NumbaPerformanceWarning)
+                    name, (a, b),), NumbaPerformanceWarning)
 
-        return lambda left, right: _impl(left, right)
+        return lambda a, b: _impl(a, b)
 
 
 @overload(np.vdot)
@@ -616,7 +667,9 @@ def vdot(left, right):
                     "np.vdot() arguments must all have the same dtype")
             return signature(left.dtype, left, right), codegen
 
-        if left.layout not in 'CF' or right.layout not in 'CF':
+        if (
+            left.layout not in "CF" or right.layout not in "CF"
+        ) and not config.DISABLE_PERFORMANCE_WARNINGS:
             warnings.warn(
                 "np.vdot() is faster on contiguous arrays, called on %s"
                 % ((left, right),), NumbaPerformanceWarning)
@@ -793,14 +846,14 @@ def dot_3_mm(context, builder, sig, args):
 
 
 @overload(np.dot)
-def dot_3(left, right, out):
+def dot_3(a, b, out):
     """
     np.dot(a, b, out)
     """
-    if (isinstance(left, types.Array) and isinstance(right, types.Array) and
+    if (isinstance(a, types.Array) and isinstance(b, types.Array) and
             isinstance(out, types.Array)):
         @intrinsic
-        def _impl(typingcontext, left, right, out):
+        def _impl(typingcontext, a, b, out):
             def codegen(context, builder, sig, args):
                 ensure_blas()
 
@@ -813,25 +866,25 @@ def dot_3(left, right, out):
                         return dot_3_vm(context, builder, sig, args)
                     else:
                         raise AssertionError('unreachable')
-            if left.dtype != right.dtype or left.dtype != out.dtype:
+            if a.dtype != b.dtype or a.dtype != out.dtype:
                 raise TypingError(
                     "np.dot() arguments must all have the same dtype")
 
-            return signature(out, left, right, out), codegen
+            return signature(out, a, b, out), codegen
 
-        if left.layout not in 'CF' or right.layout not in 'CF' or out.layout\
-            not in 'CF':
+        if (
+            a.layout not in "CF"
+            or b.layout not in "CF"
+            or out.layout not in "CF"
+        ) and not config.DISABLE_PERFORMANCE_WARNINGS:
             warnings.warn(
                 "np.vdot() is faster on contiguous arrays, called on %s"
-                % ((left, right),), NumbaPerformanceWarning)
+                % ((a, b),), NumbaPerformanceWarning)
 
-        return lambda left, right, out: _impl(left, right, out)
+        return lambda a, b, out: _impl(a, b, out)
 
 
-if config.USE_LEGACY_TYPE_SYSTEM:
-    fatal_error_func = types.ExternalFunction("numba_fatal_error", types.intc())
-else:
-    fatal_error_func = types.ExternalFunction("numba_fatal_error", types.c_intp())
+fatal_error_func = types.ExternalFunction("numba_fatal_error", types.intc())
 
 
 @register_jitable
@@ -1045,6 +1098,12 @@ def eig_impl(a):
     JOBVL = ord('N')
     JOBVR = ord('V')
 
+    # NumPy >= 2.5 always returns complex from eig for real input.
+    _eig_always_complex = np_support.numpy_version >= (2, 5)
+    _eig_real_ty = getattr(a.dtype, "underlying_float", a.dtype)
+    _eig_cmplx_dtype = np_support.as_dtype(
+        getattr(types, f"complex{2 * _eig_real_ty.bitwidth}"))
+
     def real_eig_impl(a):
         """
         eig() implementation for real arrays.
@@ -1066,7 +1125,12 @@ def eig_impl(a):
         vr = np.empty((n, ldvr), dtype=a.dtype)
 
         if n == 0:
-            return (wr, vr.T)
+            if _eig_always_complex:
+                w = np.empty(n, dtype=_eig_cmplx_dtype)
+                v = np.empty((n, n), dtype=_eig_cmplx_dtype)
+                return (w, v.T)
+            else:
+                return (wr, vr.T)
 
         r = numba_ez_rgeev(kind,
                             JOBVL,
@@ -1080,7 +1144,39 @@ def eig_impl(a):
                             ldvl,
                             vr.ctypes,
                             ldvr)
+
         _handle_err_maybe_convergence_problem(r)
+
+        if _eig_always_complex:
+            # Unpack real LAPACK wr/wi and vr into complex eigenvalues/vectors.
+            # Conjugate pairs: LAPACK stores Re/Im parts in consecutive columns.
+            # vr rows hold eigenvectors (same layout as the real-output path).
+            w = np.empty(n, dtype=_eig_cmplx_dtype)
+            v = np.empty((n, n), dtype=_eig_cmplx_dtype)
+            i = 0
+            while i < n:
+                if wi[i] == 0.0:
+                    w[i] = complex(wr[i], wi[i])
+                    for j in range(n):
+                        v[i, j] = complex(vr[i, j], 0.0)
+                    i += 1
+                else:
+                    w[i] = complex(wr[i], wi[i])
+                    w[i + 1] = complex(wr[i + 1], wi[i + 1])
+                    for j in range(n):
+                        re = vr[i, j]
+                        im = vr[i + 1, j]
+                        v.real[i, j] = re
+                        v.imag[i, j] = im
+                        v.real[i + 1, j] = re
+                        v.imag[i + 1, j] = -im
+                    i += 2
+
+            # put these in to help with liveness analysis,
+            # `.ctypes` doesn't keep the vars alive
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size,
+                                  wi.size, w.size, v.size])
+            return (w, v.T)
 
         # By design numba does not support dynamic return types, however,
         # Numpy does. Numpy uses this ability in the case of returning
@@ -1099,6 +1195,7 @@ def eig_impl(a):
         # put these in to help with liveness analysis,
         # `.ctypes` doesn't keep the vars alive
         _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size, wi.size])
+
         return (wr, vr.T)
 
     def cmplx_eig_impl(a):
@@ -1160,6 +1257,12 @@ def eigvals_impl(a):
     JOBVL = ord('N')
     JOBVR = ord('N')
 
+    # NumPy >= 2.5 always returns complex from eigvals for real input.
+    _eigvals_always_complex = np_support.numpy_version >= (2, 5)
+    _eigvals_real_ty = getattr(a.dtype, "underlying_float", a.dtype)
+    _eigvals_cmplx_dtype = np_support.as_dtype(
+        getattr(types, f"complex{2 * _eigvals_real_ty.bitwidth}"))
+
     def real_eigvals_impl(a):
         """
         eigvals() implementation for real arrays.
@@ -1178,7 +1281,10 @@ def eigvals_impl(a):
         wr = np.empty(n, dtype=a.dtype)
 
         if n == 0:
-            return wr
+            if _eigvals_always_complex:
+                return np.empty(n, dtype=_eigvals_cmplx_dtype)
+            else:
+                return wr
 
         wi = np.empty(n, dtype=a.dtype)
 
@@ -1199,6 +1305,17 @@ def eigvals_impl(a):
                             vr.ctypes,
                             ldvr)
         _handle_err_maybe_convergence_problem(r)
+
+        if _eigvals_always_complex:
+            w = np.empty(n, dtype=_eigvals_cmplx_dtype)
+            for i in range(n):
+                w[i] = complex(wr[i], wi[i])
+
+            # put these in to help with liveness analysis,
+            # `.ctypes` doesn't keep the vars alive
+            _dummy_liveness_func([acpy.size, vl.size, vr.size, wr.size,
+                                  wi.size, w.size])
+            return w
 
         # By design numba does not support dynamic return types, however,
         # Numpy does. Numpy uses this ability in the case of returning

@@ -1716,11 +1716,11 @@ class TraceRunner(object):
         else:
             raise NotImplementedError(PYVERSION)
         code = state.pop()
-        closure = annotations = kwdefaults = defaults = None
+        closure = annotations = annotate = kwdefaults = defaults = None
         if PYVERSION in ((3, 13), (3, 14)):
             assert inst.arg is None
             # SET_FUNCTION_ATTRIBUTE is responsible for setting
-            # closure, annotations, kwdefaults and defaults.
+            # closure, annotations, annotate, kwdefaults and defaults.
         else:
             if inst.arg & 0x8:
                 closure = state.pop()
@@ -1737,6 +1737,7 @@ class TraceRunner(object):
             code=code,
             closure=closure,
             annotations=annotations,
+            annotate=annotate,
             kwdefaults=kwdefaults,
             defaults=defaults,
             res=res,
@@ -1747,19 +1748,23 @@ class TraceRunner(object):
         assert PYVERSION in ((3, 13), (3, 14))
         make_func_stack = state.pop()
         data = state.pop()
-        if inst.arg == 0x1:
+        if inst.arg & 0x01:
             # 0x01 a tuple of default values for positional-only and
             #      positional-or-keyword parameters in positional order
             state.set_function_attribute(make_func_stack, defaults=data)
-        elif inst.arg & 0x2:
+        elif inst.arg & 0x02:
             # 0x02 a tuple of strings containing parameters’ annotations
             state.set_function_attribute(make_func_stack, kwdefaults=data)
-        elif inst.arg & 0x4:
+        elif inst.arg & 0x04:
             # 0x04 a tuple of strings containing parameters’ annotations
             state.set_function_attribute(make_func_stack, annotations=data)
-        elif inst.arg == 0x8:
+        elif inst.arg & 0x08:
             # 0x08 a tuple containing cells for free variables, making a closure
             state.set_function_attribute(make_func_stack, closure=data)
+        elif inst.arg & 0x10:
+            # In 3.14 a new flag was added it has the value 0x10/16
+            # Numba report: https://github.com/numba/numba/issues/10319
+            state.set_function_attribute(make_func_stack, annotate=data)
         else:
             raise AssertionError("unreachable")
         state.push(make_func_stack)

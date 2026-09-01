@@ -1,0 +1,11 @@
+Coalesce runs of list appends in the ``list_to_tuple`` peephole
+---------------------------------------------------------------
+
+The peephole that rewrites the ``BUILD_LIST``/``LIST_APPEND``/
+``LIST_TO_TUPLE`` bytecode sequence emitted a separate one-element
+``build_tuple`` and binary addition for every appended item. The resulting
+chain of tuple concatenations makes both the Numba IR and the LLVM IR
+lowered from it quadratic in the number of items. CPython uses this
+bytecode for every call with more than 30 arguments, so wide calls were
+disproportionately expensive to compile. Consecutive appends are now
+collected into a single ``build_tuple``.

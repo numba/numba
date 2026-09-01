@@ -15,8 +15,7 @@ import operator
 
 from numba.np import arrayobj, ufunc_db, numpy_support
 from numba.np.ufunc.sigparse import parse_signature
-from numba.core.imputils import (Registry, impl_ret_new_ref, force_error_model,
-                                 impl_ret_borrowed)
+from numba.core.imputils import (Registry, impl_ret_new_ref, force_error_model, impl_ret_borrowed)
 from numba.core import typing, types, utils, cgutils, callconv, config
 from numba.np.numpy_support import (
     ufunc_find_matching_loop, select_array_wrapper, from_dtype, _ufunc_loop_sig
@@ -26,6 +25,7 @@ from numba.core.typing import npydecl
 from numba.core.extending import overload, intrinsic
 
 from numba.core import errors
+from numba.np import types as npy_types
 
 registry = Registry('npyimpl')
 
@@ -235,7 +235,9 @@ class _ArrayGUHelper(namedtuple('_ArrayHelper', ('context', 'builder',
             res = _getitem_array_generic(context, builder,
                                          self.inner_arr_ty, arrty, arr,
                                          index_types, indices)
-            return impl_ret_borrowed(context, builder, self.inner_arr_ty, res)
+            # NOTE: don't call impl_ret_borrowed since the caller doesn't handle
+            #       references; but this is a borrow.
+            return res
 
     def guard_shape(self, loopshape):
         inner_ndim = self.inner_arr_ty.ndim
@@ -320,19 +322,15 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         return _ArrayHelper(ctxt, bld, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
     elif (types.unliteral(tyinp) in types.number_domain | {types.boolean}
-          or isinstance(tyinp, types.scalars._NPDatetimeBase)):
+          or isinstance(tyinp, npy_types.datetime._NPDatetimeBase)):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
         raise NotImplementedError('unsupported type for {0}: {1}'.format(where,
                                   str(tyinp)))
 
 
-if config.USE_LEGACY_TYPE_SYSTEM:
-    _broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
-                                    types.intp, types.CPointer(types.intp))
-else:
-    _broadcast_onto_sig = types.np_intp(types.np_intp, types.CPointer(types.np_intp),
-                                    types.np_intp, types.CPointer(types.np_intp))
+_broadcast_onto_sig = types.intp(types.intp, types.CPointer(types.intp),
+                                types.intp, types.CPointer(types.intp))
 
 def _broadcast_onto(src_ndim, src_shape, dest_ndim, dest_shape):
     '''Low-level utility function used in calculating a shape for
@@ -867,12 +865,13 @@ def _make_dtype_object(typingctx, desc):
         return from_nb_type(nb_type)
 
 @overload(np.dtype)
-def numpy_dtype(desc):
+def numpy_dtype(dtype):
     """Provide an implementation so that numpy.dtype function can be lowered.
     """
-    if isinstance(desc, (types.Literal, types.functions.NumberClass)):
-        def imp(desc):
-            return _make_dtype_object(desc)
+    if isinstance(dtype, (types.Literal, types.functions.NumberClass)):
+        def imp(dtype):
+            return _make_dtype_object(dtype)
         return imp
     else:
-        raise errors.NumbaTypeError('unknown dtype descriptor: {}'.format(desc))
+        raise errors.NumbaTypeError(
+            'unknown dtype descriptor: {}'.format(dtype))

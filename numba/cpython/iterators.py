@@ -84,7 +84,7 @@ def make_zip_object(context, builder, sig, args):
 
 @lower_builtin('iternext', types.ZipType)
 @iternext_impl(RefType.NEW)
-def iternext_zip(context, builder, sig, args, result):
+def iternext_zip_ZipType(context, builder, sig, args, result):
     [zip_type] = sig.args
     [zipobj] = args
 
@@ -122,7 +122,7 @@ def iternext_zip(context, builder, sig, args, result):
 
 @lower_builtin('iternext', types.Generator)
 @iternext_impl(RefType.BORROWED)
-def iternext_zip(context, builder, sig, args, result):
+def iternext_zip_Generator(context, builder, sig, args, result):
     genty, = sig.args
     gen, = args
     impl = context.get_generator_impl(genty)

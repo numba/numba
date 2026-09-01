@@ -26,7 +26,7 @@ class TestTryBareExcept(TestCase):
 
         try:
             <body>
-        except:
+        except Exception:
             <handling>
     """
     def test_try_inner_raise(self):

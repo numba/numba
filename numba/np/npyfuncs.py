@@ -45,10 +45,7 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
         msg = '{0} called with invalid types: {1}'.format(fname, sig)
         assert False, msg
 
-if config.USE_LEGACY_TYPE_SYSTEM:
-    cast_arg_ty = types.float64
-else:
-    cast_arg_ty = types.np_float64
+cast_arg_ty = types.float64
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
                                  func_name, ty=cast_arg_ty):
@@ -294,7 +291,7 @@ def _fabs(context, builder, arg):
 
 def np_complex_div_impl(context, builder, sig, args):
     # Extracted from numpy/core/src/umath/loops.c.src,
-    # inspired by complex_div_impl
+    # inspired by numba.cpython.numbers.complex_div_impl
     # variables named coherent with loops.c.src
     # This is implemented using the approach described in
     #   R.L. Smith. Algorithm 116: Complex division.

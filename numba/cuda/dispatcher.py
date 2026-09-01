@@ -23,6 +23,7 @@ from numba.cuda import types as cuda_types
 
 from numba import cuda
 from numba import _dispatcher
+from numba.np import types as npy_types
 
 from warnings import warn
 
@@ -438,7 +439,7 @@ class _Kernel(serialize.ReduceMixin):
             kernelargs.append(ctypes.c_double(val.real))
             kernelargs.append(ctypes.c_double(val.imag))
 
-        elif isinstance(ty, (types.NPDatetime, types.NPTimedelta)):
+        elif isinstance(ty, (npy_types.NPDatetime, npy_types.NPTimedelta)):
             kernelargs.append(ctypes.c_int64(val.view(np.int64)))
 
         elif isinstance(ty, types.Record):
@@ -519,7 +520,10 @@ class _LaunchConfiguration:
         self.stream = stream
         self.sharedmem = sharedmem
 
-        if config.CUDA_LOW_OCCUPANCY_WARNINGS:
+        if (
+            config.CUDA_LOW_OCCUPANCY_WARNINGS
+            and not config.DISABLE_PERFORMANCE_WARNINGS
+        ):
             # Warn when the grid has fewer than 128 blocks. This number is
             # chosen somewhat heuristically - ideally the minimum is 2 times
             # the number of SMs, but the number of SMs varies between devices -

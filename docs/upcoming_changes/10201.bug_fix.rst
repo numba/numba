@@ -1,6 +1,0 @@
-Fix UnboundLocalError when calling copy on non-Array types
-----------------------------------------------------------
-
-Enables calling np.copy inside a jitted function with non-Array 
-arguments, such as lists or scalars, and fails with a readable
-error message on incoercible types

@@ -174,6 +174,8 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
 
 unary_math_intr(math.fabs, 'llvm.fabs')
 exp_impl = unary_math_intr(math.exp, 'llvm.exp')
+if sys.version_info >= (3, 11):
+    exp2_impl = unary_math_intr(math.exp2, 'llvm.exp2')
 log_impl = unary_math_intr(math.log, 'llvm.log')
 log10_impl = unary_math_intr(math.log10, 'llvm.log10')
 log2_impl = unary_math_intr(math.log2, 'llvm.log2')
@@ -284,6 +286,12 @@ def ldexp_impl(context, builder, sig, args):
         "double": "numba_ldexp",
         }[str(fltty)]
     fn = cgutils.insert_pure_function(builder.module, fnty, name=fname)
+    # The exponent is a C `int`, and ABIs such as PowerPC64LE ELFv2
+    # require the caller to sign-extend it into the full argument
+    # register.  A bare i32 parameter carries no signedness, so LLVM
+    # does not, and a negative exponent reaches the callee as a large
+    # positive one.  See issue #8489.
+    fn.args[1].add_attribute('signext')
     res = builder.call(fn, (val, exp))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 

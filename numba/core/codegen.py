@@ -534,6 +534,8 @@ class CodeLibrary(metaclass=ABCMeta):
         # Track names of the dynamic globals
         self._dynamic_globals = []
 
+        self._reload_init = set()
+
     @property
     def has_dynamic_globals(self):
         self._ensure_finalized()
@@ -759,6 +761,8 @@ class CPUCodeLibrary(CodeLibrary):
         seen = set()
         for library in self._linking_libraries:
             if library not in seen:
+                # Parent inherits reload_init
+                self._reload_init.update(library._reload_init)
                 seen.add(library)
                 self._final_module.link_in(
                     library._get_module_for_linking(), preserve=True,
