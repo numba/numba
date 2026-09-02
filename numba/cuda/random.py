@@ -137,7 +137,15 @@ def uint64_to_unit_float64(x):
 def uint64_to_unit_float32(x):
     '''Convert uint64 to float32 value in the range [0.0, 1.0)'''
     x = uint64(x)
-    return float32(uint64_to_unit_float64(x))
+    # Take the top 24 bits directly, matching how uint64_to_unit_float64
+    # takes the top 53 bits, rather than narrowing a 53-bit float64
+    # value into float32's 24-bit significand -- rounding during that
+    # narrowing could push the largest values up to exactly 1.0,
+    # violating the documented [0.0, 1.0) contract (gh-10810). Every
+    # operand is explicitly cast to float32 to avoid NumPy's casting
+    # rule that promotes float32 [op] uint64 to float64 (see the
+    # module-level warning above about verbose casting).
+    return float32(x >> uint32(40)) * float32(1) / float32(uint64(1) << uint32(24))
 
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)

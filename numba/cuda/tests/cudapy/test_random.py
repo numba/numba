@@ -8,7 +8,9 @@ from numba.cuda.testing import skip_on_cudasim, CUDATestCase
 
 from numba.cuda.random import \
     xoroshiro128p_uniform_float32, xoroshiro128p_normal_float32, \
-    xoroshiro128p_uniform_float64, xoroshiro128p_normal_float64
+    xoroshiro128p_uniform_float64, xoroshiro128p_normal_float64, \
+    uint64_to_unit_float32, init_xoroshiro128p_states_cpu, \
+    xoroshiro128p_dtype
 
 
 # Distributions
@@ -65,6 +67,34 @@ class TestCudaRandomXoroshiro128p(CUDATestCase):
                                                          stream=stream)
         s = states.copy_to_host()
         self.assertEqual(len(np.unique(s)), 10)
+
+    def test_uint64_to_unit_float32_stays_below_one(self):
+        # Regression test for gh-10810: uint64_to_unit_float32 narrowed
+        # a 53-bit float64 value into float32's 24-bit significand with
+        # a plain cast, so the largest inputs rounded up to exactly
+        # 1.0, violating the documented [0.0, 1.0) contract. Sweep the
+        # boundary values called out in the issue.
+        boundary_values = np.array(
+            [0, 1, 2 ** 39, 2 ** 63, 2 ** 64 - 2 ** 39, 2 ** 64 - 2049,
+             2 ** 64 - 1], dtype=np.uint64)
+
+        for x in boundary_values:
+            result = uint64_to_unit_float32(x)
+            self.assertGreaterEqual(np.float32(result), np.float32(0.0))
+            self.assertLess(np.float32(result), np.float32(1.0))
+
+    def test_uniform_float32_upper_bound(self):
+        # Regression test for gh-10810. This seed was derived (by
+        # inverting splitmix64, see the issue) to make the first draw
+        # from a fresh state exactly 2**64 - 2**39, the smallest value
+        # that triggered xoroshiro128p_uniform_float32 to return 1.0.
+        states = np.zeros(1, dtype=xoroshiro128p_dtype)
+        init_xoroshiro128p_states_cpu(states, seed=2362621375128073891,
+                                       subsequence_start=0)
+
+        result = xoroshiro128p_uniform_float32(states, 0)
+        self.assertLess(np.float32(result), np.float32(1.0))
+        self.assertGreaterEqual(np.float32(result), np.float32(0.0))
 
     def check_uniform(self, kernel_func, dtype):
         states = cuda.random.create_xoroshiro128p_states(32 * 2, seed=1)
