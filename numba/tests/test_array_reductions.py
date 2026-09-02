@@ -708,6 +708,38 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
+    def test_np_median_scalar(self):
+        # The standard scalar matrix (int32, float32/float64, +/-0.0, inf, nan,
+        # booleans, and the string typing-error case) is exercised by the
+        # shared helper, matching the np.mean/np.std/np.min scalar tests.
+        self.check_scalar_basic(array_median_global)
+
+        # Extra cases not covered by check_scalar_basic:
+        cfunc = jit(nopython=True)(array_median_global)
+
+        def check(arg):
+            self.assertPreciseEqual(cfunc(arg), array_median_global(arg))
+
+        # Wider integer widths, confirming integer scalars promote to float64.
+        check(np.int64(-3))
+        check(np.uint32(5))
+
+        # Python scalars.
+        check(5)
+        check(True)
+        check(3.5)
+
+        # NumPy timedelta64 scalars: returned unchanged, with unit preserved.
+        check(np.timedelta64())
+        check(np.timedelta64(5, 'ms'))
+        check(np.timedelta64(-3, 'D'))
+        check(np.timedelta64('NaT', 's'))
+
+        # datetime64 is rejected at typing: np.median goes through a mean
+        # reduction and 'add' is undefined on two datetime64 operands.
+        with self.assertTypingError():
+            cfunc(np.datetime64('2020-01-01'))
+
     def check_percentile_and_quantile(self, pyfunc, q_upper_bound):
         cfunc = jit(nopython=True)(pyfunc)
 

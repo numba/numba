@@ -2112,8 +2112,25 @@ def _median_inner(temp_arry, n):
 
 @overload(np.median)
 def np_median(a):
-    if not isinstance(a, types.Array):
-        return
+    # Scalar case: the median of a single value is that value. NumPy's
+    # scalar promotion here (int/bool -> float64, float/complex/timedelta64
+    # unchanged) is identical to np.mean()'s, since median-of-one-value is a
+    # mean-of-one-value under the hood -- reuse array_mean()'s scalar
+    # branches directly instead of duplicating the dtype handling.
+    if isinstance(a, (types.Integer, types.Boolean, types.Float,
+                      types.Complex, types.NPTimedelta)):
+        return array_mean(a)
+    elif isinstance(a, types.NPDatetime):
+        # NumPy does not support median on datetime64 input. Its median goes
+        # through a mean reduction, and 'add' is undefined for two datetime64
+        # operands, so np.median() raises a UFuncTypeError for both scalar and
+        # array datetime64 input. Reject at typing time to match that.
+        raise TypingError(
+            "np.median() does not support datetime64 input, matching NumPy, "
+            "for which 'add' is undefined on two datetime64 operands"
+        )
+    elif not isinstance(a, types.Array):
+        return None
 
     is_datetime = as_dtype(a.dtype).char in 'mM'
 
