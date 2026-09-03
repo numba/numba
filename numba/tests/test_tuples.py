@@ -663,6 +663,12 @@ class TestConversions(TestCase):
         msg = "No conversion from UniTuple(int32 x 3) to Point(int32 x 3)"
         self.assertIn(msg, str(raises.exception))
 
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.NamedUniTuple(types.none, 3, Point),
+                Point(4, 5, 6))
+        msg = "No conversion from Point(int32 x 3) to Point(none x 3)"
+        self.assertIn(msg, str(raises.exception))
+
 
 class TestMethods(TestCase):
 
