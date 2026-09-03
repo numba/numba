@@ -96,7 +96,7 @@ class NamedTupleAttribute(AttributeTemplate):
 
 class NamedTupleCallTemplate(AbstractTemplate):
     """Base call template for NamedTuple class constructors.
-    
+
     Subclasses should define class variables `instance_class` and `key`.
     """
 
@@ -134,8 +134,5 @@ class NamedTupleClassAttribute(AttributeTemplate):
         class SpecificNamedTupleCallTemplate(NamedTupleCallTemplate):
             key = classty.instance_class
             instance_class = classty.instance_class
-
-        instance_class = classty.instance_class
-        pysig = utils.pysignature(instance_class)
 
         return types.Function(SpecificNamedTupleCallTemplate)
