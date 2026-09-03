@@ -127,9 +127,10 @@ Item selection and manipulation:
 
 * :meth:`~numpy.ndarray.take`
 * :meth:`~numpy.ndarray.repeat` (no axis argument)
-* :meth:`~numpy.ndarray.sort` (without arguments)
+* :meth:`~numpy.ndarray.sort` (``kind`` key word argument supported for
+  values ``'quicksort'``, ``'mergesort'`` and ``'stable'``)
 * :meth:`~numpy.ndarray.argsort` (``kind`` key word argument supported for
-  values ``'quicksort'`` and ``'mergesort'``)
+  values ``'quicksort'``, ``'mergesort'`` and ``'stable'``)
 * :meth:`~numpy.ndarray.nonzero`
 
 Where applicable, the corresponding top-level NumPy functions (such as
@@ -1106,7 +1107,7 @@ Sorting, searching, and counting
 * :func:`numpy.sort` (no optional arguments, quicksort accepts
   multi-dimensional array and sorts its last axis).
 * :func:`numpy.argsort` (``kind`` key word argument supported for values
-  ``'quicksort'`` and ``'mergesort'``)
+  ``'quicksort'``, ``'mergesort'`` and ``'stable'``)
 * :func:`numpy.argwhere`
 * :func:`numpy.count_nonzero` (axis only supports scalar values)
 * :func:`numpy.extract`

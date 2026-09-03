@@ -462,8 +462,20 @@ class ArrayAttribute(AttributeTemplate):
     @bound_function("array.sort")
     def resolve_sort(self, ary, args, kws):
         assert not args
-        assert not kws
-        return signature(types.none)
+        kwargs = dict(kws)
+        kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
+        if not isinstance(kind, types.StringLiteral):
+            raise TypingError('"kind" must be a string literal')
+        if kind.literal_value not in ('quicksort', 'mergesort', 'stable'):
+            msg = 'Unsupported "kind": {!r}'
+            raise TypingError(msg.format(kind.literal_value))
+        if kwargs:
+            msg = "Unsupported keywords: {!r}"
+            raise TypingError(msg.format([k for k in kwargs.keys()]))
+        def sort_stub(kind='quicksort'):
+            pass
+        pysig = utils.pysignature(sort_stub)
+        return signature(types.none, kind).replace(pysig=pysig)
 
     @bound_function("array.argsort")
     def resolve_argsort(self, ary, args, kws):
@@ -472,6 +484,9 @@ class ArrayAttribute(AttributeTemplate):
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if not isinstance(kind, types.StringLiteral):
             raise TypingError('"kind" must be a string literal')
+        if kind.literal_value not in ('quicksort', 'mergesort', 'stable'):
+            msg = 'Unsupported "kind": {!r}'
+            raise TypingError(msg.format(kind.literal_value))
         if kwargs:
             msg = "Unsupported keywords: {!r}"
             raise TypingError(msg.format([k for k in kwargs.keys()]))

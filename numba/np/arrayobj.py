@@ -6982,6 +6982,9 @@ def get_sort_func(kind, lt_impl, is_argsort=False):
     """
     Get a sort implementation of the given kind.
     """
+    if kind == 'stable':
+        # NumPy treats 'stable' as an alias for 'mergesort'
+        kind = 'mergesort'
     key = kind, lt_impl.__name__, is_argsort
 
     try:
@@ -7011,18 +7014,29 @@ def lt_implementation(dtype):
         return default_lt
 
 
-@lower_builtin("array.sort", types.Array)
+@lower_builtin("array.sort", types.Array, types.StringLiteral)
 def array_sort(context, builder, sig, args):
-    arytype = sig.args[0]
+    arytype, kind = sig.args
+    kind = kind.literal_value
 
-    sort_func = get_sort_func(kind='quicksort',
+    sort_func = get_sort_func(kind=kind,
                               lt_impl=lt_implementation(arytype.dtype))
 
-    def array_sort_impl(arr):
-        # Note we clobber the return value
-        sort_func(arr)
+    if kind in ('mergesort', 'stable') and arytype.ndim > 1:
+        def array_sort_impl(arr):
+            # mergesort only sorts 1D arrays, so sort each slice along
+            # the last axis as quicksort does for multidimensional arrays
+            for idx in np.ndindex(arr.shape[:-1]):
+                sort_func(arr[idx])
+    else:
+        def array_sort_impl(arr):
+            # Note we clobber the return value
+            sort_func(arr)
 
-    return context.compile_internal(builder, array_sort_impl, sig, args)
+    innersig = sig.replace(args=sig.args[:1])
+    innerargs = args[:1]
+    return context.compile_internal(builder, array_sort_impl,
+                                    innersig, innerargs)
 
 
 @overload(np.sort)
