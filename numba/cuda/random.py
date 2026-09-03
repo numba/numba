@@ -145,7 +145,9 @@ def uint64_to_unit_float32(x):
     # operand is explicitly cast to float32 to avoid NumPy's casting
     # rule that promotes float32 [op] uint64 to float64 (see the
     # module-level warning above about verbose casting).
-    return float32(x >> uint32(40)) * float32(1) / float32(uint64(1) << uint32(24))
+    numerator = float32(x >> uint32(40))
+    denominator = float32(uint64(1) << uint32(24))
+    return numerator * float32(1) / denominator
 
 
 @jit(forceobj=_forceobj, looplift=_looplift, nopython=_nopython)

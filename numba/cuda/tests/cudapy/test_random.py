@@ -90,7 +90,7 @@ class TestCudaRandomXoroshiro128p(CUDATestCase):
         # that triggered xoroshiro128p_uniform_float32 to return 1.0.
         states = np.zeros(1, dtype=xoroshiro128p_dtype)
         init_xoroshiro128p_states_cpu(states, seed=2362621375128073891,
-                                       subsequence_start=0)
+                                      subsequence_start=0)
 
         result = xoroshiro128p_uniform_float32(states, 0)
         self.assertLess(np.float32(result), np.float32(1.0))
