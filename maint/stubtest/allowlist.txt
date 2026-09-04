@@ -37,9 +37,10 @@ numba\.misc\.numba_gdbinfo
 numba\.misc\.numba_sysinfo
 numba\.misc\.timsort
 numba\.mviewbuf
-numba\.np\.(arraymath|arrayobj|linalg|npyimpl|numpy_support|random|types|ufunc_db|unsafe)\..*
+numba\.np\.(arraymath|arrayobj|linalg|npdatetime|npyimpl|numpy_support|random|ufunc_db|unsafe)\..*
 numba\.np\.extensions
 numba\.np\.polynomial\.polynomial_core\.type_polynomial
+numba\.np\.types\.datetime\..*
 numba\.np\.ufunc\.parallel\..*
 numba\.np\.ufunc\.(omppool|tbbpool|workqueue)
 numba\.parfors\..*
