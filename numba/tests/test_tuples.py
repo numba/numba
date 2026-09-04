@@ -1,5 +1,6 @@
 import collections
 import itertools
+import typing
 
 import numpy as np
 
@@ -16,6 +17,11 @@ Point = collections.namedtuple('Point', ('x', 'y', 'z'))
 Point2 = collections.namedtuple('Point2', ('x', 'y', 'z'))
 
 Empty = collections.namedtuple('Empty', ())
+
+class PointWithDefaults(typing.NamedTuple):
+    x: int
+    y: int = 2
+    z: int = 3
 
 def tuple_return_usecase(a, b):
     return a, b
@@ -483,6 +489,23 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         check(make_point)
         check(make_point_kws)
 
+    def test_construct_with_defaults(self):
+        pyfunc = lambda x, z: PointWithDefaults(x, z=z)
+        cfunc = jit(nopython=True)(pyfunc)
+        for args in (5, 6), (5.5, 6j):
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertIs(type(got), type(expected))
+            self.assertPreciseEqual(got, expected)
+
+    def test_construct_with_defaults_and_access_field(self):
+        pyfunc = lambda x: PointWithDefaults(x).y
+        cfunc = jit(nopython=True)(pyfunc)
+        expected = pyfunc(1)
+        got = cfunc(1)
+        self.assertIs(type(got), type(expected))
+        self.assertPreciseEqual(got, expected)
+
     def test_type(self):
         # Test the type() built-in on named tuples
         pyfunc = type_usecase
@@ -608,6 +631,36 @@ class TestConversions(TestCase):
         with self.assertRaises(errors.TypingError) as raises:
             check(fromty, types.Tuple((types.float32,)), (4, 5))
         msg = "No conversion from UniTuple(int32 x 2) to UniTuple(float32 x 1)"
+        self.assertIn(msg, str(raises.exception))
+
+    def test_namedtuple_conversions(self):
+        check = self.check_conversion
+        fromty = types.NamedUniTuple(types.int32, 3, Point)
+        check(fromty, types.NamedUniTuple(types.float32, 3, Point), Point(4, 5, 6))
+        check(fromty,
+            types.NamedTuple((types.float32, types.int16, types.int32), Point),
+            Point(4, 5, 6))
+        aty = types.NamedUniTuple(types.int32, 0, Empty)
+        bty = types.NamedTuple((), Empty)
+        check(aty, bty, Empty())
+        check(bty, aty, Empty())
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.UniTuple(types.float32, 3), Point(4, 5, 6))
+        msg = "No conversion from Point(int32 x 3) to UniTuple(float32 x 3)"
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.NamedUniTuple(types.int32, 3, Point2),
+                Point(4, 5, 6))
+        msg = "No conversion from Point(int32 x 3) to Point2(int32 x 3)"
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(types.UniTuple(types.int32, 3),
+                types.NamedUniTuple(types.int32, 3, Point),
+                Point(4, 5, 6))
+        msg = "No conversion from UniTuple(int32 x 3) to Point(int32 x 3)"
         self.assertIn(msg, str(raises.exception))
 
 
