@@ -25,7 +25,7 @@ numba\.core\.untyped_passes\..*
 numba\.core\.utils\..*
 numba\.cpython\..*
 numba\.cuda\..*
-numba\.experimental\..*
+numba\.experimental\.structref
 numba\.misc\.POST
 numba\.misc\.appdirs\..*
 numba\.misc\.coverage_support\..*
