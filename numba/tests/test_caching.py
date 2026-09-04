@@ -229,6 +229,19 @@ class BaseCacheTest(TestCase):
         sys.modules.pop(self.modname, None)
         sys.path.remove(self.tempdir)
 
+    @staticmethod
+    def _module_cached_path(module):
+        # Python 3.15 no longer sets module.__cached__, use
+        # __spec__.cached instead. See:
+        # https://docs.python.org/3/deprecations/pending-removal-in-3.15.html
+        cached = getattr(module, '__cached__', None)
+        if cached is not None:
+            return cached
+        spec = getattr(module, '__spec__', None)
+        if spec is not None:
+            return spec.cached
+        return None
+
     def import_module(self):
         # Import a fresh version of the test module.  All jitted functions
         # in the test module will start anew and load overloads from
@@ -236,10 +249,10 @@ class BaseCacheTest(TestCase):
         old = sys.modules.pop(self.modname, None)
         if old is not None:
             # Make sure cached bytecode is removed
-            cached = [old.__cached__]
-            for fn in cached:
+            cached_path = self._module_cached_path(old)
+            if cached_path:
                 try:
-                    os.unlink(fn)
+                    os.unlink(cached_path)
                 except FileNotFoundError:
                     pass
         mod = import_dynamic(self.modname)

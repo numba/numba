@@ -654,7 +654,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
                 _CONST2 = "PLACEHOLDER2"
             return _CONST2 + 4
 
-        if PYVERSION in ((3, 14), ):
+        if PYVERSION in ((3, 14), (3, 15)):
             # The order of the __code__.co_consts changes with 3.14
             new = self._literal_const_sample_generator(impl, {0:0, 2:20})
         elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -665,7 +665,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
         iconst = impl.__code__.co_consts
         nconst = new.__code__.co_consts
 
-        if PYVERSION in ((3, 14), ):
+        if PYVERSION in ((3, 14), (3, 15)):
             self.assertEqual(iconst, ("PLACEHOLDER1", 3.14159,
                                       "PLACEHOLDER2"))
             self.assertEqual(nconst, (0, 3.14159,  20))
@@ -689,7 +689,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
         for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
             for const in c_inp:
 
-                if PYVERSION in ((3, 14), ):
+                if PYVERSION in ((3, 14), (3, 15)):
                     # The order of the __code__.co_consts changes with 3.14
                     func = self._literal_const_sample_generator(impl,
                                                                 {0: const})
@@ -712,7 +712,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
         for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
             for const in c_inp:
 
-                if PYVERSION in ((3, 14), ):
+                if PYVERSION in ((3, 14), (3, 15)):
                     # The order of the __code__.co_consts changes with 3.14
                     func = self._literal_const_sample_generator(impl,
                                                                 {0: const})
@@ -737,7 +737,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
         for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
             for const in c_inp:
 
-                if PYVERSION in ((3, 14), ):
+                if PYVERSION in ((3, 14), (3, 15)):
                     # The order of the __code__.co_consts changes with 3.14
                     func = self._literal_const_sample_generator(impl,
                                                                 {0: const})
@@ -762,7 +762,7 @@ class TestBranchPrunePredicates(TestBranchPruneBase, SerialMixin):
         for c_inp, prune in (self._TRUTHY, False), (self._FALSEY, True):
             for const in c_inp:
 
-                if PYVERSION in ((3, 14), ):
+                if PYVERSION in ((3, 14), (3, 15)):
                     # The order of the __code__.co_consts changes with 3.14
                     func = self._literal_const_sample_generator(impl,
                                                                 {0: const})
