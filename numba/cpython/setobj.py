@@ -1111,9 +1111,8 @@ class SetInstance(object):
                     # instead of using `_add_key` for every entry, since the
                     # size of the new set is the same, we can just copy the
                     # data directly without having to re-compute the hash
-                    cgutils.raw_memcpy(builder, payload.entries,
-                                       src_payload.entries, nentries,
-                                       entry_size)
+                    cgutils.memcpy(builder, payload.entries,
+                                   src_payload.entries, nentries, entry_size)
                     # increment the refcounts to simulate `_add_key` for each
                     # element
                     with src_payload._iterate() as loop:
