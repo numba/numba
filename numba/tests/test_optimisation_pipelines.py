@@ -30,7 +30,9 @@ class TestPassManagerOptimization(TestCase):
 
         module = llvm.parse_assembly(full_ir)
 
-        name = foo.overloads[foo.signatures[0]].fndesc.mangled_name
+        foo_ol = foo.overloads[foo.signatures[0]]
+        name = foo_ol.fndesc.mangled_name
+        name = foo_ol.library._symbol_map.get(name, name)
         funcs = [x for x in module.functions if x.name == name]
         self.assertEqual(len(funcs), 1)
         func = funcs[0]

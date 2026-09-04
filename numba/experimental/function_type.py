@@ -311,7 +311,8 @@ def lower_cast_dispatcher_to_function_type(context, builder, fromty, toty, val):
         # Store the cfunc
         sfunc.c_addr = addr
         # Store the jit func
-        fn = context.declare_function(builder.module, cres.fndesc)
+        fn = context.declare_function(builder.module, cres.fndesc,
+                                      libs=(cres.library,))
         sfunc.jit_addr = builder.bitcast(fn, llvoidptr)
         # Link-in the dispatcher library
         context.active_code_library.add_linking_library(cres.library)
