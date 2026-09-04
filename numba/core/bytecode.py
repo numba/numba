@@ -1,8 +1,10 @@
 import sys
 from collections import namedtuple, OrderedDict
 import dis
+import hashlib
 import inspect
 import itertools
+import os
 
 from types import CodeType, ModuleType
 
@@ -625,12 +627,30 @@ class FunctionIdentity(serialize.ReduceMixin):
     being compiled, not necessarily the top-level user function
     (the two might be distinct).
     """
+    # Process-local counter used for ids that do not need to be stable across
+    # processes: *derived* identities (see derive()) and functions with no
+    # readable source (see _compute_unique_id).
     _unique_ids = itertools.count(1)
 
     @classmethod
     def from_function(cls, pyfunc):
         """
         Create the FunctionIdentity of the given function.
+        """
+        self = cls._build_from_function(pyfunc)
+        # Even the same function definition can be compiled into several
+        # different function objects with distinct closure variables, so we
+        # disambiguate with a unique id, which is deterministic across
+        # processes.
+        self._set_unique_id(cls._compute_unique_id(self.code, self.func))
+        return self
+
+    @classmethod
+    def _build_from_function(cls, pyfunc):
+        """Build a FunctionIdentity for *pyfunc* without assigning its id.
+
+        Shared by from_function() and derive(); the caller is responsible for
+        assigning the unique id via _set_unique_id().
         """
         func = get_function_object(pyfunc)
         code = get_code_object(func)
@@ -659,20 +679,117 @@ class FunctionIdentity(serialize.ReduceMixin):
         self.firstlineno = code.co_firstlineno
         self.arg_count = len(pysig.parameters)
         self.arg_names = list(pysig.parameters)
-
-        # Even the same function definition can be compiled into
-        # several different function objects with distinct closure
-        # variables, so we make sure to disambiguate using an unique id.
-        uid = next(cls._unique_ids)
-        self.unique_name = '{}${}'.format(self.func_qualname, uid)
-        self.unique_id = uid
-
         return self
 
-    def derive(self):
-        """Copy the object and increment the unique counter.
+    def _set_unique_id(self, uid):
+        self.unique_id = uid
+        self.unique_name = '{}${}'.format(self.func_qualname, uid)
+
+    @classmethod
+    def _closure_key(cls, closure):
+        """Key distinguishing closures that share the same bytecode.
+
+        Distinct closure instances must map to distinct ids, otherwise their
+        compiled symbols would collide within a process.  For the id to also be
+        stable across processes, each captured value is keyed the same way
+        ``caching._index_key`` keys the cache: by its serialisation.  That way
+        a closure shares a cache entry across processes *iff* it also shares an
+        id, so the two never disagree.
         """
-        return self.from_function(self.func)
+        parts = []
+        for cell in closure:
+            try:
+                val = cell.cell_contents
+            except ValueError:
+                # Cell not yet populated (e.g. a recursive closure).
+                parts.append(b'<empty>')
+                continue
+            parts.append(cls._closure_cell_key(val))
+        return b'\x00'.join(parts)
+
+    @classmethod
+    def _closure_cell_key(cls, val):
+        """Return a byte key for a single captured cell value.
+
+        Everything is serialised the same way as the cell contents in
+        ``caching._index_key``, *except* a captured Numba Dispatcher: pickling
+        one would assign it a uuid and pin it in the dispatcher memo (see
+        numba's ``test_inner_function_lifetime``), and its serialisation is
+        per-process anyway, so identity is used for it.  Identity is also the
+        fallback for anything that cannot be pickled.
+        """
+        # Imported lazily: numba.core.dispatcher imports this module.
+        from numba.core.dispatcher import _MemoMixin
+        if not isinstance(val, _MemoMixin):
+            try:
+                return b'S' + serialize.dumps(val)
+            except Exception:
+                pass
+        # TODO: a captured Dispatcher falls back to identity, so a closure that
+        # captures a jitted function is not cache-shared across processes (its
+        # id here, and caching._index_key's dumps() of it, both embed a
+        # per-process uuid).  Recursing into the Dispatcher's wrapped py_func to
+        # build a deterministic identity key (bytecode + closure + source) would
+        # let such nested functions be cached across processes and would also
+        # avoid the pickling retention noted above -- but only if
+        # caching._index_key is changed to key captured Dispatchers the same
+        # way.
+        return ('%s@%d' % (type(val).__qualname__, id(val))).encode(
+            'utf-8', 'backslashreplace')
+
+    @classmethod
+    def _compute_unique_id(cls, code, func):
+        """Compute a deterministic, process-independent id for the function.
+
+        The id must satisfy two requirements at once:
+
+        * **Stable across processes** for the *same* function so that the id
+          baked into the mangled symbol name (as the ``v<id>`` ABI tag) matches
+          regardless of compilation order.  This is what links the ufunc
+          wrapper cache (``.nbc``) to the gufunc kernel cache (``guf-*.nbc``).
+
+        * **Distinct for behaviourally-different functions**. Two functions can
+          share bytecode and closure yet differ in the module-level globals they
+          freeze in (e.g. after the source is edited), so the source file's
+          contents and the definition's line number are folded in as well.
+
+        """
+        try:
+            st = os.stat(code.co_filename)
+            # Reuse the cache layer's source hash so the id and the cache's
+            # source stamp are derived from exactly the same bytes.
+            from numba.core.caching import _hash_source_file
+            source = _hash_source_file(code.co_filename, st.st_mtime,
+                                       st.st_size)
+        except OSError:
+            # No readable source file (e.g. a function built with ``exec`` or
+            # an interactive prompt).  Such a function is not cached from a
+            # source file, so its id needs no cross-process stability.
+            # Fall back to a process-local counter.
+            return next(cls._unique_ids)
+
+        closure = getattr(func, '__closure__', None)
+        cvarbytes = cls._closure_key(closure) if closure else b''
+
+        hasher = hashlib.sha256()
+        for chunk in (code.co_code,
+                      str(code.co_firstlineno).encode(),
+                      cvarbytes,
+                      source):
+            hasher.update(chunk)
+            hasher.update(b'\x00')
+        return int(hasher.hexdigest(), 16)
+
+    def derive(self):
+        """Copy the object with a fresh, distinct unique id.
+
+        Deriving produces auxiliary IR -- loop lifting and with-context
+        (objmode) lifting -- that must not reuse the parent's mangled symbol
+        name. A process-local id is sufficient.
+        """
+        derived = type(self)._build_from_function(self.func)
+        derived._set_unique_id(next(FunctionIdentity._unique_ids))
+        return derived
 
     def _reduce_states(self):
         """
