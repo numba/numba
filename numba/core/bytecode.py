@@ -572,14 +572,19 @@ class ByteCodePy312(ByteCodePy311):
                     # NOT_TAKEN may split one region into two same-target
                     # entries. Merge them and retry.
                     end_inst = self.table.get(entry.end)
-                    if (entry in entries
-                            and end_inst is not None
+                    if (end_inst is not None
                             and end_inst.opname == "NOT_TAKEN"):
-                        i = entries.index(entry)
-                        if (i + 1 < len(entries)
+                        for i, e in enumerate(entries):
+                            if e is entry:
+                                break
+                        else:
+                            i = None
+                        if (i is not None
+                                and i + 1 < len(entries)
                                 and entries[i + 1].target == entry.target
                                 and entries[i + 1].start == end_inst.next):
                             nxt = entries[i + 1]
+                            assert entry.depth == nxt.depth
                             entries[i] = _ExceptionTableEntry(
                                 entry.start, nxt.end, entry.target,
                                 entry.depth, nxt.lasti)
