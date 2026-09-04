@@ -17,5 +17,5 @@ AGENTS.md file for Numba
 
 4) LLM generated output should prefer to not add comments i.e. use absolutely
    minimal comments and only if something is truly unusual or there is
-   something that is likely unclear and can not be improved by making the
+   something that is likely unclear and cannot be improved by making the
    code more clear.
