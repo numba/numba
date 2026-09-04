@@ -1,0 +1,9 @@
+Fix memory leak when an exception propagates out of a jitted function
+---------------------------------------------------------------------
+
+When an exception raised in a callee propagated out of a jitted function,
+references owned by that function's frame (arguments and locals live across
+the raising call) were leaked. This could pin caller-provided arrays and
+cause unbounded memory growth. Error propagation is now routed through a
+per-function cleanup block that releases all NRT-managed references owned
+by the frame before returning.
