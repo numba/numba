@@ -1,10 +1,12 @@
-from numba.core.types.abstract import Callable, Literal, Type, Hashable
-from numba.core.types.common import (Dummy, IterableType, Opaque,
-                                     SimpleIteratorType)
+from typing import TypeVar
+
+from numba.core.errors import LiteralTypingError, TypingError
 from numba.core.typeconv import Conversion
-from numba.core.errors import TypingError, LiteralTypingError
-from numba.core.ir import UndefinedType
+from numba.core.types.abstract import Callable, Hashable, Literal, Type
+from numba.core.types.common import Dummy, IterableType, Opaque, SimpleIteratorType
 from numba.core.utils import get_hashable_key
+
+_TypeT = TypeVar("_TypeT", bound=Type, default=Type)
 
 
 class PyObject(Dummy):
@@ -25,7 +27,7 @@ class Phantom(Dummy):
 
 class Undefined(Dummy):
     """
-    A type that is left imprecise.  This is used as a temporaray placeholder
+    A type that is left imprecise.  This is used as a temporary placeholder
     during type inference in the hope that the type can be later refined.
     """
 
@@ -60,13 +62,15 @@ class StringLiteral(Literal, Dummy):
 Literal.ctor_map[str] = StringLiteral
 
 
-def unliteral(lit_type):
-    """
-    Get base type from Literal type.
-    """
+def unliteral(lit_type: _TypeT) -> Type | _TypeT:
+    """Get base type from Literal type."""
     if hasattr(lit_type, '__unliteral__'):
-        return lit_type.__unliteral__()
-    return getattr(lit_type, 'literal_type', lit_type)
+        returnMe = lit_type.__unliteral__()
+    elif hasattr(lit_type, 'literal_type'):
+        returnMe = lit_type.literal_type
+    else:
+        returnMe = lit_type
+    return returnMe
 
 
 def literal(value):
