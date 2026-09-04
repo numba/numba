@@ -10,28 +10,29 @@ from typing import Any as Any_py
 
 import numpy as np
 
+from numba.np.types import NPDatetime as NPDatetime
+from numba.np.types import NPTimedelta as NPTimedelta
+
 from .abstract import *
-from .common import Opaque
+from .common import Opaque as Opaque
 from .containers import *
 from .function_type import *
 from .functions import *
 from .iterators import *
 from .misc import *
 from .npytypes import *
-from .scalars import (
-    Boolean,
-    BooleanLiteral as BooleanLiteral,
-    Complex,
-    EnumClass as EnumClass,
-    EnumMember as EnumMember,
-    Float,
-    IntEnumClass as IntEnumClass,
-    IntEnumMember as IntEnumMember,
-    Integer,
-    IntegerLiteral as IntegerLiteral,
-    parse_integer_bitwidth as parse_integer_bitwidth,
-    parse_integer_signed as parse_integer_signed,
-)
+from .scalars import Boolean as Boolean
+from .scalars import BooleanLiteral as BooleanLiteral
+from .scalars import Complex as Complex
+from .scalars import EnumClass as EnumClass
+from .scalars import EnumMember as EnumMember
+from .scalars import Float as Float
+from .scalars import Integer as Integer
+from .scalars import IntegerLiteral as IntegerLiteral
+from .scalars import IntEnumClass as IntEnumClass
+from .scalars import IntEnumMember as IntEnumMember
+from .scalars import parse_integer_bitwidth as parse_integer_bitwidth
+from .scalars import parse_integer_signed as parse_integer_signed
 
 __all__ = [
     "b1",
