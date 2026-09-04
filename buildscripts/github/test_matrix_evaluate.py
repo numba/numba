@@ -46,10 +46,13 @@ def test_wheel_has_free_threaded():
     py_versions = {r["python_version_full"] for r in WHEEL_BUILD_MATRIX}
     # wheel matrix includes the free-threaded build
     assert "3.14t" in py_versions
+    assert "3.15t" in py_versions
     # conda matrix does not (no upstream FT conda package)
-    assert "3.14t" not in {
+    conda_versions = {
         r["python_version_full"] for r in CONDA_BUILD_MATRIX
     }
+    assert "3.14t" not in conda_versions
+    assert "3.15t" not in conda_versions
 
 
 def test_wheel_314t_fields():
