@@ -286,3 +286,271 @@ of using ``ctypes`` is that it is invariant to the usage of JIT decorators.
 
    print(example(3, 4)) # 7
    print(example.py_func(3, 4)) # 7
+
+Implementing function pointer arguments
+=======================================
+
+We can pass in other C compiled functions to a cfunc as a function pointer argument.
+In order to do this, we include the type ExternalFunctionPointer in the function signature.
+
+ExternalFunctionPointer is originally designed to handle functions imported from e.g. ctypes.
+It expects a method which returns the value of the pointer to be passed to the constructor.
+We can simply pass a lambda to zero, since using ExternalFunctionPointer in the function signature will result
+in the value of the pointer coming from the function argument.
+
+Here is a working (contrived) example which uses a callback function to apply a generic operation to every element of an array.
+
+.. code-block:: python
+
+   import numpy as np
+   from numba import cfunc, float64, void, intc, types
+
+   CPointer = types.CPointer
+   ExternalFunctionPointer = types.ExternalFunctionPointer
+
+We first define the Callback type function signature and a pointer type to the callback.
+
+.. code-block:: python
+
+   CallbackSignature = float64(float64)
+   CallbackType = ExternalFunctionPointer(CallbackSignature, get_pointer=lambda x: 0)
+   
+.. note:: **get_pointer=lambda x: 0** is needed since numba will try to
+    evaluate the value of this pointer and needs some stand-in value.
+    The value will not actually be used since the type only appears in a signature.
+
+We now can write the driver function which consumes the function pointer. Note the use of the CallbackType in the signature.
+
+.. code-block:: python
+
+   @cfunc(void(CPointer(float64), intc, CallbackType))
+   def apply_to_array(x, n, callback):
+      for i in range(n):
+         x[i] = callback(x[i])
+
+For this example, we will implement a callback that simply adds one to each array element.
+
+.. code-block:: python
+
+   @cfunc(CallbackSignature)
+   def add_one(x):
+      return x + 1.0
+
+To demonstrate this example, we need to use ctypes to call the compiled function from Python.
+Normally numba can provide the equivalent ctypes pointer interface using ``function.ctypes``.
+However, this mechanism does not know how to translate the function pointer type.
+Therefore, we must do the translation manually.
+
+.. code-block:: python
+
+   import ctypes
+
+   p_double = ctypes.POINTER(ctypes.c_double)
+
+   # type of the callback in ctypes
+   CallbackCtypes = ctypes.CFUNCTYPE(ctypes.c_double, ctypes.c_double)
+
+   # create ctypes function pointer of correct type from the compiled function address
+   apply_to_array_ctypes = ctypes.CFUNCTYPE(
+      None, p_double, ctypes.c_int, CallbackCtypes
+   )(apply_to_array.address)
+
+Now we can call this example function from Python
+
+.. code-block:: python
+
+   x = np.arange(6.0)
+   apply_to_array_ctypes(x.ctypes.data_as(p_double), x.size, add_one.ctypes)
+   print(x)  # [1. 2. 3. 4. 5. 6.]
+
+Note this example could also have been handled with a decorator pattern thusly:
+
+.. code-block:: python
+
+   def get_apply_to_array(callback):
+       @cfunc(void(CPointer(float64), intc))
+       def apply_to_array(x, n):
+           for i in range(n):
+               x[i] = callback(x[i])
+
+       return apply_to_array
+       
+   x = np.arange(6.0)
+   get_apply_to_array(add_one)(x.ctypes.data_as(p_double), x.size)
+   print(x)  # [1. 2. 3. 4. 5. 6.]
+
+This design pattern eliminates the problem of the function pointer altogether.
+
+The disadvantage of this approach is that the compilation of apply_to_array cannot be cached.
+For a small function such as in this example, this is not an issue.
+However, if the driver function were a complex algorithm, it would be desirable to cache the compiled implementation.
+
+Dealing with void pointer arguments
+===================================
+
+It may be the case that optional parameters are passed to a callback function
+as ``void *`` or ``void * []``.
+For example, scipy.integrate.quad accepts a C function input (through LowLevelCallable object) that has the following signature::
+
+   double func(double x, void *user_data)
+   
+It is useful to be able to cast these pointer arguments to arbitrary types for use.
+The following intrinsic implementation will cast any pointer type to any other pointer type (including function pointers).
+
+.. code-block:: python
+
+   from numba.extending import intrinsic
+   from numba import types
+   
+   @intrinsic
+   def cast_ptr(_typingctx, input_ptr, ptr_type):
+       def impl(context, builder, _signature, args):
+           llvm_type = context.get_value_type(target_type)
+           val = builder.bitcast(args[0], llvm_type)
+           return val
+
+       if isinstance(ptr_type, types.TypeRef):
+           target_type = ptr_type.instance_type
+       else:
+           target_type = ptr_type
+
+       sig = target_type(input_ptr, ptr_type)
+       return sig, impl
+       
+You may now use this in a callback function like the scipy example.
+
+.. code-block:: python
+
+   from numba import cfunc, float64, types
+   
+   CPointer = types.CPointer
+   voidptr = types.voidptr
+   
+   p_double = CPointer(float64)
+
+   @cfunc(float64(float64, voidptr))
+   def my_callback(x, user_data):
+       y = cast_ptr(user_data, p_double)
+       return x + y[0]
+
+To demonstrate:
+
+.. code-block:: python
+
+   import ctypes
+
+   y = ctypes.c_double(2.0)
+   r = my_callback.ctypes(1.0, ctypes.pointer(y))
+   print(r)  # 3.0
+
+This cast_ptr intrinsic may be also used with the function pointer technique above.
+
+.. code-block:: python
+
+   ExternalFunctionPointer = types.ExternalFunctionPointer
+
+   CallbackSignature = float64(float64)
+   CallbackType = ExternalFunctionPointer(CallbackSignature, get_pointer=lambda x: 0)
+   
+   
+   @cfunc(float64(float64, voidptr))
+   def my_callback_fnptr(x, user_data):
+       y = cast_ptr(user_data, CallbackType)
+       return y(x)
+       
+   @cfunc(CallbackSignature)
+   def add_one(x):
+     return x + 1.0
+
+   y = add_one.ctypes
+   r = my_callback_fnptr.ctypes(1.0, y)
+   print(r)  # 2.0
+
+
+Receiving output values by reference
+====================================
+
+It is sometimes necessary to deal with APIs that pass back values by address.
+For example, it is common for a function exported from FORTRAN to have an interface that uses only reference arguments, such as::
+   
+   fortran_add_x_y(double * x, double *y, double *z)  // z = x + y
+   
+To use this in a numba cfunc (or njit) there are a couple of techniques that are useful. First, create the equivalent cfunc.
+
+.. code-block:: python
+
+   import numpy as np
+   from numba import cfunc, float64, void, intc, types
+
+   CPointer = types.CPointer
+   
+   p_double = CPointer(float64)
+   
+   @cfunc(void(p_double, p_double, p_double))
+   def fortran_add_x_y(px, py, pz):
+      pz[0] = px[0] + py[0]
+
+Now suppose we want to convert this into a cfunc by value
+
+.. code-block:: python
+
+   @cfunc(float64(float64, float64))
+   def add_x_y(x, y):
+      # use fortran_add_x_y somehow
+      
+The first technique is to use numpy arrays as temporary storage
+
+.. code-block:: python
+
+   @cfunc(float64(float64, float64))
+   def add_x_y(x, y):
+      x_arr = np.array([x])
+      y_arr = np.array([y])
+      z_arr = np.empty(1)
+      fortran_add_x_y(x_arr.ctypes, y_arr.ctypes, z_arr.ctypes)
+      return z_arr[0]
+      
+However, this is somewhat wasteful in overhead to create all the arrays. A better solution is to use intrinsics which allocate stack memory directly.
+
+.. code-block:: python
+
+   from numba.core import cgutils
+
+   @intrinsic
+   def alloca(typingctx, obj_type):
+       """
+       Allocate stack memory for an object of given type and return pointer to it.
+       """
+       def impl(context, builder, signature, args):
+           llvm_type = context.get_value_type(obj_type.instance_type)
+           val = cgutils.alloca_once(builder, llvm_type)
+           return val
+       sig = CPointer(obj_type.instance_type)(obj_type)
+       return sig, impl
+
+
+   @intrinsic
+   def alloca_value(typingctx, data):
+       """
+       Allocate stack memory for an object of type of given value, fill it with given value and return pointer to it.
+       """
+       def impl(context, builder, signature, args):
+           val = cgutils.alloca_once_value(builder, args[0])
+           return val
+       sig = CPointer(data)(data)
+       return sig, impl
+       
+We can make use of these intrinsics to greatly streamline the solution.
+
+.. code-block:: python
+
+   @cfunc(float64(float64, float64))
+   def add_x_y(x, y):
+      px = alloca_value(x)
+      py = alloca_value(y)
+      pz = alloca(float64)
+      fortran_add_x_y(px, py, pz)
+      return pz[0]
+      
+   print(add_x_y.ctypes(10.0, 2.0))  # 12.0
+   
