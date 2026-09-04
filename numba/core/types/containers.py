@@ -377,7 +377,24 @@ class StarArgUniTuple(_StarArgTupleMixin, UniTuple):
 
 
 class BaseNamedTuple(BaseTuple):
-    pass
+    def can_convert_to(self, typingctx, other):
+        if not isinstance(other, BaseNamedTuple):
+            return
+        if (
+            self.instance_class != other.instance_class
+            or self.count != other.count
+        ):
+            return
+        if self.count == 0:
+            return Conversion.safe
+
+        kinds = [
+            typingctx.can_convert(ta, tb)
+            for ta, tb in zip(self.types, other.types)
+        ]
+        if any(kind is None for kind in kinds):
+            return
+        return max(kinds)
 
 
 class NamedUniTuple(_HomogeneousTuple, BaseNamedTuple):
