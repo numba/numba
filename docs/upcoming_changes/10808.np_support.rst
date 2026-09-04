@@ -1,0 +1,9 @@
+Add support for ``np.nanargmax`` and ``np.nanargmin``.
+------------------------------------------------------
+
+The ``np.nanargmax`` and ``np.nanargmin`` functions are now supported in
+``nopython`` mode. NaN values are skipped when locating the argument of the
+maximum/minimum, the ``axis`` argument is supported, and NumPy is matched by
+raising ``ValueError`` with the same messages for empty and all-NaN input.
+Integer input behaves like ``np.argmax``/``np.argmin`` as NaN is not
+representable in integer dtypes.
