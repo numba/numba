@@ -5,37 +5,46 @@ Thanks for wanting to contribute to Numba :)
 First, if you need some help or want to chat to the core developers, please
 post to the Numba forum https://numba.discourse.group/.
 
-Second, please ensure that you have read and understood Numba's AI tool use
-policy: https://numba.readthedocs.io/en/stable/reference/ai_tools_policy.html
+-->
 
-Here's some guidelines to help the review process go smoothly.
+## Description
 
-0. Please write a description in this text box of the changes that are being
-   made.
+<!-- Describe the changes made in this PR. What problem does it solve? 
+     Be concise but complete -->
 
-1. Please ensure that you have written units tests for the changes made/features
-   added.
+## Related Issue
 
-2. If you are closing an issue please use one of the automatic closing words as
-   noted here: https://help.github.com/articles/closing-issues-using-keywords/
+<!-- If this closes an issue, use a closing keyword, e.g. "Closes #1234" -->
+<!-- See: https://help.github.com/articles/closing-issues-using-keywords/ -->
 
-3. If your pull request is not ready for review but you want to make use of the
-   continuous integration testing facilities here, please click the arrow besides
-   "Create Pull Request" and choose "Create Draft Pull Request".
-   When it's ready for review, you can click the button "ready to review" near
-   the end of the pull request
-   (besides "This pull request is still a work in progress".)
-   The maintainers will then be automatically notified to review it.
+## AI Tool Use Declaration
 
-4. Once review has taken place please do not add features or make changes out of
-   the scope of those requested by the reviewer (doing this just add delays as
-   already reviewed code ends up having to be re-reviewed/it is hard to tell
-   what is new etc!). Further, please do not rebase your branch on main/force
-   push/rewrite history, doing any of these causes the context of any comments
-   made by reviewers to be lost. If conflicts occur against main they should
-   be resolved by merging main into the branch used for making the pull
-   request.
+<!-- IMPORTANT: DO NOT delete this section; otherwise, the PR may be rejected.
+
+Contributors are expected to be transparent and label contributions that
+contain substantial amounts of tool-generated content.
+-->
+
+- I have read Numba's [AI tool use policy](https://numba.readthedocs.io/en/stable/reference/ai_tools_policy.html)
+- AI usage disclosure: <!-- mention: YES / NO; if yes, explain -->
+
+
+## Other Notes
+
+<!--
+Please review the following before requesting review:
+
+- I have added/updated unit tests for the changes made (if not, please explain why)
+- Not ready for review yet? Click the arrow next to "Create Pull Request" and
+  choose "Create Draft Pull Request" so CI still runs. Click "Ready for review"
+  when it's done.
+- Once review has started, please avoid scope creep (new features/changes
+  outside what the reviewer requested)---it forces re-review of already
+  reviewed code.
+- Please do NOT rebase/force-push/rewrite history on this branch after review
+  has begun — it destroys reviewer comment context. Resolve conflicts by
+  merging main into your branch instead.
 
 Many thanks in advance for your cooperation!
-
 -->
+
