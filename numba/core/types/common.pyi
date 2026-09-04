@@ -29,8 +29,8 @@ class Buffer(IterableType, ArrayCompatible):
     LAYOUTS: ClassVar[frozenset[_Layout]] = ...
 
     slice_is_copy: ClassVar[bool] = False
-    aligned: ClassVar[bool] = True
-
+    
+    aligned: bool = True
     mutable: bool = True
 
     def __init__(
