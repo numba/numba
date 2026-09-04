@@ -813,5 +813,12 @@ def make_library_cache(prefix):
         """
         _impl_class = CustomCodeLibraryCacheImpl
 
+        def __init__(self, py_func, kernel_symbol):
+            super().__init__(py_func)
+            self._kernel_symbol = kernel_symbol
+
+        def _index_key(self, sig, codegen):
+            return super()._index_key(sig, codegen) + (self._kernel_symbol,)
+
     return LibraryCache
 

@@ -199,6 +199,25 @@ def _finalize_ufunc_signature(cres, args, return_type):
     return return_type(*args)
 
 
+def _pointer_to_wrapper(info):
+    """Resolve the wrapper entry point, rejecting an unresolved symbol.
+
+    ``get_pointer_to_function`` returns NULL when the library defines no such
+    symbol, which happens when a cached wrapper is paired with a kernel that
+    does not define the symbol the wrapper calls.  Handing that NULL to NumPy
+    as a loop function segfaults on the first call, so fail loudly instead
+    (see #10128).
+    """
+    ptr = info.library.get_pointer_to_function(info.name)
+    if not ptr:
+        raise RuntimeError(
+            "unresolved symbol %r while building a ufunc entry point; the "
+            "compiled wrapper does not define it. If this persists, clear "
+            "the on-disk cache (__pycache__) and retry." % (info.name,)
+        )
+    return ptr
+
+
 def _build_element_wise_ufunc_wrapper(cres, signature):
     '''Build a wrapper for the ufunc loop entry point given by the
     compilation result object, using the element-wise signature.
@@ -210,7 +229,7 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
     with global_compiler_lock:
         info = build_ufunc_wrapper(library, ctx, fname, signature,
                                    cres.objectmode, cres)
-        ptr = info.library.get_pointer_to_function(info.name)
+        ptr = _pointer_to_wrapper(info)
     # Get dtypes
     dtypenums = [as_dtype(a).num for a in signature.args]
     dtypenums.append(as_dtype(signature.return_type).num)
@@ -413,7 +432,7 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         )
 
         env = info.env
-        ptr = info.library.get_pointer_to_function(info.name)
+        ptr = _pointer_to_wrapper(info)
         # Get dtypes
         dtypenums = []
         for a in signature.args:
