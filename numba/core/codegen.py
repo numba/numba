@@ -1413,8 +1413,11 @@ class JITCPUCodegen(CPUCodegen):
         Update the GlobalVariable named *env_name* to the address of *env*.
         """
         gvaddr = self._engine.get_global_value_address(env_name)
-        envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
-        envptr[0] = ctypes.c_void_p(id(env))
+        # If gvaddr == 0, the environment was unreferenced and removed by the
+        # linker. Thus no need to set it in this case.
+        if gvaddr:
+            envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
+            envptr[0] = ctypes.c_void_p(id(env))
 
 
 def initialize_llvm():
