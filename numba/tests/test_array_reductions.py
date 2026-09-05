@@ -26,6 +26,12 @@ def array_cumprod(arr):
 def array_cumprod_global(arr):
     return np.cumprod(arr)
 
+def array_cumprod_axis(arr, axis):
+    return arr.cumprod(axis=axis)
+
+def array_cumprod_global_axis(arr, axis):
+    return np.cumprod(arr, axis=axis)
+
 def array_nancumprod(arr):
     return np.nancumprod(arr)
 
@@ -56,17 +62,35 @@ def array_mean(arr):
 def array_mean_global(arr):
     return np.mean(arr)
 
+def array_mean_axis(arr, axis):
+    return arr.mean(axis=axis)
+
+def array_mean_global_axis(arr, axis):
+    return np.mean(arr, axis=axis)
+
 def array_var(arr):
     return arr.var()
 
 def array_var_global(arr):
     return np.var(arr)
 
+def array_var_axis(arr, axis):
+    return arr.var(axis=axis)
+
+def array_var_global_axis(arr, axis):
+    return np.var(arr, axis=axis)
+
 def array_std(arr):
     return arr.std()
 
 def array_std_global(arr):
     return np.std(arr)
+
+def array_std_axis(arr, axis):
+    return arr.std(axis=axis)
+
+def array_std_global_axis(arr, axis):
+    return np.std(arr, axis=axis)
 
 def array_min(arr):
     return arr.min()
@@ -452,6 +476,153 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_mean_basic(self):
         self.check_reduction_basic(array_mean)
+
+    def check_mean_axis(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(arr, axis):
+            expected = pyfunc(arr, axis)
+            got = cfunc(arr, axis)
+            self.assertPreciseEqual(got, expected)
+
+        # integer arrays
+        arr = np.arange(1, 13, dtype=np.int16).reshape(3, 4)
+        for axis in (0, 1, -1, -2):
+            check(arr, axis)
+        arr = np.arange(1, 25, dtype=np.int32).reshape(2, 3, 4)
+        for axis in (0, 1, 2, -1, -2, -3):
+            check(arr, axis)
+        # tuple axes
+        for axis in ((0, 1), (1, 2), (0, 2), (0, 1, 2), (-1, -2)):
+            check(arr, axis)
+        # floating point arrays
+        arr = np.linspace(2, 8, 12).reshape(3, 4)
+        for axis in (0, 1, -1):
+            check(arr, axis)
+        arr = np.linspace(1, 5, 24).reshape(2, 3, 4)
+        for axis in ((0, 1), (1, 2)):
+            check(arr, axis)
+        # complex arrays (exact values, as Numba's sequential sum may
+        # differ from NumPy's pairwise sum in the last bit otherwise)
+        arr = (np.arange(1, 13) + 1j *
+               np.arange(13, 25)).reshape(3, 4)
+        for axis in (0, 1, -1):
+            check(arr, axis)
+        arr = (np.arange(1, 25) + 1j *
+               np.arange(25, 49)).reshape(2, 3, 4)
+        for axis in ((0, 1), (1, 2)):
+            check(arr, axis)
+        # boolean arrays
+        arr = (np.arange(12).reshape(3, 4) % 2).astype(np.bool_)
+        for axis in (0, 1):
+            check(arr, axis)
+        # timedelta arrays
+        arr = np.arange(1, 13, dtype=np.int64).reshape(3, 4).astype(
+            'timedelta64[D]')
+        for axis in (0, 1, -1):
+            check(arr, axis)
+
+    def test_array_mean_axis(self):
+        self.check_mean_axis(array_mean_axis)
+
+    def test_array_mean_global_axis(self):
+        self.check_mean_axis(array_mean_global_axis)
+
+    def check_var_axis(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(arr, axis):
+            expected = pyfunc(arr, axis)
+            got = cfunc(arr, axis)
+            # Numba's sequential sum may differ from NumPy's pairwise sum
+            # in the last bit, so allow a small tolerance.
+            self.assertPreciseEqual(got, expected, prec='double')
+
+        # integer arrays
+        arr = np.arange(1, 13, dtype=np.int16).reshape(3, 4)
+        for axis in (0, 1, -1, -2):
+            check(arr, axis)
+        arr = np.arange(1, 25, dtype=np.int32).reshape(2, 3, 4)
+        for axis in (0, 1, 2, -1, -2, -3):
+            check(arr, axis)
+        # tuple axes
+        for axis in ((0, 1), (1, 2), (0, 2), (0, 1, 2), (-1, -2)):
+            check(arr, axis)
+        # floating point arrays
+        arr = np.linspace(2, 8, 12).reshape(3, 4)
+        for axis in (0, 1, -1):
+            check(arr, axis)
+        arr = np.linspace(1, 5, 24).reshape(2, 3, 4)
+        for axis in ((0, 1), (1, 2)):
+            check(arr, axis)
+        # complex arrays (exact values, as Numba's sequential sum may
+        # differ from NumPy's pairwise sum in the last bit otherwise)
+        arr = (np.arange(1, 13) + 1j *
+               np.arange(13, 25)).reshape(3, 4)
+        for axis in (0, 1, -1):
+            check(arr, axis)
+        arr = (np.arange(1, 25) + 1j *
+               np.arange(25, 49)).reshape(2, 3, 4)
+        for axis in ((0, 1), (1, 2)):
+            check(arr, axis)
+        # boolean arrays
+        arr = (np.arange(12).reshape(3, 4) % 2).astype(np.bool_)
+        for axis in (0, 1):
+            check(arr, axis)
+
+    def test_array_var_axis(self):
+        self.check_var_axis(array_var_axis)
+
+    def test_array_var_global_axis(self):
+        self.check_var_axis(array_var_global_axis)
+
+    def check_std_axis(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(arr, axis):
+            expected = pyfunc(arr, axis)
+            got = cfunc(arr, axis)
+            # Numba's sequential sum may differ from NumPy's pairwise sum
+            # in the last bit, so allow a small tolerance.
+            self.assertPreciseEqual(got, expected, prec='double')
+
+        # integer arrays
+        arr = np.arange(1, 13, dtype=np.int16).reshape(3, 4)
+        for axis in (0, 1, -1, -2):
+            check(arr, axis)
+        arr = np.arange(1, 25, dtype=np.int32).reshape(2, 3, 4)
+        for axis in (0, 1, 2, -1, -2, -3):
+            check(arr, axis)
+        # tuple axes
+        for axis in ((0, 1), (1, 2), (0, 2), (0, 1, 2), (-1, -2)):
+            check(arr, axis)
+        # floating point arrays
+        arr = np.linspace(2, 8, 12).reshape(3, 4)
+        for axis in (0, 1, -1):
+            check(arr, axis)
+        arr = np.linspace(1, 5, 24).reshape(2, 3, 4)
+        for axis in ((0, 1), (1, 2)):
+            check(arr, axis)
+        # complex arrays (exact values, as Numba's sequential sum may
+        # differ from NumPy's pairwise sum in the last bit otherwise)
+        arr = (np.arange(1, 13) + 1j *
+               np.arange(13, 25)).reshape(3, 4)
+        for axis in (0, 1, -1):
+            check(arr, axis)
+        arr = (np.arange(1, 25) + 1j *
+               np.arange(25, 49)).reshape(2, 3, 4)
+        for axis in ((0, 1), (1, 2)):
+            check(arr, axis)
+        # boolean arrays
+        arr = (np.arange(12).reshape(3, 4) % 2).astype(np.bool_)
+        for axis in (0, 1):
+            check(arr, axis)
+
+    def test_array_std_axis(self):
+        self.check_std_axis(array_std_axis)
+
+    def test_array_std_global_axis(self):
+        self.check_std_axis(array_std_global_axis)
 
     def test_np_mean_scalar(self):
         cfunc = jit(nopython=True)(array_mean_global)
@@ -979,6 +1150,30 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_array_cumprod_global(self):
         self.check_cumulative(array_cumprod_global)
+
+    def check_cumulative_axis(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(arr, axis):
+            expected = pyfunc(arr, axis)
+            got = cfunc(arr, axis)
+            self.assertPreciseEqual(got, expected)
+
+        arr = np.arange(1, 13, dtype=np.int16).reshape(3, 4)
+        for axis in (0, 1, -1):
+            check(arr, axis)
+        arr = np.arange(1, 25, dtype=np.int32).reshape(2, 3, 4)
+        for axis in (0, 1, 2, -1):
+            check(arr, axis)
+        arr = np.linspace(2, 8, 12).reshape(3, 4)
+        for axis in (0, 1):
+            check(arr, axis)
+
+    def test_array_cumprod_axis(self):
+        self.check_cumulative_axis(array_cumprod_axis)
+
+    def test_array_cumprod_global_axis(self):
+        self.check_cumulative_axis(array_cumprod_global_axis)
 
     def check_aggregation_magnitude(self, pyfunc, is_prod=False):
         """
