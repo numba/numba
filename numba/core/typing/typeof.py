@@ -298,3 +298,13 @@ def typeof_numpy_polynomial(val, c):
     domain = typeof(val.domain)
     window = typeof(val.window)
     return types.PolynomialType(coef, domain, window)
+
+
+@typeof_impl.register(ctypes._SimpleCData)
+@typeof_impl.register(ctypes._Pointer)
+def _typeof_ctypes_data(val, c):
+    from numba.core.typing import ctypes_utils
+    try:
+        return ctypes_utils.from_ctypes(type(val))
+    except (TypeError, ValueError):
+        return None
