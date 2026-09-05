@@ -26,6 +26,12 @@ def array_cumprod(arr):
 def array_cumprod_global(arr):
     return np.cumprod(arr)
 
+def array_cumprod_axis(arr, axis):
+    return arr.cumprod(axis=axis)
+
+def array_cumprod_global_axis(arr, axis):
+    return np.cumprod(arr, axis=axis)
+
 def array_nancumprod(arr):
     return np.nancumprod(arr)
 
@@ -979,6 +985,30 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_array_cumprod_global(self):
         self.check_cumulative(array_cumprod_global)
+
+    def check_cumulative_axis(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+
+        def check(arr, axis):
+            expected = pyfunc(arr, axis)
+            got = cfunc(arr, axis)
+            self.assertPreciseEqual(got, expected)
+
+        arr = np.arange(1, 13, dtype=np.int16).reshape(3, 4)
+        for axis in (0, 1, -1):
+            check(arr, axis)
+        arr = np.arange(1, 25, dtype=np.int32).reshape(2, 3, 4)
+        for axis in (0, 1, 2, -1):
+            check(arr, axis)
+        arr = np.linspace(2, 8, 12).reshape(3, 4)
+        for axis in (0, 1):
+            check(arr, axis)
+
+    def test_array_cumprod_axis(self):
+        self.check_cumulative_axis(array_cumprod_axis)
+
+    def test_array_cumprod_global_axis(self):
+        self.check_cumulative_axis(array_cumprod_global_axis)
 
     def check_aggregation_magnitude(self, pyfunc, is_prod=False):
         """
