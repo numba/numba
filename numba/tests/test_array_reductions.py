@@ -1,4 +1,4 @@
-from itertools import product, combinations_with_replacement
+from itertools import product, combinations_with_replacement, permutations
 
 import numpy as np
 
@@ -1573,6 +1573,156 @@ class TestArrayReductionsExceptions(MemoryLeakMixin, TestCase):
             setattr(cls, test_name, test_fn)
 
 TestArrayReductionsExceptions.install()
+
+
+class TestIntegerSumLayouts(MemoryLeakMixin, TestCase):
+    integer_dtypes = (np.int8, np.uint8, np.int16, np.uint16,
+                      np.int32, np.uint32, np.int64, np.uint64, np.bool_)
+
+    @staticmethod
+    def make_array(dtype):
+        if dtype == np.bool_:
+            values = [False, True, True, False, True]
+        else:
+            info = np.iinfo(dtype)
+            values = [info.max, 1, info.min, 0,
+                      -1 if info.min < 0 else info.max]
+        return np.resize(np.array(values, dtype=dtype), (3, 4, 5))
+
+    @staticmethod
+    def default_dtype(dtype):
+        dtype = np.dtype(dtype)
+        if dtype.kind == 'b' or dtype.itemsize < np.dtype(np.intp).itemsize:
+            return np.dtype(np.intp)
+        return dtype
+
+    @staticmethod
+    def modular_sum(arr, dtype):
+        dtype = np.dtype(dtype)
+        if dtype.kind == 'b':
+            return any(int(value) != 0 for value in arr.flat)
+        modulus = 1 << (8 * dtype.itemsize)
+        total = sum(int(value) for value in arr.flat) % modulus
+        if dtype.kind == 'i' and total >= modulus // 2:
+            total -= modulus
+        return total
+
+    def check_sum(self, cfunc, arr, dtype):
+        before = arr.copy()
+        writable = arr.flags.writeable
+        expected = self.modular_sum(arr, dtype)
+        self.assertEqual(cfunc(arr), expected)
+        signature = cfunc.overloads[(typeof(arr),)].signature
+        self.assertEqual(signature.return_type,
+                         typeof(np.dtype(dtype).type(0)))
+        np.testing.assert_array_equal(arr, before)
+        self.assertEqual(arr.flags.writeable, writable)
+
+    def test_default_dtype_layouts(self):
+        @jit
+        def reduce(arr):
+            return np.sum(arr)
+
+        @jit
+        def reduce_method(arr):
+            return arr.sum()
+
+        for dtype in self.integer_dtypes:
+            base = self.make_array(dtype)
+            arrays = [base.transpose(axes) for axes in permutations(range(3))]
+            arrays.extend([
+                np.asfortranarray(base), base[::-1, :, ::-1],
+                base[::2, ::-2, ::2].transpose(2, 0, 1),
+                np.broadcast_to(base[0, 0, :], (3, 4, 5)),
+                base[:, :1, :].transpose(2, 0, 1),
+                np.lib.stride_tricks.as_strided(
+                    base.ravel(), shape=(4, 3),
+                    strides=(base.itemsize, base.itemsize), writeable=False),
+            ])
+            for arr, cfunc in product(arrays, (reduce, reduce_method)):
+                with self.subTest(dtype=dtype, shape=arr.shape,
+                                  strides=arr.strides, function=cfunc.py_func):
+                    self.check_sum(cfunc, arr, self.default_dtype(arr.dtype))
+
+    def test_explicit_dtype_overflow(self):
+        for out_dtype in (np.int8, np.uint8, np.int64, np.uint64, np.bool_):
+            @jit
+            def reduce(arr):
+                return np.sum(arr, dtype=out_dtype)
+
+            for dtype in self.integer_dtypes:
+                base = self.make_array(dtype)
+                for arr in (base.transpose(2, 0, 1), base[::-1, ::-1, ::-1]):
+                    with self.subTest(dtype=dtype, out_dtype=out_dtype,
+                                      strides=arr.strides):
+                        self.check_sum(reduce, arr, out_dtype)
+
+    def test_empty_scalar_and_unaligned(self):
+        @jit
+        def reduce(arr):
+            return np.sum(arr)
+
+        for dtype in self.integer_dtypes:
+            base = self.make_array(dtype)
+            buffer = np.empty(base.nbytes + 1, dtype=np.uint8)
+            unaligned = np.ndarray(base.shape, dtype=dtype, buffer=buffer,
+                                   offset=1)
+            unaligned[...] = base
+            arrays = [np.array(base[0, 0, 0]), base[:0], base[:, :0],
+                      base[:, :, :0], base[:0].transpose(2, 0, 1),
+                      unaligned.transpose(2, 0, 1)]
+            for arr in arrays:
+                with self.subTest(dtype=dtype, shape=arr.shape,
+                                  strides=arr.strides,
+                                  aligned=arr.flags.aligned):
+                    self.check_sum(reduce, arr, self.default_dtype(arr.dtype))
+
+    def test_floating_accumulator_order(self):
+        @jit
+        def reduce(arr):
+            return np.sum(arr)
+
+        @jit
+        def reduce_float(arr):
+            return np.sum(arr, dtype=np.float64)
+
+        def arrays(dtype, large):
+            return (
+                np.array([[large, 1], [-large, 1]], dtype=dtype).T,
+                np.array([large, 1, 0, 0, -large, 1, 0, 0], dtype=dtype)
+                .reshape(2, 2, 2).transpose(2, 0, 1),
+            )
+
+        for dtype, large in ((np.float32, 2**24), (np.float64, 2**53),
+                             (np.complex128, 2**53)):
+            for arr in arrays(dtype, large):
+                got = np.asarray(reduce(arr), dtype=dtype)
+                expected = np.asarray(2, dtype=dtype)
+                with self.subTest(dtype=dtype, shape=arr.shape):
+                    self.assertEqual(got.tobytes(), expected.tobytes())
+
+        for arr in arrays(np.int64, 2**53):
+            self.assertEqual(np.float64(reduce_float(arr)).tobytes(),
+                             np.float64(2).tobytes())
+
+    def test_explicit_unaligned_signature(self):
+        array_type = types.Array(types.int64, 3, 'A', aligned=False)
+        reduce = jit(types.int64(array_type))(array_sum_global)
+        base = self.make_array(np.int64)
+        buffer = np.empty(base.nbytes + 1, dtype=np.uint8)
+        arr = np.ndarray(base.shape, dtype=np.int64, buffer=buffer, offset=1)
+        arr[...] = base
+        for values in (arr.transpose(2, 0, 1), arr[::-1, :, ::-1]):
+            self.assertEqual(reduce(values), self.modular_sum(values, np.int64))
+
+    def test_higher_rank_fallback(self):
+        reduce = jit(array_sum_global)
+        for ndim in (5, 8):
+            base = np.arange(24, dtype=np.int64).reshape(
+                (2, 3, 4) + (1,) * (ndim - 3))
+            arr = base.swapaxes(0, 1)
+            self.assertFalse(arr.flags.c_contiguous or arr.flags.f_contiguous)
+            self.check_sum(reduce, arr, np.int64)
 
 
 if __name__ == '__main__':
