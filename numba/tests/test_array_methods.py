@@ -1874,7 +1874,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                     with self.subTest(subtest_str):
                         py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
                         nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
-                        self.assertPreciseEqual(py_res, nb_res)
+                        if out_dtype in (np.complex128, np.complex64):
+                            assert np.all(py_res == nb_res)
+                        else:
+                            self.assertPreciseEqual(py_res, nb_res)
 
     def test_take(self):
         pyfunc = array_take
