@@ -1,0 +1,7 @@
+Document and test ``datetime64``/``timedelta64`` support on CUDA
+----------------------------------------------------------------
+
+The CUDA documentation now explicitly states that ``datetime64`` and
+``timedelta64`` (of any unit) are supported in kernels, device functions,
+and ``target='cuda'`` ufuncs/gufuncs. The CUDA datetime test suite has also
+been extended to cover more units than just ``datetime64[D]``.
