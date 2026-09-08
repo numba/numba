@@ -1799,12 +1799,38 @@ def np_nansum(a):
 
 @overload(np.nanprod)
 def np_nanprod(a):
+
     if not isinstance(a, types.Array):
-        return
+
+        if isinstance(a, (types.Integer, types.Boolean)):
+            # No NaN type possible for Integers and Booleans
+            retty = types.intp # to platform default
+
+            def nanprod_int_scalar_impl(a):
+                return retty(a)
+            return nanprod_int_scalar_impl
+
+        elif isinstance(a,(types.Complex, types.Float)):
+            # NaN return 1, others return the value
+            retty = a
+            one = retty(1)
+            isnan = get_isnan(a)
+
+            def nanprod_float_scalar_impl(a):
+                if isnan(a):
+                    return one
+                else:
+                    return retty(a)
+            return nanprod_float_scalar_impl
+
+        else:
+            return None
+
     if isinstance(a.dtype, types.Integer):
         retty = types.intp
     else:
         retty = a.dtype
+
     one = retty(1)
     isnan = get_isnan(a.dtype)
 
@@ -1815,7 +1841,6 @@ def np_nanprod(a):
             if not isnan(v):
                 c *= v
         return c
-
     return nanprod_impl
 
 
