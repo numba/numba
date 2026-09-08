@@ -500,7 +500,7 @@ def _np_func_builder(axis, funcfn):
 
                 iter_args = (context, builder, aryty, ary, (mask,), (res,))
             else:
-                if isinstance(ret_dtype, types.NPTimedelta):
+                if isinstance(ret_dtype, types.NPTimedelta) and funcfn is operator.iadd:
                     identity = context.get_constant(ret_dtype, ret_dtype(0))
                 else:
                     identity = context.get_constant(
