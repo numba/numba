@@ -58,10 +58,10 @@ def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
         # Release owned reference to arguments
         for elem in elems:
             pyapi.decref(elem)
-    # NOTE: if an error occurred, it will be caught by the Numpy machinery
+        # NOTE: if an error occurred, it will be caught by the Numpy machinery
 
-    # Store
-    store(retval)
+        # Store. This may error too, when unboxing.
+        store(retval)
 
     # increment indices
     for off, ary in zip(offsets, arrays):
@@ -110,8 +110,10 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
             # Unbox
             native = pyapi.to_native_value(signature.return_type, retval)
             assert native.cleanup is None
-            # Store
-            out.store_direct(native.value, builder.load(store_offset))
+
+            with builder.if_then(builder.not_(native.is_error), likely=True):
+                # Store
+                out.store_direct(native.value, builder.load(store_offset))
             # Release owned reference
             pyapi.decref(retval)
 
