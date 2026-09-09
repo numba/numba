@@ -1,0 +1,6 @@
+Improve detection of array aliasing that prohibits fusion.
+----------------------------------------------------------
+
+Improvements detection of read-after-write and write-after-read
+conflicts due to potentially array aliasing that should
+prohibit fusion.
