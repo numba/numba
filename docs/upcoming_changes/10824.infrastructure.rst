@@ -2,4 +2,4 @@ Build using PEP-517 compatability
 ---------------------------------
 
 Numba now includes a pyproject.toml file indicating the minimum build
-requirements: recent enough setuptools, and toml if on Python 3.10.
+requirements: versioneer & recent enough setuptools
