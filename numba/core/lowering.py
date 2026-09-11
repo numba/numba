@@ -446,6 +446,14 @@ class Lower(BaseLower):
                         #       all old-style implementations are gone.
                         self.builder._in_try_block = {'target': targetblk}
                         break
+                if defn.value is eh.end_matching_block:
+                    if isinstance(block.terminator, ir.Jump):
+                        targetblk = self.blkmap[block.terminator.target]
+                        self.builder._in_match_block = {'target': targetblk}
+                        break
+                    else:
+                        self.builder._in_match_block = False
+                        break
 
     def post_block(self, block):
         # Clean-up
