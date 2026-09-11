@@ -1,0 +1,5 @@
+Add support for ``int.bit_count``
+---------------------------------
+
+The ``bit_count`` method of :class:`int` (and :class:`bool`) is now supported.
+It returns the number of set bits in the absolute value of the operand.
