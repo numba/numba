@@ -2019,6 +2019,35 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertEqual(got.shape, expected.shape)
         np.testing.assert_array_equal(got, expected)
 
+    def test_clip_fortran_order(self):
+        # Regression test for #10767: np.clip must preserve F-contiguous layout.
+        a = np.asfortranarray(np.arange(12.0).reshape(3, 4))
+        self.assertTrue(a.flags.f_contiguous)
+
+        cfunc = jit(nopython=True)(np_clip_no_out)
+
+        # scalar bounds (np_clip_ss path)
+        result = cfunc(a, 2.0, 8.0)
+        expected = np.clip(a, 2.0, 8.0)
+        np.testing.assert_array_equal(result, expected)
+        self.assertTrue(result.flags.f_contiguous,
+                        "scalar-bounds clip lost F-contiguous layout")
+
+        # one None bound (np_clip_sn / np_clip_ns path)
+        result = cfunc(a, 2.0, None)
+        expected = np.clip(a, 2.0, None)
+        np.testing.assert_array_equal(result, expected)
+        self.assertTrue(result.flags.f_contiguous,
+                        "one-None-bound clip lost F-contiguous layout")
+
+        # array bounds that broadcast to a larger shape (np_clip_impl path)
+        big = np.zeros((3, 4))
+        result = cfunc(a, big, 10.0)
+        expected = np.clip(a, big, 10.0)
+        np.testing.assert_array_equal(result, expected)
+        self.assertTrue(result.flags.f_contiguous,
+                        "broadcast clip lost F-contiguous layout")
+
     def test_conj(self):
         for pyfunc in [array_conj, array_conjugate]:
             cfunc = jit(nopython=True)(pyfunc)

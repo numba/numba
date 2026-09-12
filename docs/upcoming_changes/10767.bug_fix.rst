@@ -1,7 +1,15 @@
-Fix ``np.clip`` returning wrong shape when bounds broadcast larger than ``a``
------------------------------------------------------------------------------
+Fix ``np.clip`` shape and layout preservation
+----------------------------------------------
 
-Previously the result was allocated with ``np.empty_like(a)`` before the
-broadcast shape was computed, so a bound that broadcasts to a shape larger
-than ``a`` silently produced the wrong shape and wrote outside the result
-buffer.
+Two bugs are fixed:
+
+1. **Wrong shape when bounds broadcast larger than** ``a``: the result was
+   previously allocated with ``np.empty_like(a)`` before the broadcast shape
+   was computed, so a bound that broadcasts to a shape larger than ``a``
+   silently produced the wrong shape and wrote outside the result buffer.
+
+2. **F-contiguous layout not preserved**: switching from ``np.empty_like(a)``
+   to ``np.empty(shape, a.dtype)`` always produced a C-contiguous result even
+   when ``a`` was F-contiguous.  Both issues are now fixed by dispatching the
+   allocation at the type level so that F-contiguous inputs produce
+   F-contiguous outputs.
