@@ -2652,7 +2652,7 @@ def _np_clip_prepare_out(a, shape, out):
     # Without this check the callers loop over the result shape and write
     # past the end of a too-small `out` (issue #10682).
     if out is None:
-        return np.empty_like(a)
+        return np.empty(shape, a.dtype)
     if out.shape != shape:
         raise ValueError("clip: the shape of the 'out' array does not "
                          "match the shape of the result")
