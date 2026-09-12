@@ -303,7 +303,7 @@ class _GufuncWrapper(object):
         self.sin = sin
         self.sout = sout
         self.is_objectmode = self.signature.return_type == types.pyobject
-        self.cache = (GufWrapperCache(py_func=self.py_func)
+        self.cache = (GufWrapperCache(self.py_func, self.fndesc.mangled_name)
                       if cache else NullCache())
         self.is_parfors = bool(is_parfors)
 
