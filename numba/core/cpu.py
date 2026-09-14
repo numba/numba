@@ -16,7 +16,6 @@ import numba.core.entrypoints
 # base.
 from numba.core.cpu_options import (ParallelOptions, # noqa F401
                                     FastMathOptions, InlineOptions) # noqa F401
-from numba.np import ufunc_db
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -115,18 +114,12 @@ class CPUContext(BaseContext):
                                    unicode,) # noqa F401
         from numba.core import optional, inline_closurecall # noqa F401
         from numba.misc import gdb_hook, literal # noqa F401
-        from numba.np import linalg, arraymath, arrayobj # noqa F401
-        from numba.np.random import generator_core, generator_methods, legacy # noqa F401
-        from numba.np.polynomial import polynomial_core, polynomial_functions # noqa F401
         from numba.typed import typeddict, dictimpl # noqa F401
         from numba.typed import typedlist, listobject # noqa F401
         from numba.typed import typedset, setobject # noqa F401
         from numba.experimental import jitclass, function_type # noqa F401
-        from numba.np.types import datetime_registry # noqa F401
-        from numba.np import npdatetime # noqa F401
 
         # Add target specific implementations
-        from numba.np import npyimpl
         from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
         from numba.misc import cffiimpl
         from numba.experimental.jitclass.base import ClassBuilder as \
@@ -134,7 +127,6 @@ class CPUContext(BaseContext):
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
-        self.install_registry(npyimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
         self.install_registry(jitclassimpl.class_impl_registry)
@@ -142,8 +134,6 @@ class CPUContext(BaseContext):
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
 
-        # fix for #8940
-        from numba.np.unsafe import ndarray # noqa F401
         # TODO: Hide all NumPy features behind a flag
         from numba.np import np_install # noqa F401
 
@@ -303,10 +293,6 @@ class CPUContext(BaseContext):
         '''
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
-
-    # Overrides
-    def get_ufunc_info(self, ufunc_key):
-        return ufunc_db.get_ufunc_info(ufunc_key)
 
 
 # ----------------------------------------------------------------------------

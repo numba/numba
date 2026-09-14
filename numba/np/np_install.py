@@ -1,4 +1,5 @@
 from numba.core.typing.context import Context
+from numba.core.cpu import CPUContext
 from numba.np import boxing   # noqa: F401
 from numba.core import types
 import numpy as np
@@ -17,6 +18,28 @@ def load_additional_npy_registries(self):
 
 
 Context.load_additional_registries = load_additional_npy_registries
+
+# Patch target registries to load NumPy specific implementations
+load_additional_target_registries = CPUContext.load_additional_registries
+
+
+def load_additional_npy_target_registries(self):
+    load_additional_target_registries(self)
+
+    from numba.np import linalg, arraymath, arrayobj  # noqa: F401
+    from numba.np.random import (generator_core, generator_methods,  # noqa: F401, E501
+                                 legacy)  # noqa: F401
+    from numba.np.polynomial import (polynomial_core,  # noqa: F401, E501
+                                     polynomial_functions)  # noqa: F401
+    from numba.np.types import datetime_registry  # noqa: F401
+    from numba.np import npdatetime  # noqa: F401
+    from numba.np import npyimpl
+    from numba.np.unsafe import ndarray  # noqa: F401
+
+    self.install_registry(npyimpl.registry)
+
+
+CPUContext.load_additional_registries = load_additional_npy_target_registries
 
 # Patch the cast_python_value methods of Integer, Float, and Complex
 # to use NumPy's casting functions instead of Python's built-in types.
