@@ -118,23 +118,17 @@ class TestEnsureCriticalDeps(TestCase):
     def test_numpy_min(self):
         import numpy as np
         import numba
-        from numpy.lib import NumpyVersion
-        floor = numba._ensure_critical_deps.min_numpy_version
-        below = NumpyVersion(
-            f"{floor.major}.{floor.minor}.{floor.bugfix - 1}")
-        with mock.patch.object(np, '__version__', below.vstring):
+        with mock.patch.object(np, '__version__', '1.22.2'):
             with self.assertRaises(ImportError):
                 numba._ensure_critical_deps()
-        with mock.patch.object(np, '__version__', floor.version):
+        with mock.patch.object(np, '__version__', '1.22.3'):
             numba._ensure_critical_deps()
-        with mock.patch.object(np, '__version__',
-                               f"{floor.major}.{floor.minor}.10"):
+        with mock.patch.object(np, '__version__', '1.22.10'):
             numba._ensure_critical_deps()
-        with mock.patch.object(np, '__version__', f"{floor.major}.9.9"):
+        with mock.patch.object(np, '__version__', '1.9.9'):
             with self.assertRaises(ImportError):
                 numba._ensure_critical_deps()
-        above_rc = f"{floor.major + 1}.0.0rc1"
-        with mock.patch.object(np, '__version__', above_rc):
+        with mock.patch.object(np, '__version__', '2.0.0rc1'):
             numba._ensure_critical_deps()
 
     def test_scipy_min(self):
