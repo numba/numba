@@ -10,7 +10,7 @@ load_additional_core_registries = Context.load_additional_registries
 
 def load_additional_npy_registries(self):
     from numba.core.typing import arraydecl, npydecl  # noqa: F401, E501
-    from numba.core.typing import cffi_utils
+    from numba.cffi import cffi_utils
     load_additional_core_registries(self)
 
     self.install_registry(npydecl.registry)
