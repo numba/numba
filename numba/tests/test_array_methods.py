@@ -1713,6 +1713,26 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
                         self.assertPreciseEqual(py_res, nb_res)
 
+    def test_prod_timedelta_unsupported(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def prod(a):
+            return np.prod(a)
+
+        def prod_axis(a):
+            return np.prod(a, axis=0)
+
+        a = np.arange(6, dtype='timedelta64[s]')
+
+        for pyfunc, arr in ((prod, a), (prod_axis, a.reshape(2, 3))):
+            cfunc = jit(nopython=True)(pyfunc)
+            with self.subTest(pyfunc.__name__):
+                with self.assertRaises(TypingError) as raises:
+                    cfunc(arr)
+                self.assertIn("imul(timedelta64[s], timedelta64[s])",
+                              str(raises.exception))
+
     def test_prod_axis_tuple(self):
         """ test prod with axis as a tuple """
         pyfunc = array_prod_axis_kws
