@@ -500,12 +500,12 @@ def _np_func_builder(axis, funcfn):
 
                 iter_args = (context, builder, aryty, ary, (mask,), (res,))
             else:
-                if isinstance(ret_dtype, types.NPTimedelta) and funcfn is operator.iadd:
+                if funcfn is operator.imul:
+                    identity = context.get_constant(ret_dtype, 1)
+                elif isinstance(ret_dtype, types.NPTimedelta):
                     identity = context.get_constant(ret_dtype, ret_dtype(0))
                 else:
-                    identity = context.get_constant(
-                        ret_dtype, 1 if funcfn is operator.imul else 0
-                    )
+                    identity = context.get_constant(ret_dtype, 0)
                 result = cgutils.alloca_once_value(builder, identity)
 
                 def load_accumulator(ptr):
@@ -523,6 +523,9 @@ def _np_func_builder(axis, funcfn):
                 {}
             )
             if isinstance(ret_dtype, types.Boolean):
+                # Booleans use logical reduction semantics rather than
+                # arithmetic ones: sum reduces with ``or`` and prod with
+                # ``and``.
                 if funcfn is operator.iadd:
                     reduce_funcfn = lambda builder, args: builder.or_(*args)
                 else:
