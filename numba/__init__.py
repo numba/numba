@@ -7,6 +7,8 @@ import re
 import sys
 import warnings
 
+_min_numpy_run_version = "1.22.3"
+
 
 # ---------------------- WARNING WARNING WARNING ----------------------------
 # THIS MUST RUN FIRST, DO NOT MOVE... SEE DOCSTRING IN _ensure_critical_deps
@@ -32,13 +34,13 @@ def _ensure_critical_deps():
         raise ImportError(msg)
 
     import numpy as np
-    from numpy.lib import NumpyVersion
-    min_numpy_version = NumpyVersion('1.22.3')
-    _ensure_critical_deps.min_numpy_version = min_numpy_version
-    numpy_version = NumpyVersion(np.__version__)
-
-    if numpy_version < min_numpy_version:
-        msg = (f"Numba needs NumPy {min_numpy_version.version} or greater. "
+    numpy_version = extract_version(np)
+    too_old = numpy_version < (1, 22)
+    if numpy_version == (1, 22):
+        from numpy.lib import NumpyVersion
+        too_old = NumpyVersion(np.__version__) < _min_numpy_run_version
+    if too_old:
+        msg = (f"Numba needs NumPy {_min_numpy_run_version} or greater. "
                f"Got NumPy {np.__version__}.")
         raise ImportError(msg)
 
