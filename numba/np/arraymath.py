@@ -450,9 +450,21 @@ def _np_func_builder(axis, funcfn):
     code generation, differing only in the accumulator (a scalar vs. an
     output array) and the return type.
     """
+    op_name = "sum" if funcfn is operator.iadd else "prod"
+
     @intrinsic
     def _numpy_reduce(typingctx, aryty, axisty, dtype):
         ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+        if not isinstance(ret_dtype, types.Boolean):
+            fnty = typingctx.resolve_value_type(funcfn)
+            fn_sig = fnty.get_call_type(
+                typingctx, (ret_dtype, ret_dtype), {}
+            )
+            if fn_sig is None:
+                raise TypingError(
+                    f"NumPy {op_name} does not support operands with "
+                    f"dtype {ret_dtype}"
+                )
         if axis:
             axis_length = axisty.count if isinstance(
                 axisty, types.UniTuple) else 1
