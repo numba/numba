@@ -1368,7 +1368,15 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         check_err(np.array([1, 2]))
         check_err(np.array([]))
 
-    def gen_array_cases(self, signed_dtypes, unsigned_dtypes):
+    def gen_sum_array_cases(self, signed_dtypes, unsigned_dtypes):
+        for arr_dtype in signed_dtypes + unsigned_dtypes:
+            yield np.ones((5, 4, 3), arr_dtype)
+            yield np.ones(1, arr_dtype)
+
+        for arr_dtype in signed_dtypes:
+            yield np.ones((5, 4, 3), arr_dtype) * -5
+
+    def gen_prod_array_cases(self, signed_dtypes, unsigned_dtypes):
         for arr_dtype in signed_dtypes + unsigned_dtypes:
             arr = (np.arange(60) % 7 + 1).astype(arr_dtype).reshape(5, 4, 3)
             yield arr
@@ -1397,7 +1405,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
 
-        for arr in self.gen_array_cases(signed_dtypes, unsigned_dtypes):
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
             with self.subTest("Test np.sum with {} input ".format(arr.dtype)):
                 self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
@@ -1415,7 +1423,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         unsigned_dtypes_no_uint32 = [np.uint64, np.bool_]
 
-        for arr in self.gen_array_cases(signed_dtypes_no_int32, unsigned_dtypes_no_uint32):
+        for arr in self.gen_sum_array_cases(signed_dtypes_no_int32, unsigned_dtypes_no_uint32):
             for axis in (0, 1, 2):
                 if axis > len(arr.shape)-1:
                     continue
@@ -1443,7 +1451,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         unsigned_dtypes_only_uint32 = [np.uint32]
 
-        for arr in self.gen_array_cases(signed_dtypes_only_int32, unsigned_dtypes_only_uint32):
+        for arr in self.gen_sum_array_cases(signed_dtypes_only_int32, unsigned_dtypes_only_uint32):
             for axis in (0, 1, 2):
                 if axis > len(arr.shape)-1:
                     continue
@@ -1478,7 +1486,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128]}
 
-        for arr in self.gen_array_cases(signed_dtypes, unsigned_dtypes):
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
             for out_dtype in out_dtypes[arr.dtype]:
                 subtest_str = ("Testing np.sum with {} input and {} output"
                                 .format(arr.dtype, out_dtype))
@@ -1505,7 +1513,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128]}
 
-        for arr in self.gen_array_cases(signed_dtypes, unsigned_dtypes):
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
             for out_dtype in out_dtypes[arr.dtype]:
                 for axis in (0, 1, 2):
                     if axis > len(arr.shape) - 1:
@@ -1625,7 +1633,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         unsigned_dtypes_no_uint32 = [np.uint64, np.bool_]
 
-        for arr in self.gen_array_cases(signed_dtypes_no_int32,
+        for arr in self.gen_prod_array_cases(signed_dtypes_no_int32,
                                             unsigned_dtypes_no_uint32):
             for axis in (0, 1, 2):
                 if axis > len(arr.shape)-1:
@@ -1654,7 +1662,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         unsigned_dtypes_only_uint32 = [np.uint32]
 
-        for arr in self.gen_array_cases(signed_dtypes_only_int32,
+        for arr in self.gen_prod_array_cases(signed_dtypes_only_int32,
                                             unsigned_dtypes_only_uint32):
             for axis in (0, 1, 2):
                 if axis > len(arr.shape)-1:
@@ -1693,7 +1701,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128]}
 
-        for arr in self.gen_array_cases(signed_dtypes, unsigned_dtypes):
+        for arr in self.gen_prod_array_cases(signed_dtypes, unsigned_dtypes):
             for out_dtype in out_dtypes[arr.dtype]:
                 for axis in (0, 1, 2):
                     if axis > len(arr.shape) - 1:
@@ -1864,7 +1872,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('complex64'): [np.complex64, np.complex128],
                       np.dtype('complex128'): [np.complex128]}
 
-        for arr in self.gen_array_cases(signed_dtypes, unsigned_dtypes):
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
             for out_dtype in out_dtypes[arr.dtype]:
                 for axis in (0, 1, 2):
                     if axis > len(arr.shape) - 1:
@@ -1874,10 +1882,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                     with self.subTest(subtest_str):
                         py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
                         nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
-                        if out_dtype in (np.complex128, np.complex64):
-                            assert np.all(py_res == nb_res)
-                        else:
-                            self.assertPreciseEqual(py_res, nb_res)
+                        self.assertPreciseEqual(py_res, nb_res)
 
     def test_take(self):
         pyfunc = array_take
