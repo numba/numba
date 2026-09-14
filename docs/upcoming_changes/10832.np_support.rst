@@ -1,5 +1,0 @@
-Add support for ``numpy.bitwise_count``
----------------------------------------
-
-The :func:`numpy.bitwise_count` ufunc is now supported. It requires NumPy 2.0
-or later.
