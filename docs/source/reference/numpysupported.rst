@@ -754,6 +754,10 @@ Indexing routines
 * :func:`numpy.take` (only the 2 first arguments)
 * :func:`numpy.take_along_axis` (the axis argument must be a literal value)
 * :func:`numpy.indices` (only the first argument)
+* :func:`numpy.unravel_index` (``indices`` must be an integer or boolean
+  scalar or array; ``shape`` must be a homogeneous tuple of integers, or
+  the empty tuple; ``order`` must be omitted or a compile-time literal
+  ``'C'`` or ``'F'``)
 
 Linear algebra (numpy.linalg)
 =============================
