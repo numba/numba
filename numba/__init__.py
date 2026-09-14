@@ -33,12 +33,13 @@ def _ensure_critical_deps():
 
     import numpy as np
     from numpy.lib import NumpyVersion
+    min_numpy_version = NumpyVersion('1.22.3')
+    _ensure_critical_deps.min_numpy_version = min_numpy_version
     numpy_version = NumpyVersion(np.__version__)
 
-    if numpy_version < '1.22.3':
-        msg = (f"Numba needs NumPy 1.22.3 or greater. Got NumPy "
-               f"{numpy_version.major}.{numpy_version.minor}."
-               f"{numpy_version.bugfix}.")
+    if numpy_version < min_numpy_version:
+        msg = (f"Numba needs NumPy {min_numpy_version.version} or greater. "
+               f"Got NumPy {np.__version__}.")
         raise ImportError(msg)
 
     try:
