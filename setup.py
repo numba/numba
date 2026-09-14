@@ -23,8 +23,8 @@ min_python_version = "3.10"
 max_python_version = "3.16"  # exclusive
 min_numpy_build_version = "1.11"
 min_numpy_run_version = "1.22"
-min_llvmlite_version = "0.50.0dev0"
-max_llvmlite_version = "0.51"
+min_llvmlite_version = "0.51.0dev0"
+max_llvmlite_version = "0.52"
 
 
 def _detect_lapack_ilp64():
