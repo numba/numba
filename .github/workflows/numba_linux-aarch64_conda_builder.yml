@@ -47,7 +47,7 @@ jobs:
     needs: load-matrix
     runs-on: ubuntu-24.04-arm
     env:
-      EXTRA_CHANNELS: ${{ matrix.python_version_full == '3.15' && '-c ad-testing/label/py315' || '' }}
+      EXTRA_CHANNELS: ''
     defaults:
       run:
         shell: bash -elx {0}
@@ -122,7 +122,7 @@ jobs:
     needs: [load-matrix, linux-aarch64-build-conda]
     runs-on: ubuntu-24.04-arm
     env:
-      EXTRA_CHANNELS: ${{ matrix.python_version_full == '3.15' && '-c ad-testing/label/py315' || '' }}
+      EXTRA_CHANNELS: ''
     defaults:
       run:
         shell: bash -elx {0}
