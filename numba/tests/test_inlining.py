@@ -16,11 +16,12 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode, Fixup
                              WithLifting, PreserveIR, InlineClosureLikes)
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
-                           NopythonRewrites, PreParforPass, ParforPass,
-                           DumpParforDiagnostics, NativeLowering,
-                           NativeParforLowering, IRLegalization,
-                           NoPythonBackend, NativeLowering,
-                           ParforFusionPass, ParforPreLoweringPass)
+                           NopythonRewrites, NativeLowering, IRLegalization,
+                           NoPythonBackend, NativeLowering,)
+from numba.parfors.parfor_passes import (
+    PreParforPass, ParforPass, ParforFusionPass, ParforPreLoweringPass,
+    DumpParforDiagnostics, NativeParforLowering
+)
 
 from numba.core.compiler_machinery import FunctionPass, PassManager, register_pass
 import unittest
