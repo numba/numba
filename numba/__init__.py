@@ -37,7 +37,8 @@ def _ensure_critical_deps():
 
     if numpy_version < '1.22.3':
         msg = (f"Numba needs NumPy 1.22.3 or greater. Got NumPy "
-               f"{numpy_version.major}.{numpy_version.minor}.")
+               f"{numpy_version.major}.{numpy_version.minor}."
+               f"{numpy_version.bugfix}.")
         raise ImportError(msg)
 
     try:
