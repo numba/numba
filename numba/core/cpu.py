@@ -144,6 +144,8 @@ class CPUContext(BaseContext):
 
         # fix for #8940
         from numba.np.unsafe import ndarray # noqa F401
+        # TODO: Hide all NumPy features behind a flag
+        from numba.np import np_install # noqa F401
 
     @property
     def target_data(self):
