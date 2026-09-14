@@ -4,7 +4,8 @@ set -v -e
 
 # first configure conda to have more tolerance of network problems, these
 # numbers are not scientifically chosen, just merely larger than defaults
-conda config --write-default
+# Note: --write-default may fail if .condarc already exists (e.g., from setup-miniconda action)
+conda config --write-default 2>/dev/null || true
 conda config --set remote_connect_timeout_secs 30.15
 conda config --set remote_max_retries 10
 conda config --set remote_read_timeout_secs 120.2
@@ -78,7 +79,12 @@ if [[ $(uname) == Linux ]]; then
         $CONDA_INSTALL gcc_linux-64=11 gxx_linux-64=11
     fi
 elif  [[ $(uname) == Darwin ]]; then
-    $CONDA_INSTALL clang_osx-64 clangxx_osx-64
+    # Detect architecture and install appropriate compiler toolchain
+    if [[ $(uname -m) == "arm64" ]]; then
+        $CONDA_INSTALL clang_osx-arm64 clangxx_osx-arm64
+    else
+        $CONDA_INSTALL clang_osx-64 clangxx_osx-64
+    fi
     # Install llvm-openmp on OSX for headers during build and runtime during
     # testing
     $CONDA_INSTALL llvm-openmp
