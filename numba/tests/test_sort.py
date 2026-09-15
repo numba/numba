@@ -54,6 +54,15 @@ def argsort_kind_usecase(val, is_stable=False):
     else:
         return val.argsort(kind='quicksort')
 
+def sort_heapsort_usecase(val):
+    val.sort(kind='heapsort')
+
+def argsort_heapsort_usecase(val):
+    return val.argsort(kind='heapsort')
+
+def np_argsort_heapsort_usecase(val):
+    return np.argsort(val, kind='heapsort')
+
 def sorted_usecase(val):
     return sorted(val)
 
@@ -1049,6 +1058,59 @@ class TestNumpySort(TestCase):
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
 
+    def test_array_sort_heapsort(self):
+        cfunc = jit(nopython=True)(sort_heapsort_usecase)
+        arrays = (
+            np.array([], dtype=np.int64),
+            np.array([42], dtype=np.int64),
+            np.array([3, -1, 4, -1, 5, -9, 2, 6]),
+            np.array([1, 2, 3, 4, 5]),
+            np.array([5, 4, 3, 2, 1]),
+        )
+        for orig in arrays:
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+        for orig in self.int_arrays():
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+        for orig in self.float_arrays():
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+        for real in self.float_arrays():
+            imag = real[::]
+            np.random.shuffle(imag)
+            orig = np.array([complex(*x) for x in zip(real, imag)])
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+        for shape in ((4, 5), (3, 4, 5), (2, 30)):
+            orig = np.random.random(shape) * 100
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+    def test_argsort_heapsort(self):
+        arrays = (
+            np.array([], dtype=np.int64),
+            np.array([42], dtype=np.int64),
+            np.array([3, -1, 4, -1, 5, -9, 2, 6]),
+            np.array([5, 4, 3, 2, 1]),
+        )
+        for pyfunc in (argsort_heapsort_usecase,
+                       np_argsort_heapsort_usecase):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in arrays:
+                self.check_argsort(pyfunc, cfunc, orig)
+            for orig in self.int_arrays():
+                self.check_argsort(pyfunc, cfunc, orig)
+
+        cfunc = jit(nopython=True)(argsort_heapsort_usecase)
+        for orig in self.float_arrays():
+            self.check_argsort(argsort_heapsort_usecase, cfunc, orig)
+
+        for real in self.float_arrays():
+            imag = real[::]
+            np.random.shuffle(imag)
+            orig = np.array([complex(*x) for x in zip(real, imag)])
+            self.check_argsort(argsort_heapsort_usecase, cfunc, orig)
+
     def test_bad_array(self):
         cfunc = jit(nopython=True)(np_sort_usecase)
         msg = '.*Argument "a" must be array-like.*'
@@ -1309,16 +1371,16 @@ class TestArraySort(MemoryLeakMixin, TestCase):
 
         @jit
         def unsupported_kind():
-            np.arange(5).sort(kind='heapsort')
+            np.arange(5).sort(kind='unknown')
 
         with self.assertRaises(errors.TypingError) as raises:
             unsupported_kind()
 
-        expect = "Unsupported \"kind\": 'heapsort'"
+        expect = "Unsupported \"kind\": 'unknown'"
         self.assertIn(expect, str(raises.exception))
 
     def test_kinds(self):
-        for kind in ('quicksort', 'mergesort', 'stable'):
+        for kind in ('quicksort', 'mergesort', 'stable', 'heapsort'):
             @jit
             def sort_kind(arr):
                 arr.sort(kind=kind)
@@ -1359,17 +1421,17 @@ class TestArrayArgsort(MemoryLeakMixin, TestCase):
 
         @jit
         def unsupported_kind():
-            np.arange(5).argsort(kind='heapsort')
+            np.arange(5).argsort(kind='unknown')
 
         with self.assertRaises(errors.TypingError) as raises:
             unsupported_kind()
 
-        expect = "Unsupported \"kind\": 'heapsort'"
+        expect = "Unsupported \"kind\": 'unknown'"
         self.assertIn(expect, str(raises.exception))
 
     def test_kinds(self):
         arr = np.array([3, 1, 4, 7, 5, 9, 2, 6])
-        for kind in ('quicksort', 'mergesort', 'stable'):
+        for kind in ('quicksort', 'mergesort', 'stable', 'heapsort'):
             @jit
             def argsort_kind(arr):
                 return arr.argsort(kind=kind)
