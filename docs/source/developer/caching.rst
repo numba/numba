@@ -82,11 +82,18 @@ This is a list of known limitation of the cache:
 Cache Sharing
 -------------
 
-It is safe to share and reuse the contents in the cache directory on a
-different machine. The cache remembers the CPU model and the available
-CPU features during compilation. If the CPU model and the CPU features do
-not match exactly, the cache contents will not be considered.
+It is operationally safe to share and reuse the contents in the cache
+directory on a different machine. The cache remembers the CPU model and the
+available CPU features during compilation. If the CPU model and the CPU
+features do not match exactly, the cache contents will not be considered.
 (Also see :envvar:`NUMBA_CPU_NAME`)
+
+.. warning::
+
+   "Safe" here is an operational property, not a security one. The cache
+   is deserialized with :mod:`pickle`, so loading a maliciously crafted
+   cache file can execute arbitrary code. Only share a cache directory
+   with, and reuse cache contents from, parties you trust.
 
 If the cache directory is shared on a network filesystem, concurrent
 read/write of the cache is safe only if file replacement operation is atomic
