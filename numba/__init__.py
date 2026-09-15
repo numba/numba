@@ -21,8 +21,8 @@ def _ensure_critical_deps():
     """
     #NOTE THIS CODE SHOULD NOT IMPORT ANYTHING FROM NUMBA!
 
-    def extract_version(mod):
-        return tuple(map(int, mod.__version__.split('.')[:2]))
+    def extract_version(ver):
+        return tuple(map(int, ver.split('.')[:2]))
 
     PYVERSION = sys.version_info[:2]
 
@@ -33,22 +33,27 @@ def _ensure_critical_deps():
 
     import numpy as np
     _min_numpy_run_version = "1.22.3"
-    numpy_version = extract_version(np)
-    too_old = numpy_version < (1, 22)
-    if numpy_version == (1, 22):
-        from numpy.lib import NumpyVersion
-        too_old = NumpyVersion(np.__version__) < _min_numpy_run_version
-    if too_old:
+    numpy_version = extract_version(np.__version__)
+    min_major_minor = extract_version(_min_numpy_run_version)
+
+    # Newer majors/minors skip this block - fast path.
+    if numpy_version <= min_major_minor:
         msg = (f"Numba needs NumPy {_min_numpy_run_version} or greater. "
                f"Got NumPy {np.__version__}.")
-        raise ImportError(msg)
+        # Slow path: compare with NumpyVersion at patch-level precision.
+        if numpy_version == min_major_minor:
+            from numpy.lib import NumpyVersion
+            if NumpyVersion(np.__version__) < _min_numpy_run_version:
+                raise ImportError(msg)
+        else:
+            raise ImportError(msg)
 
     try:
         import scipy
     except ImportError:
         pass
     else:
-        sp_version = extract_version(scipy)
+        sp_version = extract_version(scipy.__version__)
         if sp_version < (1, 0):
             msg = ("Numba requires SciPy version 1.0 or greater. Got SciPy "
                    f"{scipy.__version__}.")
