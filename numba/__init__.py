@@ -7,8 +7,6 @@ import re
 import sys
 import warnings
 
-_min_numpy_run_version = "1.22.3"
-
 
 # ---------------------- WARNING WARNING WARNING ----------------------------
 # THIS MUST RUN FIRST, DO NOT MOVE... SEE DOCSTRING IN _ensure_critical_deps
@@ -34,6 +32,7 @@ def _ensure_critical_deps():
         raise ImportError(msg)
 
     import numpy as np
+    _min_numpy_run_version = "1.22.3"
     numpy_version = extract_version(np)
     too_old = numpy_version < (1, 22)
     if numpy_version == (1, 22):
