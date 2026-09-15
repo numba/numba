@@ -478,6 +478,14 @@ Options for the compilation cache.
     Also see :ref:`docs on cache sharing <cache-sharing>` and
     :ref:`docs on cache clearing <cache-clearing>`
 
+    .. warning::
+
+        The on-disk cache uses :mod:`pickle` to serialize and deserialize
+        cached data. Loading a malicious cache can execute arbitrary code.
+        Only use a cache directory that you trust; do not set
+        ``NUMBA_CACHE_DIR`` to a shared, world-writable, or otherwise
+        untrusted location.
+
 .. envvar:: NUMBA_CACHE_LOCATOR_CLASSES
 
     Override the default cache locator classes and their order. If defined,

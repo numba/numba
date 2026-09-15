@@ -20,6 +20,14 @@ overloaded signatures compiled for the function. The *object code* is stored in
 files with an ``.nbc`` extension, one file per overload. The data in both files
 is serialized with :mod:`pickle`.
 
+.. warning::
+
+   Because the cache is deserialized with :mod:`pickle`, loading a
+   maliciously crafted cache file can execute arbitrary code. The cache
+   directory must be treated as trusted: do not use a shared,
+   world-writable, or otherwise untrusted location (see
+   :envvar:`NUMBA_CACHE_DIR`).
+
 
 Requirements for Cacheability
 -----------------------------
