@@ -69,6 +69,9 @@ def _entry(py_version, numpy_key, numpy_value, with_tag=False):
 #   numpy_test           pinned numpy in test env.
 #   platform             tagged on every row but unused in YAML today (one
 #                        workflow per platform); kept for downstream consumers.
+#   test_start_index     shard index for `runtests -j start:count`; osx-arm64
+#                        wheel PR-check test rows only (absent => full suite).
+#   test_count           total shard count; osx-arm64 wheel PR-check rows only.
 
 # ---- Conda matrices ----
 
@@ -134,6 +137,20 @@ WHEEL_TEST_MATRIX = [
     )
 ]
 
+# ---- osx-arm64 wheel PR check ----
+# Reduced matrix for ordinary PRs: each config runs a distinct shard of the
+# test suite (shard count 21 matches Azure, so shard durations align).
+WHEEL_PR_CHECK_OSX_ARM64 = [
+    dict(_entry(py, "numpy_test", np_), test_start_index=shard,
+         test_count=21)
+    for py, np_, shard in (
+        ("3.11", "1.26", 17),
+        ("3.12", "2.0", 18),
+        ("3.13", "2.3", 19),
+        ("3.14", "2.5", 20),
+    )
+]
+
 # ---- Unified evaluate ----
 
 _MATRICES = {
@@ -178,7 +195,13 @@ def evaluate(pkg_type, event, pr_labels, platform, inputs="{}"):
     else:
         accept_full = False
 
-    if accept_full:
+    if (event, pkg_type, platform) == ("pull_request", "wheel", "osx-arm64") \
+            and not selected:
+        pr_pys = {r["python_version_full"] for r in WHEEL_PR_CHECK_OSX_ARM64}
+        build = [r for r in base_build
+                 if r["python_version_full"] in pr_pys]
+        test = [dict(r) for r in WHEEL_PR_CHECK_OSX_ARM64]
+    elif accept_full:
         build, test = list(base_build), list(base_test)
     elif event == "workflow_dispatch":
         params = json.loads(inputs)

@@ -3,14 +3,9 @@ name: numba_osx-arm64_wheel_builder
 on:
   schedule:
     - cron: '5 7 * * 6'  # Saturday 7:05 AM UTC - osx-arm64 wheel (staggered to manage osx runner limit)
+  # every PR runs a reduced sharded check (see WHEEL_PR_CHECK_OSX_ARM64 in
+  # buildscripts/github/evaluate.py) and workflow_dispatch is used for release CI.
   pull_request:
-    paths:
-      - .github/workflows/numba_osx-arm64_wheel_builder.yml
-      - buildscripts/github/evaluate.py
-      - buildscripts/github/patch_wheel_dylib.py
-      - buildscripts/github/test_wheel_contents.py
-      - buildscripts/github/test_wheel_osx_arm64.py
-      - setup.py
   workflow_dispatch:
     inputs:
       llvmlite_wheel_runid:
@@ -235,5 +230,11 @@ jobs:
           # print Numba system information
           arch -arm64 python -m numba -s
 
-          # run tests
-          arch -arm64 python -m numba.runtests -m 4 -v
+          # run tests; a shard of the suite when the matrix row carries
+          # test_start_index (PR check), the full suite otherwise
+          if [ -n "${{ matrix.test_start_index }}" ]; then
+              SHARD_ARGS="-j ${{ matrix.test_start_index }}:${{ matrix.test_count }}"
+          else
+              SHARD_ARGS=""
+          fi
+          arch -arm64 python -m numba.runtests -m 4 -v $SHARD_ARGS
