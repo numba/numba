@@ -10,6 +10,8 @@ import warnings
 
 # ---------------------- WARNING WARNING WARNING ----------------------------
 # THIS MUST RUN FIRST, DO NOT MOVE... SEE DOCSTRING IN _ensure_critical_deps
+_min_numpy_run_version = "1.22.3"
+
 def _ensure_critical_deps():
     """
     Make sure the Python, NumPy and SciPy present are supported versions.
@@ -32,7 +34,6 @@ def _ensure_critical_deps():
         raise ImportError(msg)
 
     import numpy as np
-    _min_numpy_run_version = "1.22.3"
     numpy_version = extract_version(np.__version__)
     min_major_minor = extract_version(_min_numpy_run_version)
 
