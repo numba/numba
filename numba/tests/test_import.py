@@ -129,6 +129,9 @@ class TestEnsureCriticalDeps(TestCase):
             with mock.patch.object(np, '__version__', '1.9.9'):
                 with self.assertRaises(ImportError):
                     numba._ensure_critical_deps()
+            with mock.patch.object(np, '__version__', '1.22.3rc1'):
+                with self.assertRaises(ImportError):
+                    numba._ensure_critical_deps()
             with mock.patch.object(np, '__version__', '2.0.0rc1'):
                 numba._ensure_critical_deps()
 
