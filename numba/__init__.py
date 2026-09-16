@@ -10,7 +10,7 @@ import warnings
 
 # ---------------------- WARNING WARNING WARNING ----------------------------
 # THIS MUST RUN FIRST, DO NOT MOVE... SEE DOCSTRING IN _ensure_critical_deps
-_min_numpy_run_version = "1.22.3"
+_min_numpy_run_version = (1, 22, 3)
 
 def _ensure_critical_deps():
     """
@@ -35,16 +35,16 @@ def _ensure_critical_deps():
 
     import numpy as np
     numpy_version = extract_version(np.__version__)
-    min_major_minor = extract_version(_min_numpy_run_version)
 
     # Newer majors/minors skip this block - fast path.
-    if numpy_version <= min_major_minor:
-        msg = (f"Numba needs NumPy {_min_numpy_run_version} or greater. "
+    if numpy_version <= _min_numpy_run_version:
+        min_str = ".".join(map(str, _min_numpy_run_version))
+        msg = (f"Numba needs NumPy {min_str} or greater. "
                f"Got NumPy {np.__version__}.")
         # Slow path: compare with NumpyVersion at patch-level precision.
-        if numpy_version == min_major_minor:
+        if numpy_version == _min_numpy_run_version[:2]:
             from numpy.lib import NumpyVersion
-            if NumpyVersion(np.__version__) < _min_numpy_run_version:
+            if NumpyVersion(np.__version__) < min_str:
                 raise ImportError(msg)
         else:
             raise ImportError(msg)
