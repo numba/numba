@@ -71,8 +71,6 @@ jobs:
           python-version: ${{ matrix.python_version_full }}
           auto-update-conda: true
           auto-activate-base: true
-          # Python 3.15 is temporarily on ad-testing until it lands in defaults
-          channels: ${{ matrix.python_version_full == '3.15' && 'ad-testing/label/py315,defaults' || 'defaults' }}
 
       - name: Setup Miniconda [free-threaded]
         if: ${{ endsWith(matrix.python_version_full, 't') }}
@@ -80,7 +78,6 @@ jobs:
         with:
           auto-update-conda: true
           auto-activate-base: true
-          channels: ${{ startsWith(matrix.python_version_full, '3.15') && 'ad-testing/label/py315,defaults' || 'defaults' }}
 
       - name: Install free-threaded Python
         if: ${{ endsWith(matrix.python_version_full, 't') }}
