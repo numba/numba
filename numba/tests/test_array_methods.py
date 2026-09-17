@@ -1730,8 +1730,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             with self.subTest(pyfunc.__name__):
                 with self.assertRaises(TypingError) as raises:
                     cfunc(arr)
-                self.assertIn("imul(timedelta64[s], timedelta64[s])",
-                              str(raises.exception))
+                self.assertIn(
+                    "NumPy prod does not support operands with "
+                    "dtype timedelta64[s]",
+                    str(raises.exception))
 
     def test_prod_axis_tuple(self):
         """ test prod with axis as a tuple """

@@ -457,14 +457,15 @@ def _np_func_builder(axis, funcfn):
         ret_dtype = get_ret_dtype_if_any(aryty, dtype)
         if not isinstance(ret_dtype, types.Boolean):
             fnty = typingctx.resolve_value_type(funcfn)
-            fn_sig = fnty.get_call_type(
-                typingctx, (ret_dtype, ret_dtype), {}
-            )
-            if fn_sig is None:
+            try:
+                fnty.get_call_type(
+                    typingctx, (ret_dtype, ret_dtype), {}
+                )
+            except TypingError:
                 raise TypingError(
                     f"NumPy {op_name} does not support operands with "
                     f"dtype {ret_dtype}"
-                )
+                ) from None
         if axis:
             axis_length = axisty.count if isinstance(
                 axisty, types.UniTuple) else 1
