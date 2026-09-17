@@ -24,6 +24,8 @@ concurrency:
 env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
+  # dump Python tracebacks of all threads on fatal signals (segfaults)
+  PYTHONFAULTHANDLER: "1"
 
 jobs:
   load-matrix:
