@@ -434,6 +434,18 @@ def get_ret_dtype_if_any(aryty, dtype):
     return ret_dtype
 
 
+def check_reduction_dtype(aryty, dtype, unsupported, op_name):
+    # Reject, at typing time, dtypes that the reduction operation cannot
+    # handle (e.g. datetime64 cannot be summed and neither datetime64 nor
+    # timedelta64 can be multiplied).
+    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+    if isinstance(ret_dtype, unsupported):
+        raise TypingError(
+            f"NumPy {op_name} does not support operands with "
+            f"dtype {ret_dtype}"
+        )
+
+
 def _fill_array_with_constant(context, builder, aryty, ary, value):
     # Fill an array with a constant value using an ArrayIterator
     with ArrayIterator(context, builder, aryty, ary) as ptr:
@@ -450,22 +462,12 @@ def _np_func_builder(axis, funcfn):
     code generation, differing only in the accumulator (a scalar vs. an
     output array) and the return type.
     """
-    op_name = "sum" if funcfn is operator.iadd else "prod"
-
     @intrinsic
     def _numpy_reduce(typingctx, aryty, axisty, dtype):
+        # Unsupported dtypes (e.g. timedelta64 for prod) are rejected in
+        # the @overload typing section of the callers, see array_sum and
+        # array_prod.
         ret_dtype = get_ret_dtype_if_any(aryty, dtype)
-        if not isinstance(ret_dtype, types.Boolean):
-            fnty = typingctx.resolve_value_type(funcfn)
-            try:
-                fnty.get_call_type(
-                    typingctx, (ret_dtype, ret_dtype), {}
-                )
-            except TypingError:
-                raise TypingError(
-                    f"NumPy {op_name} does not support operands with "
-                    f"dtype {ret_dtype}"
-                ) from None
         if axis:
             axis_length = axisty.count if isinstance(
                 axisty, types.UniTuple) else 1
@@ -622,6 +624,7 @@ def array_sum(a, axis=None, dtype=None):
             "NumPy sum only supports integer axis value or tuple of integers"
         )
     if isinstance(a, types.Array):
+        check_reduction_dtype(a, dtype, types.NPDatetime, "sum")
         if isinstance(axis, types.Tuple) and axis.count == 0:
             if is_nonelike(dtype):
                 def array_sum_impl(a, axis=None, dtype=None):
@@ -668,6 +671,9 @@ def array_prod(a, axis=None, dtype=None):
             "NumPy prod only supports integer axis value or tuple of integers"
         )
     if isinstance(a, types.Array):
+        check_reduction_dtype(
+            a, dtype, (types.NPDatetime, types.NPTimedelta), "prod"
+        )
         if isinstance(axis, types.Tuple) and axis.count == 0:
             if is_nonelike(dtype):
                 def array_prod_impl(a, axis=None, dtype=None):
