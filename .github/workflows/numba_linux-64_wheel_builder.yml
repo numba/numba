@@ -33,6 +33,8 @@ env:
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
   CONDA_CHANNEL_NUMBA: numba/label/dev
   MANYLINUX_IMAGE: "manylinux_2_28_x86_64:2026.08.08-1"
+  # dump Python tracebacks of all threads on fatal signals (segfaults)
+  PYTHONFAULTHANDLER: "1"
   # Set USE_TBB to true by default, only override if explicitly set to false
   USE_TBB: ${{ github.event_name == 'workflow_dispatch' && inputs.use_tbb != false || true }}
 
@@ -177,6 +179,13 @@ jobs:
           repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install catchsegv
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glibc-tools
+          # verify catchsegv is installed
+          catchsegv --version
+
       - name: Validate and test wheel
         run: |
           # Pin to the setup-python interpreter: a login shell (bash -el) can
@@ -202,5 +211,5 @@ jobs:
           # print Numba system information
           $PYTHON_PATH -m numba -s
 
-          # run tests
-          $PYTHON_PATH -m numba.runtests -m 4 -v
+          # run tests under catchsegv to obtain native backtraces on segfault
+          catchsegv $PYTHON_PATH -m numba.runtests -m 4 -v
