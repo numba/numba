@@ -1906,6 +1906,22 @@ class TestParfors(TestParforsBase):
         x = TestNamedTuple3(y=np.zeros(10))
         self.check(test_impl, x, check_arg_equality=[comparer])
 
+    def test_namedtuple4(self):
+        # issue7135
+        def test_impl(dat):
+            n, = dat.x.shape
+            for i in numba.prange(n):
+                dat.x[i] = -1
+
+        def comparer(a, b):
+            np.testing.assert_almost_equal(a.x, b.x)
+
+        x = np.ones(10)
+        Data = namedtuple("Data", ["x"])
+        dat = Data(x)
+
+        self.check(test_impl, dat, check_arg_equality=[comparer])
+
     def test_inplace_binop(self):
         def test_impl(a, b):
             b += a
