@@ -1732,7 +1732,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         """ test prod with axis as a tuple """
         pyfunc = array_prod_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        a = np.arange(2 * 3 * 4, dtype=np.intp).reshape(2, 3, 4)
+        a = (np.arange(60, dtype=np.intp) % 7 + 1).reshape(5, 4, 3)
 
         data = [-2, -1, 0, 1, 2]
         all_perms = list(chain.from_iterable(
