@@ -238,6 +238,7 @@ The following attributes and methods are supported:
 * ``.conjugate()``
 * ``.real``
 * ``.imag``
+* ``.bit_count()``
 
 float, complex
 --------------
