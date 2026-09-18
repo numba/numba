@@ -45,7 +45,7 @@ jobs:
   linux-aarch64-build-conda:
     name: linux-aarch64-build-conda (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     env:
       EXTRA_CHANNELS: ${{ matrix.python_version_full == '3.15' && '-c ad-testing/label/py315' || '' }}
     defaults:
@@ -120,7 +120,7 @@ jobs:
   linux-aarch64-test:
     name: linux-aarch64-test-conda (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, linux-aarch64-build-conda]
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     env:
       EXTRA_CHANNELS: ${{ matrix.python_version_full == '3.15' && '-c ad-testing/label/py315' || '' }}
     defaults:
