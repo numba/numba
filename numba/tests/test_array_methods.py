@@ -216,6 +216,12 @@ def array_prod_axis_kws(a, axis):
 def array_prod_axis_dtype_kws(a, dtype, axis):
     return a.prod(axis=axis, dtype=dtype)
 
+def np_prod_axis_kws(a, axis):
+    return np.prod(a, axis=axis)
+
+def np_prod_axis_dtype_kws(a, dtype, axis):
+    return np.prod(a, axis=axis, dtype=dtype)
+
 def array_sum_const_multi(arr, axis):
     # use np.sum with different constant args multiple times to check
     # for internal compile cache to see if constant-specialization is
@@ -1793,6 +1799,51 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         str(c_raises.exception),
                         str(py_raises.exception)
                     )
+
+    def test_prod_axis_empty_tuple(self):
+        """ test np.prod with axis=() (no reduction) and an explicit dtype """
+        method = jit(nopython=True)(array_prod_axis_dtype_kws)
+        function = jit(nopython=True)(np_prod_axis_dtype_kws)
+
+        a = (np.arange(60) % 7 + 1).astype(np.int32).reshape(5, 4, 3)
+        for dtype in (np.int64, np.uint64, np.float64, np.float32):
+            with self.subTest(dtype=dtype):
+                # method form: a.prod(axis=(), dtype=...)
+                self.assertPreciseEqual(
+                    array_prod_axis_dtype_kws(a, dtype, ()),
+                    method(a, dtype, ()))
+                # function form: np.prod(a, axis=(), dtype=...)
+                self.assertPreciseEqual(
+                    np_prod_axis_dtype_kws(a, dtype, ()),
+                    function(a, dtype, ()))
+
+    def test_prod_function_form(self):
+        """ test the top-level np.prod function form with axis and dtype """
+        np_axis = jit(nopython=True)(np_prod_axis_kws)
+        np_axis_dtype = jit(nopython=True)(np_prod_axis_dtype_kws)
+
+        a = (np.arange(60) % 7 + 1).astype(np.int64).reshape(5, 4, 3)
+        for axis in (0, 1, 2):
+            with self.subTest(axis=axis):
+                self.assertPreciseEqual(np_prod_axis_kws(a, axis),
+                                        np_axis(a, axis))
+        for dtype in (np.int64, np.float64, np.float32):
+            for axis in (0, 1, 2):
+                with self.subTest(dtype=dtype, axis=axis):
+                    self.assertPreciseEqual(
+                        np_prod_axis_dtype_kws(a, dtype, axis),
+                        np_axis_dtype(a, dtype, axis))
+
+    def test_prod_axis_overflow(self):
+        """ test that the prod accumulator does not overflow (int32 -> int64)
+        """
+        pyfunc = array_prod_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # 100 ** 5 overflows int32, so the accumulator must be int64
+        a = np.full((5, 2), 100, np.int32)
+        expected = np.array([100 ** 5, 100 ** 5], dtype=np.int64)
+        self.assertPreciseEqual(cfunc(a, axis=0), expected)
 
     def test_sum_1d_kws(self):
         # check 1d reduces to scalar
