@@ -1,0 +1,7 @@
+Fix ``np.clip`` returning wrong shape when bounds broadcast larger than ``a``
+-----------------------------------------------------------------------------
+
+Previously the result was allocated with ``np.empty_like(a)`` before the
+broadcast shape was computed, so a bound that broadcasts to a shape larger
+than ``a`` silently produced the wrong shape and wrote outside the result
+buffer.
