@@ -10,6 +10,8 @@ import warnings
 
 # ---------------------- WARNING WARNING WARNING ----------------------------
 # THIS MUST RUN FIRST, DO NOT MOVE... SEE DOCSTRING IN _ensure_critical_deps
+_min_numpy_run_version = (1, 22, 3)
+
 def _ensure_critical_deps():
     """
     Make sure the Python, NumPy and SciPy present are supported versions.
@@ -21,8 +23,8 @@ def _ensure_critical_deps():
     """
     #NOTE THIS CODE SHOULD NOT IMPORT ANYTHING FROM NUMBA!
 
-    def extract_version(mod):
-        return tuple(map(int, mod.__version__.split('.')[:2]))
+    def extract_version(ver):
+        return tuple(map(int, ver.split('.')[:2]))
 
     PYVERSION = sys.version_info[:2]
 
@@ -32,19 +34,27 @@ def _ensure_critical_deps():
         raise ImportError(msg)
 
     import numpy as np
-    numpy_version = extract_version(np)
+    numpy_version = extract_version(np.__version__)
 
-    if numpy_version < (1, 22):
-        msg = (f"Numba needs NumPy 1.22 or greater. Got NumPy "
-               f"{numpy_version[0]}.{numpy_version[1]}.")
-        raise ImportError(msg)
+    # Newer majors/minors skip this block - fast path.
+    if numpy_version <= _min_numpy_run_version:
+        min_str = ".".join(map(str, _min_numpy_run_version))
+        msg = (f"Numba needs NumPy {min_str} or greater. "
+               f"Got NumPy {np.__version__}.")
+        # Slow path: compare with NumpyVersion at patch-level precision.
+        if numpy_version == _min_numpy_run_version[:2]:
+            from numpy.lib import NumpyVersion
+            if NumpyVersion(np.__version__) < min_str:
+                raise ImportError(msg)
+        else:
+            raise ImportError(msg)
 
     try:
         import scipy
     except ImportError:
         pass
     else:
-        sp_version = extract_version(scipy)
+        sp_version = extract_version(scipy.__version__)
         if sp_version < (1, 0):
             msg = ("Numba requires SciPy version 1.0 or greater. Got SciPy "
                    f"{scipy.__version__}.")
@@ -144,7 +154,7 @@ __all__ += types.__all__
 __all__ += errors.__all__
 
 
-_min_llvmlite_version = (0, 50, 0)
+_min_llvmlite_version = (0, 51, 0)
 _min_llvm_version = (14, 0, 0)
 
 def _ensure_llvm():

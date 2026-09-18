@@ -316,7 +316,7 @@ class _LAPACK:
             types.intp,                 # ldb
             types.CPointer(rtype),      # S
             types.float64,              # rcond
-            types.CPointer(types.intc)  # rank
+            types.CPointer(F_INT_nbtype)  # rank
         )
         return types.ExternalFunction("numba_ez_gelsd", sig)
 
@@ -1843,7 +1843,7 @@ def lstsq_impl(a, b, rcond=-1.0):
 
         # Allocate returns
         s = np.empty(minmn, dtype=real_dtype)
-        rank_ptr = np.empty(1, dtype=np.int32)
+        rank_ptr = np.empty(1, dtype=F_INT_nptype)
 
         r = numba_ez_gelsd(
             kind,  # kind

@@ -133,7 +133,6 @@ class IteratorType(IterableType[_TypeT_co], Generic[_TypeT_co]):
     @override
     def iterator_type(self) -> Self: ...
 
-# pyrefly: ignore[invalid-inheritance]
 class Container(
     Sized,
     IterableType[_TypeT_co],

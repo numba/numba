@@ -422,7 +422,7 @@ numba_xxgemm(char kind, char transa, char transb,
 
 
 /* L2-norms */
-NUMBA_EXPORT_FUNC(F_INT)
+NUMBA_EXPORT_FUNC(int)
 numba_xxnrm2(char kind, Py_ssize_t n, void * x, Py_ssize_t incx, void * result)
 {
     void *raw_func = NULL;

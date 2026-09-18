@@ -1,0 +1,307 @@
+
+Version 0.68.0 (TBD)
+====================
+
+This is a major Numba release. Numba now supports Python 3.15. This
+release also expands Windows ARM64 conda packages and wheels from
+Python 3.12 through 3.14. Linux ``x86_64`` and ``aarch64`` wheels are
+now tagged to be compatible with GLIBC >= 2.27.
+
+Please find a summary of all noteworthy items below.
+
+Highlights
+~~~~~~~~~~
+
+Support for Python 3.15
+-----------------------
+
+Support for Python 3.15 is added. This includes updates for bytecode
+changes such as ``GET_ITER`` / ``POP_ITER`` stack behavior,
+``LOAD_COMMON_CONSTANT``, and exception-table splits from ``NOT_TAKEN``.
+
+(`PR-#10732 <https://github.com/numba/numba/pull/10732>`__)
+
+
+Improvements
+~~~~~~~~~~~~
+
+Added support for using IntEnum as NumPy array's index.
+-------------------------------------------------------
+
+``IntEnum`` members can now be used directly as array indices, for
+example ``a[MyEnum.FOO]``, without an explicit cast to an integer.
+
+(`PR-#9230 <https://github.com/numba/numba/pull/9230>`__)
+
+Enable tuple types in ``np.sum`` function.
+------------------------------------------
+
+The ``np.sum`` function now supports tuple types for the ``axis`` argument,
+allowing users to specify multiple axes along which to perform the operation
+at runtime.
+
+(`PR-#10661 <https://github.com/numba/numba/pull/10661>`__)
+
+Preserve array layout when slicing with a ``None`` step
+-------------------------------------------------------
+
+Previously, a slice with an explicit ``None`` step was typed as a three-member slice,
+so ``x[a:b:None]`` inferred an ``"A"`` layout where ``x[a:b]`` inferred ``"C"``.
+
+(`PR-#10781 <https://github.com/numba/numba/pull/10781>`__)
+
+Enable using ILP64 BLAS and LAPACK.
+-----------------------------------
+
+Users can opt in to using ILP64 (64-bit integer) LAPACK ABI. To opt in, define
+the ``NUMBA_LAPACK_ILP64=1`` environment variable at numba build time, and
+make sure that SciPy available at run time exports the ILP64 ``cython_lapack`` ABI
+(this currently requires SciPy >= 1.18, built from source).
+
+(`PR-#10784 <https://github.com/numba/numba/pull/10784>`__)
+
+
+NumPy Support
+~~~~~~~~~~~~~
+
+Added ``kind`` argument to ``ndarray.sort``
+-------------------------------------------
+
+``ndarray.sort`` now accepts the ``kind`` argument in nopython mode and
+supports ``"mergesort"`` in addition to the default ``"quicksort"``, matching
+the ``kind`` support already available in ``ndarray.argsort``. Both methods
+also accept ``"stable"`` as an alias for ``"mergesort"`` and reject any other
+``kind`` at compile time. The default value keeps the existing behaviour.
+
+(`PR-#10703 <https://github.com/numba/numba/pull/10703>`__)
+
+Add support for ``np.nanargmax`` and ``np.nanargmin``.
+------------------------------------------------------
+
+The ``np.nanargmax`` and ``np.nanargmin`` functions are now supported in
+``nopython`` mode. NaN values are skipped when locating the argument of the
+maximum/minimum, the ``axis`` argument is supported, and NumPy is matched by
+raising ``ValueError`` with the same messages for empty and all-NaN input.
+Integer input behaves like ``np.argmax``/``np.argmin`` as NaN is not
+representable in integer dtypes.
+
+(`PR-#10808 <https://github.com/numba/numba/pull/10808>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Add missing ``config.DISABLE_PERFORMANCE_WARNINGS`` checks
+----------------------------------------------------------
+
+A bug where some Numba functions raise a ``NumbaPerformanceWarning``
+despite setting ``config.DISABLE_PERFORMANCE_WARNINGS`` (or the
+``NUMBA_DISABLE_PERFORMANCE_WARNINGS`` environment variable) has been
+fixed.
+
+(`PR-#9794 <https://github.com/numba/numba/pull/9794>`__)
+
+Fix complex multiplication and division NaN recovery for Python 3.14+
+---------------------------------------------------------------------
+
+Complex number multiplication and division now match CPython 3.14+ behaviour
+when infinities produce ``nan+nanj`` under IEEE 754 arithmetic. The NaN
+recovery logic from CPython's ``_Py_c_prod()`` and ``_Py_c_quot()`` is
+applied for ``*`` and ``/`` on complex types when running on Python 3.14 and
+later.
+
+(`PR-#10528 <https://github.com/numba/numba/pull/10528>`__)
+
+Make ``.nbi`` cache index files reproducible
+--------------------------------------------
+
+Source freshness stamps in the on-disk cache (``.nbi`` files) now use a
+content hash of the source instead of the file's modification time. The
+modification time varies across hosts and filesystems (and its precision
+differs between filesystems), which made cache index files
+non-reproducible. Using a content hash makes the stamps deterministic and
+filesystem-agnostic. As a result, ``InTreeCacheLocatorFsAgnostic`` is now
+deprecated in favour of ``InTreeCacheLocator``.
+
+(`PR-#10659 <https://github.com/numba/numba/pull/10659>`__)
+
+Fix false ``NumbaPerformanceWarning`` when indexing with ``newaxis``
+--------------------------------------------------------------------
+
+Indexing a contiguous array with ``np.newaxis`` (for example
+``x[:, None]``) was incorrectly treated as breaking contiguity, since the
+slice preceding the ``newaxis`` was no longer considered the innermost
+index. This caused a spurious ``NumbaPerformanceWarning`` to be raised
+from ``np.dot()``, ``np.vdot()``, and ``@`` when one of their operands had
+been reshaped with ``newaxis``, even though the array was still
+contiguous (`#10086 <https://github.com/numba/numba/issues/10086>`_).
+
+(`PR-#10684 <https://github.com/numba/numba/pull/10684>`__)
+
+Fix ``np.clip`` writing past the end of a caller-provided ``out`` array
+-----------------------------------------------------------------------
+
+``np.clip`` did not check the shape of an explicit ``out`` argument, so an
+``out`` that did not match the shape of the result was written past its end
+and a wrong array was returned with no error. The shape is now validated and
+a mismatch raises ``ValueError``, matching NumPy.
+
+(`PR-#10761 <https://github.com/numba/numba/pull/10761>`__)
+
+Fix ``AssertionError`` when unifying mismatched first-class function types
+--------------------------------------------------------------------------
+
+A tuple holding two first-class functions with the same argument count but
+different signatures raised a bare ``AssertionError`` with no message, from
+``typeof`` while typing the argument, so no Numba error context was attached
+either. ``unified_function_type`` now returns ``None`` for that case, as its
+documentation already describes, which lets ``BaseTuple.from_types`` fall back
+to a heterogeneous tuple and the call report the actual mismatch.
+
+(`PR-#10763 <https://github.com/numba/numba/pull/10763>`__)
+
+Fix first-class function return-type mismatch
+---------------------------------------------
+
+Passing a jit-compiled function as a first-class function
+(``numba.types.FunctionType``) argument whose declared return type does
+not use the same LLVM value type as the compiled function's return type
+now raises an error instead of silently producing a corrupted return
+value (no cast is inserted at the call).
+
+(`PR-#10764 <https://github.com/numba/numba/pull/10764>`__)
+
+Coalesce runs of list appends in the ``list_to_tuple`` peephole
+---------------------------------------------------------------
+
+The peephole that rewrites the ``BUILD_LIST``/``LIST_APPEND``/
+``LIST_TO_TUPLE`` bytecode sequence emitted a separate one-element
+``build_tuple`` and binary addition for every appended item. The resulting
+chain of tuple concatenations makes both the Numba IR and the LLVM IR
+lowered from it quadratic in the number of items. CPython uses this
+bytecode for every call with more than 30 arguments, so wide calls were
+disproportionately expensive to compile. Consecutive appends are now
+collected into a single ``build_tuple``.
+
+(`PR-#10782 <https://github.com/numba/numba/pull/10782>`__)
+
+Fix ``math.ldexp`` and ``np.ldexp`` with negative exponents on PowerPC64LE
+--------------------------------------------------------------------------
+
+The exponent argument of the ``numba_ldexp`` and ``numba_ldexpf`` helpers is a
+C ``int``, and ABIs such as PowerPC64LE ELFv2 require the caller to sign-extend
+it into the full argument register. The declaration Numba emitted used a bare
+``i32`` parameter, which carries no signedness, so LLVM did not sign-extend it
+and a negative exponent reached the callee as a large positive one. Both
+lowerings, for ``math.ldexp`` and for the ``np.ldexp`` ufunc, now mark the
+exponent parameter ``signext``.
+
+(`PR-#10789 <https://github.com/numba/numba/pull/10789>`__)
+
+
+Changes
+~~~~~~~
+
+Relax NumPy ``sin``/``cos`` test comparisons on Linux x86_64 with NumPy < 1.25
+------------------------------------------------------------------------------
+
+Follow-up to PR #10572, which added a 4-ULP allowance for NumPy < 1.25
+``sin``/``cos`` on Linux x86_64. Apply that allowance in the remaining tests
+that were missed, and skip tests where the NumPy < 1.25 error cannot be
+matched by relative ULP comparison.
+
+(`PR-#10786 <https://github.com/numba/numba/pull/10786>`__)
+
+Linux ``x86_64`` wheels now require ``glibc`` 2.28 or newer
+-----------------------------------------------------------
+
+``linux-64`` wheels are built as ``manylinux_2_28`` instead of
+``manylinux2014``. Installing from PyPI requires ``glibc`` 2.28 or
+newer. Systems with older ``glibc`` can remain on Numba 0.67.
+``linux-aarch64`` was already on ``manylinux_2_28``.
+
+(`PR-#10804 <https://github.com/numba/numba/pull/10804>`__)
+
+
+Documentation Changes
+~~~~~~~~~~~~~~~~~~~~~
+
+Document container types in reference manual
+--------------------------------------------
+
+Updated the documentation for Numba types to reference ``ListType``, ``DictType``, and ``SetType``.
+
+(`PR-#10775 <https://github.com/numba/numba/pull/10775>`__)
+
+Pull-Requests:
+
+* PR `#8779 <https://github.com/numba/numba/pull/8779>`_: Refactored Numpy documentation to follow numpy user reference (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ `esc <https://github.com/esc>`_ `kc611 <https://github.com/kc611>`_)
+* PR `#9230 <https://github.com/numba/numba/pull/9230>`_: allow using IntEnumMember as array index (Da Li `dlee992 <https://github.com/dlee992>`_ `gmarkall <https://github.com/gmarkall>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#9794 <https://github.com/numba/numba/pull/9794>`_: Add missing `config.DISABLE_PERFORMANCE_WARNINGS` checks (`maxkapur <https://github.com/maxkapur>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10528 <https://github.com/numba/numba/pull/10528>`_: Fix: Python 3.14 complex nan recovery (`benjeffery <https://github.com/benjeffery>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10542 <https://github.com/numba/numba/pull/10542>`_: cleanup: remove dead code from np/math/numbers (`swap357 <https://github.com/swap357>`_)
+* PR `#10607 <https://github.com/numba/numba/pull/10607>`_: Update dependency macos to v26 (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ `renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10659 <https://github.com/numba/numba/pull/10659>`_: Make .nbi files reproducible (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#10661 <https://github.com/numba/numba/pull/10661>`_: Add tuple axis support for array sum (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ kc611 `kc611 <https://github.com/kc611>`_ `sklam <https://github.com/sklam>`_)
+* PR `#10684 <https://github.com/numba/numba/pull/10684>`_: Fix false NumbaPerformanceWarning when indexing with newaxis (`zain-asif-dev <https://github.com/zain-asif-dev>`_)
+* PR `#10701 <https://github.com/numba/numba/pull/10701>`_: `misc.special` type stubs (`jorenham <https://github.com/jorenham>`_)
+* PR `#10703 <https://github.com/numba/numba/pull/10703>`_: Add mergesort option for array.sort() (`eyupcanakman <https://github.com/eyupcanakman>`_)
+* PR `#10716 <https://github.com/numba/numba/pull/10716>`_: `jitclass` type stubs (`jorenham <https://github.com/jorenham>`_)
+* PR `#10721 <https://github.com/numba/numba/pull/10721>`_: Shift legacy NumPy distributions to NumPy module (`kc611 <https://github.com/kc611>`_)
+* PR `#10727 <https://github.com/numba/numba/pull/10727>`_: update llvmlite to next dev version (`swap357 <https://github.com/swap357>`_)
+* PR `#10732 <https://github.com/numba/numba/pull/10732>`_: Python 3.15 (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10733 <https://github.com/numba/numba/pull/10733>`_: Update actions/stale action to v11 (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ `renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10739 <https://github.com/numba/numba/pull/10739>`_: `np.ufunc` type stubs (threading functions and `PyUFunc_*`) (`jorenham <https://github.com/jorenham>`_)
+* PR `#10741 <https://github.com/numba/numba/pull/10741>`_: `core.types.npytypes` type stubs (`jorenham <https://github.com/jorenham>`_)
+* PR `#10742 <https://github.com/numba/numba/pull/10742>`_: Update pypa/gh-action-pypi-publish digest to dc37677 (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ `renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10751 <https://github.com/numba/numba/pull/10751>`_: `numba.core.types` stubs missing re-exports (`jorenham <https://github.com/jorenham>`_)
+* PR `#10752 <https://github.com/numba/numba/pull/10752>`_: `numba.np.types` type stubs (`NPTimedelta`, `NPDatetime`) (`jorenham <https://github.com/jorenham>`_)
+* PR `#10756 <https://github.com/numba/numba/pull/10756>`_: Update dependency pyrefly to v1.2.0 (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ `renovate[bot] <https://github.com/apps/renovate>`_)
+* PR `#10759 <https://github.com/numba/numba/pull/10759>`_: CI: expand `win-arm64` py-version matrix to cover python 3.11-3.14 (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ `esc <https://github.com/esc>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10761 <https://github.com/numba/numba/pull/10761>`_: Fix np.clip writing past the end of a caller-provided out= array (`nicoseijas <https://github.com/nicoseijas>`_)
+* PR `#10763 <https://github.com/numba/numba/pull/10763>`_: Fix #10758. Refuse to unify mismatched first-class function types (`nelson2005 <https://github.com/nelson2005>`_)
+* PR `#10764 <https://github.com/numba/numba/pull/10764>`_: Fix: first-class function return type mismatch (`swap357 <https://github.com/swap357>`_)
+* PR `#10775 <https://github.com/numba/numba/pull/10775>`_: docs: add container types documentation (#3349) (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ `coderay3000 <https://github.com/coderay3000>`_ `esc <https://github.com/esc>`_)
+* PR `#10779 <https://github.com/numba/numba/pull/10779>`_: Cherry pick 0.67 (`swap357 <https://github.com/swap357>`_)
+* PR `#10781 <https://github.com/numba/numba/pull/10781>`_: Type None step slices as being 2 parameter (`ricardoV94 <https://github.com/ricardoV94>`_)
+* PR `#10782 <https://github.com/numba/numba/pull/10782>`_: Coalesce runs of list appends in the list_to_tuple peephole (`velochy <https://github.com/velochy>`_)
+* PR `#10784 <https://github.com/numba/numba/pull/10784>`_: ENH: enable ILP64 linear algebra (Claude Sonnet 5 `ev-br <https://github.com/ev-br>`_ Evgeni Burovski Guilherme Leobas)
+* PR `#10786 <https://github.com/numba/numba/pull/10786>`_: Fix: Numpy 1.24 sincos followup (`swap357 <https://github.com/swap357>`_)
+* PR `#10789 <https://github.com/numba/numba/pull/10789>`_: FIX:  Use signext on numba_ldexp's exponent (`MementoRC <https://github.com/MementoRC>`_)
+* PR `#10791 <https://github.com/numba/numba/pull/10791>`_: Complete dead code sweep for `numba/np/math/numbers.py` (`esc <https://github.com/esc>`_)
+* PR `#10793 <https://github.com/numba/numba/pull/10793>`_: ci: drop python 3.11 from the win-arm64 matrix (`swap357 <https://github.com/swap357>`_)
+* PR `#10797 <https://github.com/numba/numba/pull/10797>`_: initialize AGENTS.md (`esc <https://github.com/esc>`_)
+* PR `#10800 <https://github.com/numba/numba/pull/10800>`_: Fix re-export of `types`. (`hunterhogan <https://github.com/hunterhogan>`_)
+* PR `#10804 <https://github.com/numba/numba/pull/10804>`_: CI: upgrade `manylinux` image to `manylinux_2_28` for numba builds (`swap357 <https://github.com/swap357>`_)
+* PR `#10805 <https://github.com/numba/numba/pull/10805>`_: update win-arm64 versions (`betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_ `esc <https://github.com/esc>`_ `swap357 <https://github.com/swap357>`_)
+* PR `#10808 <https://github.com/numba/numba/pull/10808>`_: ENH: add support for np.nanargmax and np.nanargmin (`juanmicl <https://github.com/juanmicl>`_)
+* PR `#10809 <https://github.com/numba/numba/pull/10809>`_: CI: use `--pre` for llvmlite installs on wheel builder workflows (`swap357 <https://github.com/swap357>`_)
+* PR `#10822 <https://github.com/numba/numba/pull/10822>`_: relax CUDASIM test fp16 intrinsic comparison tolerance. (`swap357 <https://github.com/swap357>`_)
+* PR `#10825 <https://github.com/numba/numba/pull/10825>`_: update version support table for 0.68.0rc1 (`swap357 <https://github.com/swap357>`_)
+* PR `#10826 <https://github.com/numba/numba/pull/10826>`_: Changelog `0.68` (`swap357 <https://github.com/swap357>`_)
+
+Authors:
+
+* `benjeffery <https://github.com/benjeffery>`_
+* `betterqualityassuranceuser <https://github.com/betterqualityassuranceuser>`_
+* `coderay3000 <https://github.com/coderay3000>`_
+* `dlee992 <https://github.com/dlee992>`_
+* `esc <https://github.com/esc>`_
+* `ev-br <https://github.com/ev-br>`_
+* `eyupcanakman <https://github.com/eyupcanakman>`_
+* `gmarkall <https://github.com/gmarkall>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `hunterhogan <https://github.com/hunterhogan>`_
+* `jorenham <https://github.com/jorenham>`_
+* `juanmicl <https://github.com/juanmicl>`_
+* `kc611 <https://github.com/kc611>`_
+* `maxkapur <https://github.com/maxkapur>`_
+* `MementoRC <https://github.com/MementoRC>`_
+* `nelson2005 <https://github.com/nelson2005>`_
+* `nicoseijas <https://github.com/nicoseijas>`_
+* `renovate[bot] <https://github.com/apps/renovate>`_
+* `ricardoV94 <https://github.com/ricardoV94>`_
+* `sklam <https://github.com/sklam>`_
+* `swap357 <https://github.com/swap357>`_
+* `velochy <https://github.com/velochy>`_
+* `zain-asif-dev <https://github.com/zain-asif-dev>`_
