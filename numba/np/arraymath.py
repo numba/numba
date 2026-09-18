@@ -892,12 +892,31 @@ def array_mean(a):
 @overload(np.var)
 @overload_method(types.Array, "var")
 def array_var(a):
-    if isinstance(a, types.Array):
-        def array_var_impl(a):
-            # Compute the mean
-            m = a.mean()
+    if isinstance(a, (types.Integer, types.Boolean)):
+        def _scalar_var(a):
+            return np.float64(0.0)
 
-            # Compute the sum of square diffs
+        return _scalar_var
+
+    elif isinstance(a, types.Float):
+        typed_zero = as_dtype(a).type(0)
+
+        def _scalar_var(a):
+            return typed_zero
+
+        return _scalar_var
+
+    elif isinstance(a, types.Complex):
+        real_zero = as_dtype(a.underlying_float).type(0)
+
+        def _scalar_var(a):
+            return real_zero
+
+        return _scalar_var
+
+    elif isinstance(a, types.Array):
+        def array_var_impl(a):
+            m = a.mean()
             ssd = 0
             for v in np.nditer(a):
                 val = (v.item() - m)
@@ -913,7 +932,6 @@ def array_std(a):
     if isinstance(a, types.Array):
         def array_std_impl(a):
             return a.var() ** 0.5
-
         return array_std_impl
 
     # Integers and booleans default to float64(0.0) in numpy.std
