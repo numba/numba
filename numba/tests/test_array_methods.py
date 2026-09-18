@@ -1382,7 +1382,6 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             yield arr
             absorbing = arr.copy()
             absorbing[3, 2, 1] = 0
-
             yield absorbing
             yield np.full(1, 7, arr_dtype)
 
@@ -1663,7 +1662,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         unsigned_dtypes_only_uint32 = [np.uint32]
 
         for arr in self.gen_prod_array_cases(signed_dtypes_only_int32,
-                                            unsigned_dtypes_only_uint32):
+                                             unsigned_dtypes_only_uint32):
             for axis in (0, 1, 2):
                 if axis > len(arr.shape)-1:
                     continue
@@ -1753,12 +1752,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                     self.assertPreciseEqual(pyfunc(a, axes), cfunc(a, axes))
 
     def test_prod_axis_tuple_duplicates(self):
-        """ test prod with axis as a tuple """
+        """ test prod with a tuple axis containing duplicate values """
         self.disable_leak_check()
         pyfunc = array_prod_axis_kws
         err = ValueError if numpy_version < (1, 25) else np.exceptions.AxisError
         cfunc = jit(nopython=True)(pyfunc)
-        a = np.arange(2 * 3 * 4, dtype=np.intp).reshape(2, 3, 4)
+        a = (np.arange(60, dtype=np.intp) % 7 + 1).reshape(5, 4, 3)
 
         data = [-3, -2, -1, 0, 1, 2, 3]
         all_perms = list(chain.from_iterable(

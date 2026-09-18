@@ -428,7 +428,7 @@ def get_ret_dtype_if_any(aryty, dtype):
         ):
             # For signed integers smaller than intp,
             # use intp as the accumulator
-            ret_dtype = types.intp
+            ret_dtype = types.uintp if not ret_dtype.signed else types.intp
     else:
         ret_dtype = dtype.dtype
     return ret_dtype
