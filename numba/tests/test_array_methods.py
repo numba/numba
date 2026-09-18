@@ -210,20 +210,11 @@ def array_cumsum_axis_dtype_kws(a, dtype, axis):
 def array_sum_axis_dtype_pos(a, a1, a2):
     return a.sum(a1, a2)
 
-def array_prod(a, *args):
-    return a.prod(*args)
-
 def array_prod_axis_kws(a, axis):
     return a.prod(axis=axis)
 
-def array_prod_dtype_kws(a, dtype):
-    return a.prod(dtype=dtype)
-
 def array_prod_axis_dtype_kws(a, dtype, axis):
     return a.prod(axis=axis, dtype=dtype)
-
-def array_prod_axis_dtype_pos(a, a1, a2):
-    return a.prod(a1, a2)
 
 def array_sum_const_multi(arr, axis):
     # use np.sum with different constant args multiple times to check
@@ -1647,9 +1638,9 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         uint32 and int32 must be tested separately because Numpy's current
         behaviour is different in 64bits Windows (accumulates as int32)
-        and 64bits Linux (accumulates as int64), while Numba has decided to
-        always accumulate as int64, when the OS is 64bits. No testing has
-        been done for behaviours in 32 bits platforms.
+        and 64bits Linux (accumulates as int64), while Numba accumulates
+        int32 as int64 and uint32 as uint64, when the OS is 64bits. No
+        testing has been done for behaviours in 32 bits platforms.
         """
         pyfunc = array_prod_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
@@ -1670,13 +1661,16 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                                   "input ".format(arr.dtype)):
                     npy_res = pyfunc(arr, axis=axis)
                     numba_res = cfunc(arr, axis=axis)
+                    expected_dtype = np.dtype(out_dtypes[arr.dtype])
                     if isinstance(numba_res, np.ndarray):
-                        self.assertPreciseEqual(
-                            npy_res.astype(out_dtypes[arr.dtype]),
-                            numba_res.astype(out_dtypes[arr.dtype]))
-                    else:
-                        # the results are scalars
-                        self.assertEqual(npy_res, numba_res)
+                        self.assertEqual(numba_res.dtype, expected_dtype)
+                    # NumPy's dtype may differ from Numba's (e.g. on 32 bit
+                    # Windows), so only the NumPy result is cast to the
+                    # expected accumulator dtype before comparing values.
+                    # Numba boxes scalar results as Python scalars, which
+                    # carry no dtype of their own.
+                    self.assertPreciseEqual(
+                        npy_res.astype(expected_dtype), numba_res)
 
     def test_prod_axis_dtype_kws(self):
         """ test prod with axis and dtype parameters over a whole range

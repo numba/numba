@@ -426,8 +426,8 @@ def get_ret_dtype_if_any(aryty, dtype):
             isinstance(aryty.dtype, types.Integer) and
             aryty.dtype.bitwidth < types.intp.bitwidth
         ):
-            # For signed integers smaller than intp,
-            # use intp as the accumulator
+            # For integers smaller than intp, use the pointer-sized
+            # accumulator that matches the signedness of the input.
             ret_dtype = types.uintp if not ret_dtype.signed else types.intp
     else:
         ret_dtype = dtype.dtype
