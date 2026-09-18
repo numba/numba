@@ -79,9 +79,33 @@ def test_eval_pull_request():
             CONDA_BUILD_MATRIX if pkg == "conda" else WHEEL_BUILD_MATRIX
         )
         for p in PLATFORMS:
+            if (pkg, p) == ("wheel", "osx-arm64"):
+                continue  # reduced PR-check matrix, tested below
             build, _ = evaluate(pkg, "pull_request", None, p)
             assert len(build) == len(expected), (pkg, p)
             assert all(r["platform"] == p for r in build), (pkg, p)
+
+
+def test_eval_osx_arm64_wheel_pr_check():
+    # ordinary PR (no build labels): reduced sharded check
+    build, test = evaluate("wheel", "pull_request", None, "osx-arm64")
+    assert [r["python_version_full"] for r in test] == [
+        "3.11", "3.12", "3.13", "3.14",
+    ]
+    assert {r["python_version_full"] for r in build} == {
+        "3.11", "3.12", "3.13", "3.14",
+    }
+    # distinct, valid shard indices with a shared shard count
+    indices = [r["test_start_index"] for r in test]
+    assert len(set(indices)) == 4
+    assert all(r["test_count"] == 21 for r in test)
+    assert all(0 <= r["test_start_index"] < r["test_count"] for r in test)
+    # build_numba_wheel label selects the full matrix instead
+    build, test = evaluate(
+        "wheel", "pull_request", ["build_numba_wheel"], "osx-arm64",
+    )
+    assert len(build) == len(WHEEL_BUILD_MATRIX)
+    assert all("test_start_index" not in r for r in test)
 
 
 def test_eval_label():
