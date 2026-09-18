@@ -1,0 +1,6 @@
+Fix xoroshiro128p_uniform_float32 returning exactly 1.0
+---------------------------------------------------------
+
+``numba.cuda.random.xoroshiro128p_uniform_float32`` could return exactly
+``1.0`` for roughly 1 in 3.4e7 draws, violating its documented
+``[0.0, 1.0)`` contract. This has been fixed.
