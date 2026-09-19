@@ -1,7 +1,5 @@
 import enum
 
-import numpy as np
-
 from .abstract import Dummy, Hashable, Literal, Number, Type
 from functools import total_ordering, cached_property
 from numba.core import utils
@@ -41,7 +39,8 @@ class Integer(Number):
         return cls(name)
 
     def cast_python_value(self, value):
-        return getattr(np, self.name)(value)
+        # return getattr(np, self.name)(value)
+        return int(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -121,7 +120,8 @@ class Float(Number):
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):
-        return getattr(np, self.name)(value)
+        # return getattr(np, self.name)(value)
+        return float(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
@@ -140,7 +140,8 @@ class Complex(Number):
         self.bitwidth = bitwidth
 
     def cast_python_value(self, value):
-        return getattr(np, self.name)(value)
+        # return getattr(np, self.name)(value)
+        return complex(value)
 
     def __lt__(self, other):
         if self.__class__ is not other.__class__:
