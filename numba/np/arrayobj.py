@@ -855,8 +855,12 @@ class IntegerArrayIndexer(Indexer):
             builder.load(idx) for idx in self.global_ary_idx_list[
                 len(self.global_ary_idx_list) - len(self.idx_shape):]
         ]
+        # Broadcast extents are 1 or the full extent, so use select for speed
         indices = [
-            builder.srem(indices[i], self.idx_shape[i])
+            builder.select(
+                builder.icmp_signed('==', self.idx_shape[i], self.ll_intp(1)),
+                self.ll_intp(0), indices[i]
+            )
             for i in range(len(self.idx_shape))
         ]
 
@@ -1541,8 +1545,12 @@ def maybe_copy_source(context, builder, use_copy, indexer,
                           len(src_indices)) + list(src_indices)
             )
 
+        # As in IntegerArrayIndexer.loop_head
         src_indices = [
-            builder.srem(src_indices[i], src_shapes[i])
+            builder.select(
+                builder.icmp_signed('==', src_shapes[i], intp_t(1)),
+                intp_t(0), src_indices[i]
+            )
             for i in range(len(src_shapes))
         ]
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
