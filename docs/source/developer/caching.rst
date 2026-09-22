@@ -22,7 +22,7 @@ is serialized with :mod:`pickle`.
 
 .. warning::
 
-   Because the cache is deserialized with :mod:`pickle`, loading a
+  The cache is deserialized with :mod:`pickle`, therefore loading a
    maliciously crafted cache file can execute arbitrary code. The cache
    directory must be treated as trusted: do not use a shared,
    world-writable, or otherwise untrusted location (see
@@ -82,7 +82,7 @@ This is a list of known limitation of the cache:
 Cache Sharing
 -------------
 
-It is operationally safe to share and reuse the contents in the cache
+It is operationally safe to share and reuse the contents of the cache
 directory on a different machine. The cache remembers the CPU model and the
 available CPU features during compilation. If the CPU model and the CPU
 features do not match exactly, the cache contents will not be considered.
