@@ -20,9 +20,14 @@ overloaded signatures compiled for the function. The *object code* is stored in
 files with an ``.nbc`` extension, one file per overload. The data in both files
 is serialized with :mod:`pickle`.
 
+.. _cache-security:
+
+Security
+--------
+
 .. warning::
 
-  The cache is deserialized with :mod:`pickle`, therefore loading a
+   The cache is deserialized with :mod:`pickle`, therefore loading a
    maliciously crafted cache file can execute arbitrary code. The cache
    directory must be treated as trusted: do not use a shared,
    world-writable, or otherwise untrusted location (see
@@ -90,10 +95,8 @@ features do not match exactly, the cache contents will not be considered.
 
 .. warning::
 
-   "Safe" here is an operational property, not a security one. The cache
-   is deserialized with :mod:`pickle`, so loading a maliciously crafted
-   cache file can execute arbitrary code. Only share a cache directory
-   with, and reuse cache contents from, parties you trust.
+   "Safe" here is an operational property, not a security one (see
+   :ref:`cache-security`).
 
 If the cache directory is shared on a network filesystem, concurrent
 read/write of the cache is safe only if file replacement operation is atomic
