@@ -667,6 +667,16 @@ if numpy_version < (2, 0):
 # Advanced / fancy indexing
 
 
+def broadcast_index(builder, idx, extent):
+    """
+    Map a loop counter onto a dimension that is broadcast against it, i.e.
+    whose extent is either 1 or the full loop extent.
+    """
+    fnty = ir.FunctionType(idx.type, [idx.type, idx.type])
+    umin = builder.module.declare_intrinsic('llvm.umin', [idx.type], fnty)
+    return builder.call(umin, [idx, builder.sub(extent, extent.type(1))])
+
+
 class Indexer(object):
     """
     Generic indexer interface, for generating indices over a fancy indexed
@@ -855,12 +865,8 @@ class IntegerArrayIndexer(Indexer):
             builder.load(idx) for idx in self.global_ary_idx_list[
                 len(self.global_ary_idx_list) - len(self.idx_shape):]
         ]
-        # Broadcast extents are 1 or the full extent, so use select for speed
         indices = [
-            builder.select(
-                builder.icmp_signed('==', self.idx_shape[i], self.ll_intp(1)),
-                self.ll_intp(0), indices[i]
-            )
+            broadcast_index(builder, indices[i], self.idx_shape[i])
             for i in range(len(self.idx_shape))
         ]
 
@@ -1545,12 +1551,8 @@ def maybe_copy_source(context, builder, use_copy, indexer,
                           len(src_indices)) + list(src_indices)
             )
 
-        # As in IntegerArrayIndexer.loop_head
         src_indices = [
-            builder.select(
-                builder.icmp_signed('==', src_shapes[i], intp_t(1)),
-                intp_t(0), src_indices[i]
-            )
+            broadcast_index(builder, src_indices[i], src_shapes[i])
             for i in range(len(src_shapes))
         ]
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):
