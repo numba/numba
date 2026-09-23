@@ -1,0 +1,4 @@
+Added prefer_literal argument to templates.bound_function
+----------------------------------
+
+Added an option to the bound_function decorator to have the method template set to prefer_literal. Previously only non-literal types would be given to the template.
