@@ -2041,9 +2041,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         "one-None-bound clip lost F-contiguous layout")
 
         # array bounds that broadcast to a larger shape (np_clip_impl path)
-        big = np.zeros((3, 4))
-        result = cfunc(a, big, 10.0)
-        expected = np.clip(a, big, 10.0)
+        narrow = np.asfortranarray(np.arange(6.0).reshape(2, 3, 1))
+        big = np.asfortranarray(np.zeros((2, 3, 4)))
+        result = cfunc(narrow, big, 10.0)
+        expected = np.clip(narrow, big, 10.0)
         np.testing.assert_array_equal(result, expected)
         self.assertTrue(result.flags.f_contiguous,
                         "broadcast clip lost F-contiguous layout")
