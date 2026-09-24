@@ -67,7 +67,7 @@ jobs:
         run: |
           export CONDA_PREFIX="${RUNNER_TEMP}/conda-build-env"
           "${CONDA_EXE}" create --prefix "${CONDA_PREFIX}" \
-            -c "${WIN_ARM64_CONDA_CHANNEL}" -c m2-winarm64 -c main \
+            -c main \
             --yes "python=${PYTHON_VERSION}" pip tbb-devel
           echo "CONDA_PREFIX=${CONDA_PREFIX}" >> "${GITHUB_ENV}"
           export PATH="${CONDA_PREFIX}/Scripts:${CONDA_PREFIX}/Library/bin:${CONDA_PREFIX}:${PATH}"
@@ -139,7 +139,7 @@ jobs:
         run: |
           export CONDA_PREFIX="${RUNNER_TEMP}/conda-base"
           "${CONDA_EXE}" create --prefix "${CONDA_PREFIX}" \
-            -c "${WIN_ARM64_CONDA_CHANNEL}" -c m2-winarm64 -c main \
+            -c main \
             --yes "python=${PYTHON_VERSION}" pip wheel tbb
           echo "CONDA_PREFIX=${CONDA_PREFIX}" >> "${GITHUB_ENV}"
           export PATH="${CONDA_PREFIX}/Scripts:${CONDA_PREFIX}/Library/bin:${CONDA_PREFIX}:${PATH}"

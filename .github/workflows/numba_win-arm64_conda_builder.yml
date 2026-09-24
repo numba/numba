@@ -55,7 +55,7 @@ jobs:
         run: |
           export CONDA_PREFIX="${RUNNER_TEMP}/conda-base"
           "${CONDA_EXE}" create --prefix "${CONDA_PREFIX}" \
-            -c "${WIN_ARM64_CONDA_CHANNEL}" -c m2-winarm64 -c main \
+            -c main \
             --yes conda-build
           echo "CONDA_PREFIX=${CONDA_PREFIX}" >> "${GITHUB_ENV}"
           echo "${CONDA_PREFIX}" >> "${GITHUB_PATH}"
@@ -92,7 +92,7 @@ jobs:
           fi
 
           conda-build -c $LLVMLITE_CHANNEL "${extra_args[@]}" \
-            -c "${WIN_ARM64_CONDA_CHANNEL}" -c m2-winarm64 -c defaults \
+            -c defaults \
             --python=${PYTHON_VERSION} \
             --numpy=${NUMPY_VERSION} \
             buildscripts/condarecipe.local/ \
@@ -142,7 +142,7 @@ jobs:
         run: |
           export CONDA_PREFIX="${RUNNER_TEMP}/conda-base"
           "${CONDA_EXE}" create --prefix "${CONDA_PREFIX}" \
-            -c "${WIN_ARM64_CONDA_CHANNEL}" -c m2-winarm64 -c main \
+            -c main \
             --yes conda-build
           echo "CONDA_PREFIX=${CONDA_PREFIX}" >> "${GITHUB_ENV}"
           echo "${CONDA_PREFIX}" >> "${GITHUB_PATH}"
@@ -190,7 +190,7 @@ jobs:
           fi
 
           conda-build -c $LLVMLITE_CHANNEL "${extra_args[@]}" \
-            -c "${WIN_ARM64_CONDA_CHANNEL}" -c m2-winarm64 -c defaults \
+            -c defaults \
             --python=${PYTHON_VERSION} \
             --extra-deps numpy=${NUMPY_VERSION} \
             --test \
