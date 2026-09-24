@@ -1,0 +1,7 @@
+Faster ``Generator.shuffle`` and ``Generator.permutation`` for 1D arrays
+------------------------------------------------------------------------
+
+``np.random.Generator.shuffle`` now swaps elements directly for 1D arrays
+instead of going through the N-D slice-copy path, making it about 2x faster
+and on par with NumPy. ``Generator.permutation`` benefits as well. The
+generated sequence is unchanged for a given seed.
