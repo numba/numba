@@ -1362,26 +1362,49 @@ class TestUfuncIssues(TestCase):
 
     def test_issue_2006(self):
         """
-        <float32 ** int> should return float32, not float64.
+        Under NEP 50, <float32 ** int> returns float64 when the integer
+        type cannot be safely cast to float32 (e.g. int32, int64).
+        Small integers (int8, int16, uint8, uint16) that can safely cast
+        to float32 still preserve the float32 output type.
+        Python int literals (typed as int64) also promote to float64.
         """
         def foo(x, y):
             return np.power(x, y)
         pyfunc = foo
         cfunc = njit(pyfunc)
 
-        def check(x, y):
-            got = cfunc(x, y)
-            np.testing.assert_array_almost_equal(got, pyfunc(x, y))
-            # Check the power operation conserved the input's dtype
-            # (this is different from Numpy, whose behaviour depends on
-            #  the *values* of the arguments -- see PyArray_CanCastArrayTo).
-            self.assertEqual(got.dtype, x.dtype)
-
         xs = [np.float32([1, 2, 3]), np.complex64([1j, 2, 3 - 3j])]
         for x in xs:
-            check(x, 3)
-            check(x, np.uint64(3))
-            check(x, np.int64([2, 2, 3]))
+            # int8 can safely cast to float32/complex64, preserves input dtype
+            got = cfunc(x, np.int8(3))
+            np.testing.assert_array_almost_equal(got, pyfunc(x, np.int8(3)))
+            self.assertEqual(got.dtype, x.dtype)
+            # uint8 also safe
+            got = cfunc(x, np.uint8(3))
+            np.testing.assert_array_almost_equal(got, pyfunc(x, np.uint8(3)))
+            self.assertEqual(got.dtype, x.dtype)
+            # int16 also safe (16 bits <= 24-bit mantissa)
+            got = cfunc(x, np.int16(3))
+            np.testing.assert_array_almost_equal(got, pyfunc(x, np.int16(3)))
+            self.assertEqual(got.dtype, x.dtype)
+            # int32 cannot safely cast to float32, so promotes to float64/128
+            got = cfunc(x, np.int32([2, 2, 3]))
+            expected = pyfunc(x, np.int32([2, 2, 3]))
+            np.testing.assert_array_almost_equal(got, expected)
+            if x.dtype == np.float32:
+                expected_dtype = np.float64
+            else:
+                expected_dtype = np.complex128
+            self.assertEqual(got.dtype, expected_dtype)
+            # uint32 also promotes
+            got = cfunc(x, np.uint32([2, 2, 3]))
+            expected = pyfunc(x, np.uint32([2, 2, 3]))
+            np.testing.assert_array_almost_equal(got, expected)
+            self.assertEqual(got.dtype, expected_dtype)
+            # Python int literal (typed as int64) also promotes to float64
+            got = cfunc(x, 3)
+            np.testing.assert_array_almost_equal(got, pyfunc(x, 3))
+            self.assertEqual(got.dtype, expected_dtype)
 
 
 class _LoopTypesTester(TestCase):

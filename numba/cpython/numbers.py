@@ -539,6 +539,17 @@ def bool_unary_positive_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def bool_invert_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    # Convert to boolean (i1) representation and flip the bit.
+    # This is equivalent to logical NOT: ~True == False, ~False == True.
+    # XOR with 1 flips only the boolean bit (not all bits as int_invert does).
+    istrue = context.cast(builder, val, typ, types.boolean)
+    res = builder.not_(istrue)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 lower_builtin(operator.eq, types.boolean, types.boolean)(int_eq_impl)
 lower_builtin(operator.ne, types.boolean, types.boolean)(int_ne_impl)
 lower_builtin(operator.lt, types.boolean, types.boolean)(int_ult_impl)
@@ -611,6 +622,8 @@ def _implement_bitwise_operators():
 _implement_integer_operators()
 
 _implement_bitwise_operators()
+
+lower_builtin(operator.invert, types.boolean)(bool_invert_impl)
 
 
 def real_add_impl(context, builder, sig, args):
