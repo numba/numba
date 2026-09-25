@@ -10,6 +10,7 @@ ufunc
 
 import numpy as np
 import sys
+from numba.core.cpu import CPUContext
 
 # this is lazily initialized to avoid circular imports
 IS_WIN32 = sys.platform.startswith('win32')
@@ -1214,3 +1215,6 @@ def _fill_ufunc_db(ufunc_db):
     ufunc_db[np.remainder].update({
         'mm->m': npdatetime.timedelta_mod_timedelta,
     })
+
+
+CPUContext.get_ufunc_info = lambda self, ufunc_key: get_ufunc_info(ufunc_key)
