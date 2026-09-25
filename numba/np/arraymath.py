@@ -2196,8 +2196,15 @@ def _median_inner(temp_arry, n):
 
 @overload(np.median)
 def np_median(a):
-    if not isinstance(a, types.Array):
-        return
+    if isinstance(a, (types.Integer, types.Boolean, types.Float,
+                      types.Complex, types.NPTimedelta)):
+        return array_mean(a)
+    elif isinstance(a, types.NPDatetime):
+        raise TypingError(
+            "np.median() does not support datetime64 input, matching NumPy"
+        )
+    elif not isinstance(a, types.Array):
+        return None
 
     is_datetime = as_dtype(a.dtype).char in 'mM'
 

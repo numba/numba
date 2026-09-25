@@ -1,0 +1,7 @@
+Fixed ``np.median`` failing on scalar input
+--------------------------------------------
+
+``np.median`` now accepts scalar input in nopython mode. Integer and
+boolean scalars are promoted to ``float64``, floating-point and complex
+scalars keep their dtype, and ``timedelta64`` scalars are returned
+unchanged. ``datetime64`` input is not supported, matching NumPy.
