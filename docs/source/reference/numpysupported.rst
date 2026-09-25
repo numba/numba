@@ -175,6 +175,20 @@ Calculation:
 * :meth:`~numpy.ndarray.var`
 * :meth:`~numpy.ndarray.std`
 * :meth:`~numpy.ndarray.prod`
+* :meth:`~numpy.ndarray.prod` (with or without the ``axis`` and/or ``dtype``
+  arguments.)
+
+  * ``axis`` supports ``integer`` values and tuples of integers.
+  * All numeric ``dtypes`` are supported in the ``dtype`` parameter.
+    ``datetime`` and ``timedelta`` arrays cannot be used as input arrays.
+  * When a ``dtype`` is given, it determines the type of the internal
+    accumulator. When it is not, the selection is made automatically based on
+    the input array's ``dtype``, mostly following the same rules as NumPy.
+    However, on 64-bit Windows, Numba uses a 64-bit accumulator for integer
+    inputs (``int64`` for ``int32`` inputs and ``uint64`` for ``uint32``
+    inputs), while NumPy would use a 32-bit accumulator in those cases.
+
+
 * :meth:`~numpy.ndarray.cumprod`
 * :meth:`~numpy.ndarray.all`
 * :meth:`~numpy.ndarray.any`
