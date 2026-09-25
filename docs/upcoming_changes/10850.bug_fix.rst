@@ -1,0 +1,7 @@
+Fix ``np.sum`` performance and datatype regressions from ``ArrayIterator``
+--------------------------------------------------------------------------
+
+``np.sum`` performance and return datatype regressions, introduced when
+``ArrayIterator`` was adopted, are fixed. The innermost loop now uses a static
+stride constant, which restores vectorization, and ``order='K'`` iteration over
+Fortran-layout arrays proceeds in reverse so the innermost loop does less work.
