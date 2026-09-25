@@ -1,0 +1,6 @@
+Build using PEP-517 compatability
+---------------------------------
+
+Numba now includes a pyproject.toml file indicating the minimum build
+requirements: recent enough setuptools run in legacy mode due to the vendored
+versioneer.
