@@ -176,6 +176,19 @@ def NumPyRandomGeneratorType_shuffle(inst, x, axis=0):
     check_types(x, [types.Array], 'x')
     check_types(axis, [int, types.Integer], 'axis')
 
+    # Record elements are views, so a scalar swap would alias.
+    if x.ndim == 1 and not isinstance(x.dtype, types.Record):
+        def impl(inst, x, axis=0):
+            if axis < -1 or axis > 0:
+                raise IndexError("Axis is out of bounds for the given array")
+
+            for i in range(len(x) - 1, 0, -1):
+                j = types.intp(random_methods.random_interval(
+                    inst.bit_generator, i))
+                x[i], x[j] = x[j], x[i]
+
+        return impl
+
     def impl(inst, x, axis=0):
         if axis < 0:
             axis = axis + x.ndim
