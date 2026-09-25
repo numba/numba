@@ -35,6 +35,17 @@ def power(a, b):
     return a ** b
 
 
+class BadType:
+    def __int__(self):
+        raise RuntimeError()
+
+
+def bad_type_if_odd(a):
+    if a % 2 == 0:
+        return a
+    return BadType()
+
+
 class TestExceptions(TestCase):
     """
     Test raising exceptions inside ufuncs.
@@ -55,6 +66,15 @@ class TestExceptions(TestCase):
 
     def test_ufunc_raise_objmode(self):
         self.check_ufunc_raise(forceobj=True)
+
+    def test_ufunc_conversion_raise_objmode(self):
+        f = vectorize(['int64(int64)'], forceobj=True)(bad_type_if_odd)
+        arr = np.array([10, 11, 12, 13], dtype=np.int64)
+        out = np.zeros_like(arr)
+        with self.assertRaises(RuntimeError) as cm:
+            f(arr, out)
+        # All values were computed except for the ones giving an error
+        self.assertEqual(list(out), [10, 0, 12, 0])
 
     def check_gufunc_raise(self, **vectorize_args):
         f = guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)',
