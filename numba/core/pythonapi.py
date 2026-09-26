@@ -12,12 +12,24 @@ from numba import _helperlib
 from numba.core import (
     types, utils, config, lowering, cgutils, imputils, serialize,
 )
+# from numba.core.base import PYOBJECT, GENERIC_POINTER
+int32_t = ir.IntType(32)
 
 PY_UNICODE_1BYTE_KIND = _helperlib.py_unicode_1byte_kind
 PY_UNICODE_2BYTE_KIND = _helperlib.py_unicode_2byte_kind
 PY_UNICODE_4BYTE_KIND = _helperlib.py_unicode_4byte_kind
 if sys.version_info < (3, 12):
     PY_UNICODE_WCHAR_KIND = _helperlib.py_unicode_wchar_kind
+GENERIC_POINTER = ir.PointerType(ir.IntType(8))
+
+PICKLE_BUF_IDX = 0
+PICKLE_BUFSZ_IDX = 1
+HASH_BUF_IDX = 2
+UNWRAP_FUNC_IDX = 3
+ALLOC_FLAG_IDX = 4
+pyobj_t = ir.LiteralStructType(
+    [GENERIC_POINTER, int32_t, GENERIC_POINTER, GENERIC_POINTER, int32_t])
+pyobj_ptr_t = ir.PointerType(pyobj_t)
 
 
 class _Registry(object):
