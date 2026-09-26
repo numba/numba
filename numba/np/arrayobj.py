@@ -31,7 +31,7 @@ from numba.core.typing import signature
 from numba.core.types import StringLiteral
 from numba.core.extending import (register_jitable, overload, overload_method,
                                   intrinsic, overload_attribute)
-from numba.misc import quicksort, mergesort
+from numba.misc import quicksort, mergesort, heapsort
 from numba.cpython import slicing
 from numba.cpython.charseq import _make_constant_bytes, bytes_type
 from numba.cpython.unsafe.tuple import tuple_setitem, build_full_slice_tuple
@@ -7001,6 +7001,11 @@ def get_sort_func(kind, lt_impl, is_argsort=False):
                 lt=lt_impl,
                 is_argsort=is_argsort)
             func = sort.run_mergesort
+        elif kind == 'heapsort':
+            sort = heapsort.make_jit_heapsort(
+                lt=lt_impl,
+                is_argsort=is_argsort)
+            func = sort.run_heapsort
         _sorts[key] = func
         return func
 
@@ -7022,10 +7027,11 @@ def array_sort(context, builder, sig, args):
     sort_func = get_sort_func(kind=kind,
                               lt_impl=lt_implementation(arytype.dtype))
 
-    if kind in ('mergesort', 'stable') and arytype.ndim > 1:
+    if kind in ('mergesort', 'stable', 'heapsort') and arytype.ndim > 1:
         def array_sort_impl(arr):
-            # mergesort only sorts 1D arrays, so sort each slice along
-            # the last axis as quicksort does for multidimensional arrays
+            # Mergesort and heapsort only sort 1D arrays, so sort each slice
+            # along the last axis as quicksort does for multidimensional
+            # arrays
             for idx in np.ndindex(arr.shape[:-1]):
                 sort_func(arr[idx])
     else:

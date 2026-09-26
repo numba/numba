@@ -475,7 +475,8 @@ class ArrayAttribute(AttributeTemplate):
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if not isinstance(kind, types.StringLiteral):
             raise TypingError('"kind" must be a string literal')
-        if kind.literal_value not in ('quicksort', 'mergesort', 'stable'):
+        if kind.literal_value not in ('quicksort', 'mergesort', 'stable',
+                                      'heapsort'):
             msg = 'Unsupported "kind": {!r}'
             raise TypingError(msg.format(kind.literal_value))
         if kwargs:
@@ -493,7 +494,8 @@ class ArrayAttribute(AttributeTemplate):
         kind = kwargs.pop('kind', types.StringLiteral('quicksort'))
         if not isinstance(kind, types.StringLiteral):
             raise TypingError('"kind" must be a string literal')
-        if kind.literal_value not in ('quicksort', 'mergesort', 'stable'):
+        if kind.literal_value not in ('quicksort', 'mergesort', 'stable',
+                                      'heapsort'):
             msg = 'Unsupported "kind": {!r}'
             raise TypingError(msg.format(kind.literal_value))
         if kwargs:
