@@ -66,10 +66,24 @@ class EntireIterator():
         self.extra_strides = extra_strides if extra_strides else []
         self.extra_iter_ptrs = extra_iter_ptrs if extra_iter_ptrs else []
 
+    def _has_static_unit_stride(self):
+        if self.dim == self.aryty.ndim - 1 and self.aryty.layout == 'C':
+            return True
+        if self.dim == 0 and self.aryty.layout == 'F':
+            return True
+        return False
+
     def prepare(self):
         builder = self.builder
         self.size = builder.extract_value(self.ary.shape, self.dim)
-        self.dim_stride = builder.extract_value(self.ary.strides, self.dim)
+        if self._has_static_unit_stride():
+            itemsize = self.context.get_abi_sizeof(
+                self.context.get_data_type(self.aryty.dtype))
+            self.dim_stride = self.context.get_constant(
+                types.intp, itemsize)
+        else:
+            self.dim_stride = builder.extract_value(
+                self.ary.strides, self.dim)
         self.index = cgutils.alloca_once(builder, self.ll_intp)
         self.extra_dim_strides = [
             builder.extract_value(self.extra_strides[i], self.dim)
@@ -140,7 +154,7 @@ class EntireIterator():
 
 class ArrayIterator:
     def __init__(self, context, builder, aryty, ary,
-                 extra_masks=None, extra_arys=None):
+                 extra_masks=None, extra_arys=None, order='C'):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -173,6 +187,11 @@ class ArrayIterator:
                 self.extra_iter_ptrs.append(extra_iter_ptr)
                 self.extra_types.append(extra_ary.data.type)
 
+        if order == 'K' and aryty.layout == 'F':
+            dims = list(reversed(range(aryty.ndim)))
+        else:
+            dims = list(range(aryty.ndim))
+
         self.indexers = [
             EntireIterator(
                 context,
@@ -184,7 +203,7 @@ class ArrayIterator:
                 self.extra_variations,
                 self.extra_strides,
                 self.extra_iter_ptrs,
-            ) for dim in range(aryty.ndim)
+            ) for dim in dims
         ]
 
     def make_stride_from_mask(self, context, builder, mask, strides):
@@ -426,8 +445,23 @@ def get_ret_dtype_if_any(aryty, dtype):
             isinstance(aryty.dtype, types.Integer) and
             aryty.dtype.bitwidth < types.intp.bitwidth
         ):
-            # For signed integers smaller than intp,
-            # use intp as the accumulator
+            ret_dtype = (types.intp if aryty.dtype.signed
+                         else types.uintp)
+    else:
+        ret_dtype = dtype.dtype
+    return ret_dtype
+
+
+def get_cumulative_ret_dtype_if_any(aryty, dtype):
+    if is_nonelike(dtype):
+        ret_dtype = aryty.dtype
+        if ret_dtype == types.bool_:
+            ret_dtype = types.intp
+        if (
+            isinstance(aryty.dtype, types.Integer) and
+            aryty.dtype.signed and
+            aryty.dtype.bitwidth < types.intp.bitwidth
+        ):
             ret_dtype = types.intp
     else:
         ret_dtype = dtype.dtype
@@ -461,7 +495,8 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
             add_funcfn = context.get_function(fnty, fn_sig)
 
         # Loop on source and copy to destination
-        with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
+        with ArrayIterator(context, builder, aryty, ary,
+                           order='K') as iter_val_ptr:
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
                 builder.load(result),
@@ -518,7 +553,7 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
         mask = get_mask(context, builder, aryty.ndim, axis)
         # Loop on source and copy to destination
         with ArrayIterator(
-            context, builder, aryty, ary, (mask,), (res,)
+            context, builder, aryty, ary, (mask,), (res,), order='K'
         ) as (ary_iter_ptr, res_ptr_tup):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, ary_iter_ptr)
@@ -562,8 +597,8 @@ def check_duplicates(axis, ndim):
             raise ValueError("duplicate value in 'axis'")
 
 
-@overload(np.sum)
-@overload_method(types.Array, "sum")
+@overload(np.sum, prefer_literal=True)
+@overload_method(types.Array, "sum", prefer_literal=True)
 def array_sum(a, axis=None, dtype=None):
     if not (isinstance(axis, types.Integer) or
             is_nonelike(axis) or (
@@ -634,7 +669,7 @@ def array_prod(a):
 
 @intrinsic
 def _numpy_cumsum(typingctx, aryty, axisty, dtype):
-    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+    ret_dtype = get_cumulative_ret_dtype_if_any(aryty, dtype)
 
     ret = types.Array(ret_dtype, aryty.ndim, layout='C')
     sig = ret(aryty, axisty, dtype)
@@ -691,7 +726,7 @@ def _numpy_cumsum(typingctx, aryty, axisty, dtype):
 
 @intrinsic
 def _numpy_cumsum_axis(typingctx, aryty, axisty, dtype):
-    ret_dtype = get_ret_dtype_if_any(aryty, dtype)
+    ret_dtype = get_cumulative_ret_dtype_if_any(aryty, dtype)
     ret = types.Array(ret_dtype, aryty.ndim, layout='C')
     sig = ret(aryty, axisty, dtype)
 
@@ -802,13 +837,7 @@ def array_cumsum(a, axis=None, dtype=None):
 @overload_method(types.Array, "cumprod")
 def array_cumprod(a):
     if isinstance(a, types.Array):
-        is_integer = a.dtype in types.signed_domain
-        is_bool = a.dtype == types.bool_
-        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
-                or is_bool:
-            dtype = as_dtype(types.intp)
-        else:
-            dtype = as_dtype(a.dtype)
+        dtype = as_dtype(get_cumulative_ret_dtype_if_any(a, None))
 
         acc_init = get_accumulator(dtype, 1)
 
