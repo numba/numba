@@ -1082,6 +1082,14 @@ class TestNumpySort(TestCase):
             orig = np.array([complex(*x) for x in zip(real, imag)])
             self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
 
+        arrays = (
+            np.array(['2020-01-03', '2020-01-01', '2020-01-02'],
+                     dtype='datetime64[D]'),
+            np.array([3, -1, 2], dtype='timedelta64[D]'),
+        )
+        for orig in arrays:
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
         for shape in ((4, 5), (3, 4, 5), (2, 30)):
             orig = np.random.random(shape) * 100
             self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
@@ -1109,6 +1117,14 @@ class TestNumpySort(TestCase):
             imag = real[::]
             np.random.shuffle(imag)
             orig = np.array([complex(*x) for x in zip(real, imag)])
+            self.check_argsort(argsort_heapsort_usecase, cfunc, orig)
+
+        arrays = (
+            np.array(['2020-01-03', '2020-01-01', '2020-01-02'],
+                     dtype='datetime64[D]'),
+            np.array([3, -1, 2], dtype='timedelta64[D]'),
+        )
+        for orig in arrays:
             self.check_argsort(argsort_heapsort_usecase, cfunc, orig)
 
     def test_bad_array(self):
