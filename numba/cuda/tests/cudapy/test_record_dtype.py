@@ -95,7 +95,7 @@ recordwitharray = np.dtype(
 )
 
 recordwith2darray = np.dtype([('i', np.int32),
-                              ('j', np.float32, (3, 2))])
+                              ('j', np.float32, (3, 2))], align=True)
 
 nested_array1_dtype = np.dtype([("array1", np.int16, (3,))], align=True)
 
