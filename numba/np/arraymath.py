@@ -1857,11 +1857,8 @@ def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0):
 def np_nansum(a):
     if not isinstance(a, types.Array):
         return
-    if isinstance(a.dtype, types.Integer):
-        retty = types.intp
-    else:
-        retty = a.dtype
-    zero = retty(0)
+    dtype = as_dtype(get_accumulator_type(a.dtype))
+    zero = get_accumulator(dtype, 0)
     isnan = get_isnan(a.dtype)
 
     def nansum_impl(a):
@@ -1879,11 +1876,8 @@ def np_nansum(a):
 def np_nanprod(a):
     if not isinstance(a, types.Array):
         return
-    if isinstance(a.dtype, types.Integer):
-        retty = types.intp
-    else:
-        retty = a.dtype
-    one = retty(1)
+    dtype = as_dtype(get_accumulator_type(a.dtype))
+    one = get_accumulator(dtype, 1)
     isnan = get_isnan(a.dtype)
 
     def nanprod_impl(a):

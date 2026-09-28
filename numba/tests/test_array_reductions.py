@@ -3,9 +3,23 @@ from itertools import product, combinations_with_replacement
 import numpy as np
 
 from numba import jit, njit, typeof, types
-from numba.np.numpy_support import numpy_version
+from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import TestCase, MemoryLeakMixin, tag, skip_if_numpy_2
 import unittest
+
+
+def as_accumulator_dtype(dtype):
+    """Convert a NumPy reduction result dtype to the equivalent Numba dtype.
+
+    Numba always accumulates integers into intp/uintp; NumPy uses the platform
+    C integer, which is narrower than intp on 64-bit Windows. See issue #10846.
+    """
+    dtype = np.dtype(dtype)
+    if dtype.kind == "i" and dtype.itemsize < np.dtype(np.intp).itemsize:
+        return np.dtype(np.intp)
+    if dtype.kind == "u" and dtype.itemsize < np.dtype(np.uintp).itemsize:
+        return np.dtype(np.uintp)
+    return dtype
 
 
 def array_all(arr):
@@ -1104,6 +1118,42 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_array_cumprod_global(self):
         self.check_cumulative(array_cumprod_global)
+
+    def get_return_dtype(self, cfunc, arr):
+        arrty = typeof(arr)
+        for sig in cfunc.nopython_signatures:
+            if sig.args[0] == arrty:
+                return as_dtype(sig.return_type)
+        raise AssertionError("no signature compiled for %s" % (arrty,))
+
+    def test_accumulator_dtype_parity(self):
+        """NumPy parity for the accumulator dtype of the reductions.
+
+        See issue #10846: booleans and integers narrower than the platform
+        integer accumulate into intp (signed) or uintp (unsigned), the other
+        dtypes keep their own type.
+        """
+        dtypes = [np.bool_, np.int8, np.int16, np.int32, np.int64,
+                  np.uint8, np.uint16, np.uint32, np.uint64,
+                  np.float32, np.float64, np.complex64, np.complex128]
+        pyfuncs = [array_sum_global, array_prod_global, array_nansum,
+                   array_nanprod, array_cumsum_global, array_cumprod_global,
+                   array_nancumsum, array_nancumprod]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for dtype in dtypes:
+                arr = np.arange(1, 5).astype(dtype)
+                expected = pyfunc(arr)
+                got = cfunc(arr)
+                with self.subTest(pyfunc=pyfunc.__name__, dtype=dtype):
+                    if isinstance(got, np.ndarray):
+                        self.assertEqual(
+                            got.dtype,
+                            as_accumulator_dtype(expected.dtype))
+                    else:
+                        self.assertEqual(
+                            self.get_return_dtype(cfunc, arr),
+                            as_accumulator_dtype(np.asarray(expected).dtype))
 
     def check_aggregation_magnitude(self, pyfunc, is_prod=False):
         """
