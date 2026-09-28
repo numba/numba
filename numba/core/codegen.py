@@ -10,6 +10,7 @@ import llvmlite.binding as ll
 import llvmlite.ir as llvmir
 
 from abc import abstractmethod, ABCMeta
+from ctypes.util import find_library
 from numba.core import utils, config, cgutils
 from numba.core.llvm_bindings import create_pass_builder
 from numba.core.runtime.nrtopt import remove_redundant_nrt_refct
@@ -1370,6 +1371,11 @@ class JITCPUCodegen(CPUCodegen):
 
     _library_class = JITCodeLibrary
 
+    def _init(self, llvm_module):
+        super()._init(llvm_module)
+        if self._vector_library == 'accelerate':
+            _load_accelerate()
+
     def _customize_tm_options(self, options):
         # As long as we don't want to ship the code to another machine,
         # we can specialize for this CPU.
@@ -1417,6 +1423,14 @@ class JITCPUCodegen(CPUCodegen):
         gvaddr = self._engine.get_global_value_address(env_name)
         envptr = (ctypes.c_void_p * 1).from_address(gvaddr)
         envptr[0] = ctypes.c_void_p(id(env))
+
+
+@functools.lru_cache(maxsize=None)
+def _load_accelerate():
+    library = find_library('Accelerate')
+    if library is None:
+        raise RuntimeError("Accelerate was selected but could not be found")
+    ll.load_library_permanently(library)
 
 
 def initialize_llvm():

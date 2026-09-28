@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import weakref
+from unittest.mock import patch
 
 import llvmlite.binding as ll
 
@@ -73,7 +74,8 @@ class JITCPUCodegenTestCase(TestCase):
         }
         '''
         for provider in ('accelerate', 'none'):
-            with override_config('VECTOR_MATH_LIBRARY', provider):
+            with override_config('VECTOR_MATH_LIBRARY', provider), \
+                 patch('numba.core.codegen._load_accelerate'):
                 codegen = JITCPUCodegen('vector_math')
             with self.subTest(provider=provider), \
                  override_config('VECTOR_MATH_LIBRARY', 'none'), \
