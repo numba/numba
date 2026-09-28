@@ -423,6 +423,10 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
                             sys.platform.startswith('linux')):
                         continue
 
+                    # Known intermittent hangs / crashes, see issue #10563.
+                    if p == 'random' and backend == 'tbb':
+                        continue
+
                     # workqueue is not thread safe
                     if (p in ('threading', 'random') and
                             backend == 'workqueue'):
@@ -432,6 +436,18 @@ class TestSpecificBackend(TestInSubprocess, TestParallelBackendBase):
 
 
 TestSpecificBackend.generate()
+
+
+class TestSpecificBackendGeneration(TestCase):
+
+    def test_random_tbb_tests_not_generated(self):
+        for name in TestSpecificBackend.runners:
+            self.assertNotIn(f"test_random_{name}_tbb",
+                             TestSpecificBackend.__dict__)
+
+    def test_non_random_tbb_test_still_generated(self):
+        self.assertIn("test_threading_concurrent_jit_tbb",
+                      TestSpecificBackend.__dict__)
 
 
 class ThreadLayerTestHelper(TestCase):
