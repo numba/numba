@@ -34,7 +34,7 @@ def _inlining_threshold(optlevel, sizelevel=0):
 
 
 def create_pass_builder(tm, opt=2, loop_vectorize=False,
-                        slp_vectorize=False):
+                        slp_vectorize=False, vector_library=None):
     """
     Create an LLVM pass builder with the desired optimisation level and options.
     """
@@ -45,4 +45,4 @@ def create_pass_builder(tm, opt=2, loop_vectorize=False,
 
     # FIXME: Enabled from llvm 16
     # pto.inlining_threshold = _inlining_threshold(opt)
-    return llvm.create_pass_builder(tm, pto)
+    return llvm.create_pass_builder(tm, pto, vector_library=vector_library)

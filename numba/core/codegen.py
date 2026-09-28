@@ -1183,6 +1183,7 @@ class CPUCodegen(Codegen):
 
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
+        self._vector_library = config.VECTOR_MATH_LIBRARY
 
         target = ll.Target.from_triple(ll.get_process_triple())
         tm_options = dict(opt=config.OPT)
@@ -1261,6 +1262,7 @@ class CPUCodegen(Codegen):
         pb = create_pass_builder(self._tm, opt=opt_level,
                                  loop_vectorize=loop_vectorize,
                                  slp_vectorize=slp_vectorize,
+                                 vector_library=self._vector_library,
                                  **kwargs)
 
         return pb

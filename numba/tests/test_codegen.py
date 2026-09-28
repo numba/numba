@@ -18,7 +18,7 @@ import unittest
 from numba import njit
 from numba.core.codegen import JITCPUCodegen
 from numba.core.compiler_lock import global_compiler_lock
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, override_config
 
 
 asm_sum = r"""
@@ -63,6 +63,28 @@ class JITCPUCodegenTestCase(TestCase):
     def tearDown(self):
         del self.codegen
         global_compiler_lock.release()
+
+    def test_vector_library(self):
+        asm = '''
+        declare float @sinf(float)
+        define float @f(float %x) {
+            %y = call float @sinf(float %x)
+            ret float %y
+        }
+        '''
+        for provider in ('accelerate', 'none'):
+            with override_config('VECTOR_MATH_LIBRARY', provider):
+                codegen = JITCPUCodegen('vector_math')
+            with self.subTest(provider=provider), \
+                 override_config('VECTOR_MATH_LIBRARY', 'none'), \
+                 ll.parse_assembly(asm) as mod:
+                mod.triple = ll.get_process_triple()
+                pm, pb = codegen._module_pass_manager(opt=3)
+                with pm, pb:
+                    pm.run(mod, pb)
+                mod.verify()
+                self.assertEqual('(vsinf)' in str(mod),
+                                 provider == 'accelerate')
 
     def compile_module(self, asm, linking_asm=None):
         library = self.codegen.create_library('compiled_module')
