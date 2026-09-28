@@ -417,21 +417,21 @@ def get_mask(context, builder, mask_length, axis):
     return builder.load(stack)
 
 
+def get_accumulator_type(ty):
+    """numpy's accumulator dtype: booleans and integers narrower than the
+    platform integer accumulate into intp (signed) or uintp (unsigned)."""
+    if ty == types.bool_:
+        return types.intp
+    if isinstance(ty, types.Integer) and ty.bitwidth < types.intp.bitwidth:
+        return types.intp if ty.signed else types.uintp
+    return ty
+
+
 def get_ret_dtype_if_any(aryty, dtype):
     if is_nonelike(dtype):
-        ret_dtype = aryty.dtype
-        if ret_dtype == types.bool_:
-            ret_dtype = types.intp
-        if (
-            isinstance(aryty.dtype, types.Integer) and
-            aryty.dtype.bitwidth < types.intp.bitwidth
-        ):
-            # For signed integers smaller than intp,
-            # use intp as the accumulator
-            ret_dtype = types.intp
+        return get_accumulator_type(aryty.dtype)
     else:
-        ret_dtype = dtype.dtype
-    return ret_dtype
+        return dtype.dtype
 
 
 @intrinsic
@@ -612,7 +612,7 @@ def array_sum(a, axis=None, dtype=None):
 @overload_method(types.Array, "prod")
 def array_prod(a):
     if isinstance(a, types.Array):
-        dtype = as_dtype(a.dtype)
+        dtype = as_dtype(get_accumulator_type(a.dtype))
 
         acc_init = get_accumulator(dtype, 1)
 
@@ -624,7 +624,7 @@ def array_prod(a):
 
         return array_prod_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        acc_init = as_dtype(a).type(1)
+        acc_init = as_dtype(get_accumulator_type(a)).type(1)
 
         def scalar_prod_impl(a):
             return acc_init * a
@@ -802,13 +802,7 @@ def array_cumsum(a, axis=None, dtype=None):
 @overload_method(types.Array, "cumprod")
 def array_cumprod(a):
     if isinstance(a, types.Array):
-        is_integer = a.dtype in types.signed_domain
-        is_bool = a.dtype == types.bool_
-        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
-                or is_bool:
-            dtype = as_dtype(types.intp)
-        else:
-            dtype = as_dtype(a.dtype)
+        dtype = as_dtype(get_ret_dtype_if_any(a, None))
 
         acc_init = get_accumulator(dtype, 1)
 

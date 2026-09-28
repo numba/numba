@@ -1431,9 +1431,14 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                     npy_res = pyfunc(arr, axis=axis)
                     numba_res = cfunc(arr, axis=axis)
                     if isinstance(numba_res, np.ndarray):
+                        # See issue #10846, the accumulator dtype must
+                        # match numpy
+                        self.assertEqual(
+                            numba_res.dtype,
+                            npy_res.dtype)
                         self.assertPreciseEqual(
-                            npy_res.astype(out_dtypes[arr.dtype]),
-                            numba_res.astype(out_dtypes[arr.dtype]))
+                            npy_res,
+                            numba_res)
                     else:
                         # the results are scalars
                         self.assertEqual(npy_res, numba_res)
@@ -1669,8 +1674,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_cumsum(self):
         """ test cumsum with axis and dtype parameters over a whole range of dtypes """
+        pyfunc_default = array_cumsum
+        cfunc_default = jit(nopython=True)(array_cumsum)
+
         pyfunc = array_cumsum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
+
         signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
                       np.complex64, np.complex128]
 
@@ -1687,6 +1696,13 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('complex128'): [np.complex128]}
 
         for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            with self.subTest("Testing np.cumsum defaults with {} "
+                              "input".format(arr.dtype)):
+                nb_res_default = cfunc_default(arr)
+                py_res_default = pyfunc_default(arr)
+                self.assertEqual(py_res_default.dtype, nb_res_default.dtype)
+                self.assertPreciseEqual(py_res_default,
+                                        nb_res_default)
             for out_dtype in out_dtypes[arr.dtype]:
                 for axis in (0, 1, 2):
                     if axis > len(arr.shape) - 1:
