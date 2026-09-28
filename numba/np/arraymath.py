@@ -66,10 +66,24 @@ class EntireIterator():
         self.extra_strides = extra_strides if extra_strides else []
         self.extra_iter_ptrs = extra_iter_ptrs if extra_iter_ptrs else []
 
+    def _has_static_unit_stride(self):
+        if self.dim == self.aryty.ndim - 1 and self.aryty.layout == 'C':
+            return True
+        if self.dim == 0 and self.aryty.layout == 'F':
+            return True
+        return False
+
     def prepare(self):
         builder = self.builder
         self.size = builder.extract_value(self.ary.shape, self.dim)
-        self.dim_stride = builder.extract_value(self.ary.strides, self.dim)
+        if self._has_static_unit_stride():
+            itemsize = self.context.get_abi_sizeof(
+                self.context.get_data_type(self.aryty.dtype))
+            self.dim_stride = self.context.get_constant(
+                types.intp, itemsize)
+        else:
+            self.dim_stride = builder.extract_value(
+                self.ary.strides, self.dim)
         self.index = cgutils.alloca_once(builder, self.ll_intp)
         self.extra_dim_strides = [
             builder.extract_value(self.extra_strides[i], self.dim)
@@ -140,7 +154,7 @@ class EntireIterator():
 
 class ArrayIterator:
     def __init__(self, context, builder, aryty, ary,
-                 extra_masks=None, extra_arys=None):
+                 extra_masks=None, extra_arys=None, order='C'):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -173,6 +187,11 @@ class ArrayIterator:
                 self.extra_iter_ptrs.append(extra_iter_ptr)
                 self.extra_types.append(extra_ary.data.type)
 
+        if order == 'K' and aryty.layout == 'F':
+            dims = list(reversed(range(aryty.ndim)))
+        else:
+            dims = list(range(aryty.ndim))
+
         self.indexers = [
             EntireIterator(
                 context,
@@ -184,7 +203,7 @@ class ArrayIterator:
                 self.extra_variations,
                 self.extra_strides,
                 self.extra_iter_ptrs,
-            ) for dim in range(aryty.ndim)
+            ) for dim in dims
         ]
 
     def make_stride_from_mask(self, context, builder, mask, strides):
@@ -461,7 +480,8 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
             add_funcfn = context.get_function(fnty, fn_sig)
 
         # Loop on source and copy to destination
-        with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
+        with ArrayIterator(context, builder, aryty, ary,
+                           order='K') as iter_val_ptr:
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
                 builder.load(result),
@@ -518,7 +538,7 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
         mask = get_mask(context, builder, aryty.ndim, axis)
         # Loop on source and copy to destination
         with ArrayIterator(
-            context, builder, aryty, ary, (mask,), (res,)
+            context, builder, aryty, ary, (mask,), (res,), order='K'
         ) as (ary_iter_ptr, res_ptr_tup):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, ary_iter_ptr)
