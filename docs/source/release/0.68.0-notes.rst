@@ -1,6 +1,6 @@
 
-Version 0.68.0 (September 30, 2026)
-===================================
+Version 0.68.0 (30 September 2026)
+==================================
 
 This is a major Numba release. Numba now supports Python 3.15. This
 release also expands Windows ARM64 conda packages and wheels from
