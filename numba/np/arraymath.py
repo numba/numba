@@ -13,6 +13,7 @@ from numba.np.types.datetime import NPDatetime, NPTimedelta
 import numpy as np
 
 from numba.core import types, cgutils
+from numba.core.config import IS_WIN32
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
@@ -419,11 +420,21 @@ def get_mask(context, builder, mask_length, axis):
 
 def get_accumulator_type(ty):
     """numpy's accumulator dtype: booleans and integers narrower than the
-    platform integer accumulate into intp (signed) or uintp (unsigned)."""
+    default platform integer accumulate into that integer (signed or
+    unsigned)."""
+    # NumPy < 2.0 used the C ``long`` as the default integer, which is 32-bit
+    # on 64-bit Windows, whereas Numba's ``intp`` is pointer sized. See
+    # issue #10846.
+    if IS_WIN32 and numpy_version < (2, 0):
+        platform_int, platform_uint = types.int32, types.uint32
+        platform_bits = types.int32.bitwidth
+    else:
+        platform_int, platform_uint = types.intp, types.uintp
+        platform_bits = types.intp.bitwidth
     if ty == types.bool_:
-        return types.intp
-    if isinstance(ty, types.Integer) and ty.bitwidth < types.intp.bitwidth:
-        return types.intp if ty.signed else types.uintp
+        return platform_int
+    if isinstance(ty, types.Integer) and ty.bitwidth < platform_bits:
+        return platform_int if ty.signed else platform_uint
     return ty
 
 
@@ -612,14 +623,18 @@ def array_sum(a, axis=None, dtype=None):
 @overload_method(types.Array, "prod")
 def array_prod(a):
     if isinstance(a, types.Array):
-        dtype = as_dtype(get_accumulator_type(a.dtype))
-
-        acc_init = get_accumulator(dtype, 1)
+        acc_ty = get_accumulator_type(a.dtype)
+        acc_init = get_accumulator(as_dtype(acc_ty), 1)
+        # Integer arithmetic promotes to intp, so cast the result back to
+        # the accumulator dtype (see get_accumulator_type).
+        cast_result = isinstance(acc_ty, types.Integer)
 
         def array_prod_impl(a):
             c = acc_init
             for v in np.nditer(a):
                 c *= v.item()
+            if cast_result:
+                c = acc_ty(c)
             return c
 
         return array_prod_impl
@@ -1857,9 +1872,12 @@ def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0):
 def np_nansum(a):
     if not isinstance(a, types.Array):
         return
-    dtype = as_dtype(get_accumulator_type(a.dtype))
-    zero = get_accumulator(dtype, 0)
+    acc_ty = get_accumulator_type(a.dtype)
+    zero = get_accumulator(as_dtype(acc_ty), 0)
     isnan = get_isnan(a.dtype)
+    # Integer arithmetic promotes to intp, so cast the result back to the
+    # accumulator dtype (see get_accumulator_type).
+    cast_result = isinstance(acc_ty, types.Integer)
 
     def nansum_impl(a):
         c = zero
@@ -1867,6 +1885,8 @@ def np_nansum(a):
             v = view.item()
             if not isnan(v):
                 c += v
+        if cast_result:
+            c = acc_ty(c)
         return c
 
     return nansum_impl
@@ -1876,9 +1896,12 @@ def np_nansum(a):
 def np_nanprod(a):
     if not isinstance(a, types.Array):
         return
-    dtype = as_dtype(get_accumulator_type(a.dtype))
-    one = get_accumulator(dtype, 1)
+    acc_ty = get_accumulator_type(a.dtype)
+    one = get_accumulator(as_dtype(acc_ty), 1)
     isnan = get_isnan(a.dtype)
+    # Integer arithmetic promotes to intp, so cast the result back to the
+    # accumulator dtype (see get_accumulator_type).
+    cast_result = isinstance(acc_ty, types.Integer)
 
     def nanprod_impl(a):
         c = one
@@ -1886,6 +1909,8 @@ def np_nanprod(a):
             v = view.item()
             if not isnan(v):
                 c *= v
+        if cast_result:
+            c = acc_ty(c)
         return c
 
     return nanprod_impl

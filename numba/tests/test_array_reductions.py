@@ -8,20 +8,6 @@ from numba.tests.support import TestCase, MemoryLeakMixin, tag, skip_if_numpy_2
 import unittest
 
 
-def as_accumulator_dtype(dtype):
-    """Convert a NumPy reduction result dtype to the equivalent Numba dtype.
-
-    Numba always accumulates integers into intp/uintp; NumPy uses the platform
-    C integer, which is narrower than intp on 64-bit Windows. See issue #10846.
-    """
-    dtype = np.dtype(dtype)
-    if dtype.kind == "i" and dtype.itemsize < np.dtype(np.intp).itemsize:
-        return np.dtype(np.intp)
-    if dtype.kind == "u" and dtype.itemsize < np.dtype(np.uintp).itemsize:
-        return np.dtype(np.uintp)
-    return dtype
-
-
 def array_all(arr):
     return arr.all()
 
@@ -1145,15 +1131,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                 arr = np.arange(1, 5).astype(dtype)
                 expected = pyfunc(arr)
                 got = cfunc(arr)
+                if isinstance(got, np.ndarray):
+                    got_dtype = got.dtype
+                else:
+                    got_dtype = self.get_return_dtype(cfunc, arr)
                 with self.subTest(pyfunc=pyfunc.__name__, dtype=dtype):
-                    if isinstance(got, np.ndarray):
-                        self.assertEqual(
-                            got.dtype,
-                            as_accumulator_dtype(expected.dtype))
-                    else:
-                        self.assertEqual(
-                            self.get_return_dtype(cfunc, arr),
-                            as_accumulator_dtype(np.asarray(expected).dtype))
+                    self.assertEqual(got_dtype, np.asarray(expected).dtype)
 
     def check_aggregation_magnitude(self, pyfunc, is_prod=False):
         """

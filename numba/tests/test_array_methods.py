@@ -1406,19 +1406,13 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_sum_axis_kws2(self):
         """  testing uint32 and int32 separately
 
-        uint32 and int32 must be tested separately because Numpy's current
-        behaviour is different in 64bits Windows (accumulates as int32)
-        and 64bits Linux (accumulates as int64), while Numba has decided to always
-        accumulate as int64, when the OS is 64bits. No testing has been done
-        for behaviours in 32 bits platforms.
+        uint32 and int32 must be tested separately because NumPy < 2.0
+        accumulates into the 32-bit default integer on 64-bit Windows, while
+        Numba accumulates into the platform integer. See issue #10846.
         """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
         signed_dtypes_only_int32 = [np.int32]
-        # expected return dtypes in Numba
-        out_dtypes = {np.dtype('int32'): np.int64, np.dtype('uint32'): np.uint64,
-                      np.dtype('int64'): np.int64,
-                      np.dtype(TIMEDELTA_M): np.dtype(TIMEDELTA_M)}
 
         unsigned_dtypes_only_uint32 = [np.uint32]
 
