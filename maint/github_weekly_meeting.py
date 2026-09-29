@@ -1,4 +1,6 @@
 #! /usr/bin/env python
+#
+# Requires pip package: github3-py==4
 
 import sys
 import os
@@ -78,9 +80,10 @@ def display(data):
 def main(numba_last_num, llvmlite_last_num, user=None, password=None):
 
     if user is not None and password is not None:
-        gh = login(str(user), password=str(password))
+        # password is a personal access token; basic auth was removed by GitHub
+        gh = login(str(user), token=str(password))
     else:
-        gh = github3
+        gh = github3.GitHub()
 
     numba_data = fetch("numba", "numba", numba_last_num, gh)
     llvmlite_data = fetch("numba", "llvmlite", llvmlite_last_num, gh)
