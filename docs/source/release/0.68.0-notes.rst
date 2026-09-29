@@ -1,6 +1,6 @@
 
-Version 0.68.0 (TBD)
-====================
+Version 0.68.0 (30 September 2026)
+==================================
 
 This is a major Numba release. Numba now supports Python 3.15. This
 release also expands Windows ARM64 conda packages and wheels from
@@ -289,6 +289,9 @@ Pull-Requests:
 * PR `#10822 <https://github.com/numba/numba/pull/10822>`_: relax CUDASIM test fp16 intrinsic comparison tolerance. (`swap357 <https://github.com/swap357>`_)
 * PR `#10825 <https://github.com/numba/numba/pull/10825>`_: update version support table for 0.68.0rc1 (`swap357 <https://github.com/swap357>`_)
 * PR `#10826 <https://github.com/numba/numba/pull/10826>`_: Changelog `0.68` (`swap357 <https://github.com/swap357>`_)
+* PR `#10867 <https://github.com/numba/numba/pull/10867>`_: Cherry pick win-arm64 CI fix to release0.68 (`swap357 <https://github.com/swap357>`_)
+* PR `#10869 <https://github.com/numba/numba/pull/10869>`_: Cherry-pick Azure CI fix on release0.68 (`swap357 <https://github.com/swap357>`_)
+* PR `#10874 <https://github.com/numba/numba/pull/10874>`_: Update 0.68 release notes (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
