@@ -4754,6 +4754,9 @@ def _parse_empty_like_args(context, builder, sig, args):
     np.ones_like() call.
     """
     arytype = sig.args[0]
+    if len(args) >= 4 and not isinstance(sig.args[2], types.NoneType):
+        shapes = _parse_shape(context, builder, sig.args[2], args[2])
+        return sig.return_type, shapes
     if isinstance(arytype, types.Array):
         ary = make_array(arytype)(context, builder, value=args[0])
         shapes = cgutils.unpack_tuple(builder, ary.shape, count=arytype.ndim)
@@ -4803,9 +4806,10 @@ def ol_np_empty(shape, dtype=float):
 
 
 @intrinsic
-def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_retty_ref):
+def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_shape,
+                        ty_retty_ref):
     ty_retty = ty_retty_ref.instance_type
-    sig = ty_retty(ty_prototype, ty_dtype, ty_retty_ref)
+    sig = ty_retty(ty_prototype, ty_dtype, ty_shape, ty_retty_ref)
 
     def codegen(cgctx, builder, sig, llargs):
         arrtype, shapes = _parse_empty_like_args(cgctx, builder, sig, llargs)
@@ -4815,7 +4819,7 @@ def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_retty_ref):
 
 
 @overload(np.empty_like)
-def ol_np_empty_like(arr, dtype=None):
+def ol_np_empty_like(arr, dtype=None, shape=None):
     _check_const_str_dtype("empty_like", dtype)
     if not is_nonelike(dtype):
         nb_dtype = ty_parse_dtype(dtype)
@@ -4823,19 +4827,30 @@ def ol_np_empty_like(arr, dtype=None):
         nb_dtype = arr.dtype
     else:
         nb_dtype = arr
-    if nb_dtype is not None:
+    if nb_dtype is None:
+        msg = ("Cannot parse input types to function "
+               f"np.empty_like({arr}, {dtype}, {shape})")
+        raise errors.TypingError(msg)
+    if is_nonelike(shape):
         if isinstance(arr, types.Array):
             layout = arr.layout if arr.layout != 'A' else 'C'
             retty = arr.copy(dtype=nb_dtype, layout=layout, readonly=False)
         else:
             retty = types.Array(nb_dtype, 0, 'C')
     else:
-        msg = ("Cannot parse input types to function "
-               f"np.empty_like({arr}, {dtype})")
-        raise errors.TypingError(msg)
+        ndim = ty_parse_shape(shape)
+        if ndim is None:
+            msg = ("Cannot parse input types to function "
+                   f"np.empty_like({arr}, {dtype}, {shape})")
+            raise errors.TypingError(msg)
+        if isinstance(arr, types.Array):
+            layout = arr.layout if arr.layout != 'A' else 'C'
+        else:
+            layout = 'C'
+        retty = types.Array(nb_dtype, ndim, layout)
 
-    def impl(arr, dtype=None):
-        return numpy_empty_like_nd(arr, dtype, retty)
+    def impl(arr, dtype=None, shape=None):
+        return numpy_empty_like_nd(arr, dtype, shape, retty)
     return impl
 
 
