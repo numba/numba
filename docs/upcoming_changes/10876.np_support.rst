@@ -1,0 +1,6 @@
+Support the ``shape`` kwarg for ``np.empty_like``
+-------------------------------------------------
+
+``np.empty_like`` now accepts the ``shape`` keyword argument, as NumPy does.
+When given, the returned array has the specified shape while the dtype and
+memory layout are taken from the prototype array.
