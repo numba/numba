@@ -5539,12 +5539,24 @@ def array_asfortranarray(a):
 
 @lower_builtin("array.astype", types.Array, types.DTypeSpec)
 @lower_builtin("array.astype", types.Array, types.StringLiteral)
+@lower_builtin("array.astype", types.Array, types.DTypeSpec, types.Boolean)
+@lower_builtin("array.astype", types.Array, types.StringLiteral, types.Boolean)
 def array_astype(context, builder, sig, args):
     arytype = sig.args[0]
+    rettype = sig.return_type
+
+    # `copy` defaults to True (NumPy semantics). When copy=False is passed as a
+    # compile-time constant and no actual conversion is required (identical array
+    # type: dtype, layout and mutability all match), return the input array
+    # without allocating or copying -- this makes a redundant astype() a no-op.
+    copy = True
+    if len(sig.args) > 2 and isinstance(sig.args[2], types.BooleanLiteral):
+        copy = sig.args[2].literal_value
+    if not copy and arytype == rettype:
+        return impl_ret_borrowed(context, builder, rettype, args[0])
+
     ary = make_array(arytype)(context, builder, value=args[0])
     shapes = cgutils.unpack_tuple(builder, ary.shape)
-
-    rettype = sig.return_type
     ret = _empty_nd_impl(context, builder, rettype, shapes)
 
     src_data = ary.data
