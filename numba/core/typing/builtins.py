@@ -48,24 +48,29 @@ class Abs(ConcreteTemplate):
 
 
 @infer_global(slice)
-class Slice(ConcreteTemplate):
-    cases = [
-        signature(types.slice2_type, types.intp),
-        signature(types.slice2_type, types.none),
-        signature(types.slice2_type, types.none, types.none),
-        signature(types.slice2_type, types.none, types.intp),
-        signature(types.slice2_type, types.intp, types.none),
-        signature(types.slice2_type, types.intp, types.intp),
-        signature(types.slice3_type, types.intp, types.intp, types.intp),
-        signature(types.slice3_type, types.none, types.intp, types.intp),
-        signature(types.slice3_type, types.intp, types.none, types.intp),
-        signature(types.slice3_type, types.none, types.none, types.intp),
-        # A None step is a step of 1, i.e. a two-member slice.
-        signature(types.slice2_type, types.intp, types.intp, types.none),
-        signature(types.slice2_type, types.intp, types.none, types.none),
-        signature(types.slice2_type, types.none, types.intp, types.none),
-        signature(types.slice2_type, types.none, types.none, types.none),
-    ]
+class Slice(AbstractTemplate):
+    def generic(self, args, kws):
+        if not kws:
+            from numba.core.types.misc import SliceLiteral
+            res = None
+            if len(args) == 1 and args[0] == types.none:
+                res = signature(SliceLiteral(slice(None, None, None)), *args)
+            elif len(args) == 2 and args[0] == types.none and args[1] == types.none:
+                res = signature(SliceLiteral(slice(None, None, None)), *args)
+            elif len(args) == 3 and args[0] == types.none and args[1] == types.none and args[2] == types.none:
+                res = signature(SliceLiteral(slice(None, None, None)), *args)
+            else:
+                # fallback to generic slice types
+                if len(args) == 1:
+                    res = signature(types.slice2_type, *args)
+                elif len(args) == 2:
+                    res = signature(types.slice2_type, *args)
+                elif len(args) == 3:
+                    if args[2] == types.none:
+                        res = signature(types.slice2_type, *args)
+                    else:
+                        res = signature(types.slice3_type, *args)
+            return res
 
 
 @infer_global(range, typing_key=range)

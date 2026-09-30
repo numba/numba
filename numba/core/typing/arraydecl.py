@@ -150,6 +150,13 @@ def get_array_index_type(ary, idx):
                     or (is_innermost and isinstance(ty, types.SliceType)
                         and not ty.has_step))
 
+        def is_full_slice(ty):
+            from numba.core.types.misc import SliceLiteral
+            if isinstance(ty, SliceLiteral):
+                sl = ty.literal_value
+                return sl.start is None and sl.stop is None and sl.step is None
+            return False
+
         def check_contiguity(outer_indices):
             """
             Whether indexing with the given indices (from outer to inner in
@@ -157,10 +164,10 @@ def get_array_index_type(ary, idx):
             """
             for i, ty in enumerate(outer_indices[:-1]):
                 # An index is still "innermost" for contiguity purposes if
-                # every index after it is a newaxis, since those don't
-                # correspond to any physical dimension of the source array.
+                # every index after it is a newaxis or a full slice, since those don't
+                # break contiguity of the underlying dimension.
                 is_innermost = all(
-                    is_nonelike(t) for t in outer_indices[i + 1:]
+                    is_nonelike(t) or is_full_slice(t) for t in outer_indices[i + 1:]
                 )
                 if not keeps_contiguity(ty, is_innermost):
                     return False
@@ -206,6 +213,7 @@ def get_array_index_type(ary, idx):
 
 @infer_global(operator.getitem)
 class GetItemBuffer(AbstractTemplate):
+    prefer_literal = True
     def generic(self, args, kws):
         assert not kws
         [ary, idx] = args

@@ -2102,6 +2102,45 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             np.frombuffer(buffer, dtype=buffer.dtype, count=count)
 
 
+class TestSlicingLayout(MemoryLeakMixin, TestCase):
+    """Test that full-slice indexing preserves array contiguity layout (#5124)."""
+
+    def test_full_slice_preserves_c_layout(self):
+        @njit
+        def get_row(X):
+            return X[0, :, :]
+        arr = np.arange(24, dtype=np.float64).reshape((2, 3, 4))
+        got = get_row(arr)
+        expected = arr[0, :, :]
+        self.assertPreciseEqual(got, expected)
+        self.assertTrue(got.flags['C_CONTIGUOUS'])
+
+    def test_full_slice_preserves_f_layout(self):
+        @njit
+        def get_col(X):
+            return X[:, :, 0]
+        arr = np.asfortranarray(np.arange(24, dtype=np.float64).reshape((2, 3, 4)))
+        got = get_col(arr)
+        expected = arr[:, :, 0]
+        self.assertPreciseEqual(got, expected)
+        self.assertTrue(got.flags['F_CONTIGUOUS'])
+
+    def test_integer_index_with_full_slices(self):
+        @njit
+        def select(X, i):
+            return X[i, :, :]
+        arr = np.arange(60, dtype=np.float64).reshape((3, 4, 5))
+        for i in range(3):
+            self.assertPreciseEqual(select(arr, i), arr[i, :, :])
+
+    def test_mixed_slicing_still_works(self):
+        @njit
+        def partial(X):
+            return X[0, 1:3, :]
+        arr = np.arange(24, dtype=np.float64).reshape((2, 3, 4))
+        self.assertPreciseEqual(partial(arr), arr[0, 1:3, :])
+
+
 class TestArrayComparisons(TestCase):
 
     def test_identity(self):
