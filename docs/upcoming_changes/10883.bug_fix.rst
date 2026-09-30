@@ -1,0 +1,7 @@
+Preserve array layout when slicing with full slices
+----------------------------------------------------
+
+Slicing with full slices (e.g. ``X[0, :, :]``) now correctly preserves
+array contiguity layout (``C`` or ``F``) instead of pessimizing to
+``A`` (any). This enables downstream optimizations in operations like
+``np.dot`` that specialize on contiguous arrays.
