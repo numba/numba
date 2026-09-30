@@ -1,0 +1,6 @@
+Support ``copy`` keyword in ``array.astype()``
+----------------------------------------------
+
+``array.astype(dtype, copy=False)`` now avoids allocation and copying
+when no type conversion is needed, matching NumPy semantics. The
+``copy`` argument must be a compile-time constant boolean.
