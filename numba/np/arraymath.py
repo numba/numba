@@ -438,6 +438,15 @@ def get_accumulator_type(ty):
     return ty
 
 
+def needs_accumulator_cast(ty):
+    return isinstance(ty, types.Integer) and ty.bitwidth < types.intp.bitwidth
+
+
+@register_jitable
+def cast_accumulator(result, acc_ty):
+    return acc_ty(result)
+
+
 def get_ret_dtype_if_any(aryty, dtype):
     if is_nonelike(dtype):
         return get_accumulator_type(aryty.dtype)
@@ -625,16 +634,14 @@ def array_prod(a):
     if isinstance(a, types.Array):
         acc_ty = get_accumulator_type(a.dtype)
         acc_init = get_accumulator(as_dtype(acc_ty), 1)
-        # Integer arithmetic promotes to intp, so cast the result back to
-        # the accumulator dtype (see get_accumulator_type).
-        cast_result = isinstance(acc_ty, types.Integer)
+        cast_required = needs_accumulator_cast(acc_ty)
 
         def array_prod_impl(a):
             c = acc_init
             for v in np.nditer(a):
                 c *= v.item()
-            if cast_result:
-                c = acc_ty(c)
+            if cast_required:
+                c = cast_accumulator(c, acc_ty)
             return c
 
         return array_prod_impl
@@ -1875,9 +1882,7 @@ def np_nansum(a):
     acc_ty = get_accumulator_type(a.dtype)
     zero = get_accumulator(as_dtype(acc_ty), 0)
     isnan = get_isnan(a.dtype)
-    # Integer arithmetic promotes to intp, so cast the result back to the
-    # accumulator dtype (see get_accumulator_type).
-    cast_result = isinstance(acc_ty, types.Integer)
+    cast_required = needs_accumulator_cast(acc_ty)
 
     def nansum_impl(a):
         c = zero
@@ -1885,8 +1890,8 @@ def np_nansum(a):
             v = view.item()
             if not isnan(v):
                 c += v
-        if cast_result:
-            c = acc_ty(c)
+        if cast_required:
+            c = cast_accumulator(c, acc_ty)
         return c
 
     return nansum_impl
@@ -1899,9 +1904,7 @@ def np_nanprod(a):
     acc_ty = get_accumulator_type(a.dtype)
     one = get_accumulator(as_dtype(acc_ty), 1)
     isnan = get_isnan(a.dtype)
-    # Integer arithmetic promotes to intp, so cast the result back to the
-    # accumulator dtype (see get_accumulator_type).
-    cast_result = isinstance(acc_ty, types.Integer)
+    cast_required = needs_accumulator_cast(acc_ty)
 
     def nanprod_impl(a):
         c = one
@@ -1909,8 +1912,8 @@ def np_nanprod(a):
             v = view.item()
             if not isnan(v):
                 c *= v
-        if cast_result:
-            c = acc_ty(c)
+        if cast_required:
+            c = cast_accumulator(c, acc_ty)
         return c
 
     return nanprod_impl
