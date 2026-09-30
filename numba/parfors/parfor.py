@@ -197,10 +197,8 @@ def lower_get_type_min_value(context, builder, sig, args):
     typ = sig.args[0].dtype
 
     if isinstance(typ, types.Boolean):
-        # Boolean is not a subclass of Integer in Numba.  Its data
-        # representation is i8 (see BooleanModel.get_data_type), so we
-        # must use IntType(8) here to match the type read from arrays.
-        lty = lir.IntType(8)
+        # Boolean value type is i1 in Numba (see BooleanModel).
+        lty = lir.IntType(1)
         res = lir.Constant(lty, 0)
     elif isinstance(typ, types.Integer):
         bw = typ.bitwidth
@@ -230,10 +228,8 @@ def lower_get_type_max_value(context, builder, sig, args):
     typ = sig.args[0].dtype
 
     if isinstance(typ, types.Boolean):
-        # Boolean is not a subclass of Integer in Numba.  Its data
-        # representation is i8 (see BooleanModel.get_data_type), so we
-        # must use IntType(8) here to match the type read from arrays.
-        lty = lir.IntType(8)
+        # Boolean value type is i1 in Numba (see BooleanModel).
+        lty = lir.IntType(1)
         res = lir.Constant(lty, 1)
     elif isinstance(typ, types.Integer):
         bw = typ.bitwidth

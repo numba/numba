@@ -1,0 +1,6 @@
+Fix parfors ``argmin``/``argmax``/``min``/``max`` on boolean arrays
+-------------------------------------------------------------------
+
+Parallel reductions (``np.argmin``, ``np.argmax``, ``np.min``,
+``np.max``) on boolean arrays no longer raise ``UnboundLocalError``
+when executed with ``parallel=True``.
