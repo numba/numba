@@ -1071,14 +1071,23 @@ class TestParforNumPy(TestParforsBase):
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
         D = np.array([np.inf, np.inf])
+        E = np.array([False, True, False, True, False])
+        F = np.array([False, False, False])  # all-False
+        G = np.array([True, True, True])  # all-True
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
         self.check(test_impl1, D)
+        self.check(test_impl1, E)
+        self.check(test_impl1, F)
+        self.check(test_impl1, G)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
         self.check(test_impl2, D)
+        self.check(test_impl2, E)
+        self.check(test_impl2, F)
+        self.check(test_impl2, G)
 
         # checks that 0d array input raises
         msg = ("zero-size array to reduction operation "
@@ -1108,14 +1117,23 @@ class TestParforNumPy(TestParforsBase):
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
         D = np.array([-np.inf, -np.inf])
+        E = np.array([False, True, False, True, False])
+        F = np.array([False, False, False])  # all-False
+        G = np.array([True, True, True])  # all-True
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
         self.check(test_impl1, D)
+        self.check(test_impl1, E)
+        self.check(test_impl1, F)
+        self.check(test_impl1, G)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
         self.check(test_impl2, D)
+        self.check(test_impl2, E)
+        self.check(test_impl2, F)
+        self.check(test_impl2, G)
 
         # checks that 0d array input raises
         msg = ("zero-size array to reduction operation "
@@ -1145,14 +1163,17 @@ class TestParforNumPy(TestParforsBase):
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
         D = np.array([1., 0., np.nan, 2., 3.])
+        E = np.array([False, True, False, True, False])  # see issue #5263
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
         self.check(test_impl1, D)
+        self.check(test_impl1, E)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
         self.check(test_impl2, D)
+        self.check(test_impl2, E)
 
         # checks that 0d array input raises
         msg = 'attempt to get argmax of an empty sequence'
@@ -1181,14 +1202,17 @@ class TestParforNumPy(TestParforsBase):
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
         D = np.array([1., 0., np.nan, 0., 3.])
+        E = np.array([True, True, False, True, False])  # see issue #5263
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
         self.check(test_impl1, D)
+        self.check(test_impl1, E)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
         self.check(test_impl2, D)
+        self.check(test_impl2, E)
 
         # checks that 0d array input raises
         msg = 'attempt to get argmin of an empty sequence'
