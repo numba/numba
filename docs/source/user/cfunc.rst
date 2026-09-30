@@ -126,9 +126,9 @@ With CFFI
 For applications that have a lot of state, it is useful to pass data in C
 structures.  To simplify the interoperability with C code, numba can convert
 a ``cffi`` type into a numba ``Record`` type using
-``numba.core.typing.cffi_utils.map_type``::
+``numba.cffi.cffi_utils.map_type``::
 
-   from numba.core.typing import cffi_utils
+   from numba.cffi import cffi_utils
 
    nbtype = cffi_utils.map_type(cffi_type, use_record_dtype=True)
 
@@ -136,7 +136,7 @@ a ``cffi`` type into a numba ``Record`` type using
     structures are returned as void pointers.
 
 .. note:: From v0.49 the ``numba.cffi_support`` module has been phased out
-    in favour of ``numba.core.typing.cffi_utils``
+    in favour of ``numba.cffi.cffi_utils``
 
 
 For example::
