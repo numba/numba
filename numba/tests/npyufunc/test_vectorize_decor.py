@@ -120,6 +120,33 @@ class TestVectorizeNopythonArg(BaseVectorizeNopythonArg):
         self._test_target_nopython('parallel', [])
 
 
+class BaseVectorizeNogilArg(unittest.TestCase):
+    """
+    Test passing the nogil argument to the vectorize decorator (issue #1317).
+    """
+    def _test_target_nogil(self, target, with_sig=True):
+        a = np.array([2.0], dtype=np.float32)
+        b = np.array([3.0], dtype=np.float32)
+        sig = [float32(float32, float32)]
+        args = with_sig and [sig] or []
+        f = vectorize(*args, target=target, nogil=True)(vector_add)
+        np.testing.assert_array_equal(f(a, b), a + b)
+
+
+class TestVectorizeNogilArg(BaseVectorizeNogilArg):
+    def test_target_cpu_nogil(self):
+        self._test_target_nogil('cpu')
+
+    def test_target_cpu_nogil_no_sig(self):
+        self._test_target_nogil('cpu', False)
+
+    def test_target_parallel_nogil(self):
+        self._test_target_nogil('parallel')
+
+    def test_target_parallel_nogil_no_sig(self):
+        self._test_target_nogil('parallel', False)
+
+
 class BaseVectorizeUnrecognizedArg(unittest.TestCase, CheckWarningsMixin):
     """
     Test passing an unrecognized argument to the vectorize decorator.
