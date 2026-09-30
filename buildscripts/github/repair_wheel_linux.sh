@@ -14,7 +14,8 @@ echo "USE_TBB: $USE_TBB"
 echo "WHEEL_DIR: $WHEEL_DIR"
 
 # Install required tools
-$PYTHON_EXECUTABLE -m pip install auditwheel patchelf twine wheel
+$PYTHON_EXECUTABLE -m pip install auditwheel patchelf wheel
+[[ "$PYTHON_EXECUTABLE" == *cp315t* ]] || $PYTHON_EXECUTABLE -m pip install twine
 
 # Install TBB if enabled
 if [ "$USE_TBB" = "true" ]; then
@@ -110,7 +111,7 @@ echo "Copying final wheel $WHEEL_REPACKED to $WHEEL_DIR/"
 cp "$WHEEL_REPACKED" "$WHEEL_DIR/"
 
 # Verify the final wheel (in the temp dir before cleanup)
-$PYTHON_EXECUTABLE -m twine check "$WHEEL_REPACKED"
+[[ "$PYTHON_EXECUTABLE" == *cp315t* ]] || $PYTHON_EXECUTABLE -m twine check "$WHEEL_REPACKED"
 $PYTHON_EXECUTABLE /io/buildscripts/github/test_wheel_contents.py "$WHEEL_DIR/$WHEEL_REPACKED"
 
 echo "Wheel repair and patch completed successfully"
