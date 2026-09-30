@@ -1,0 +1,7 @@
+Accept ``nogil`` option in ``@vectorize`` and ``@guvectorize``
+--------------------------------------------------------------
+
+The ``nogil`` keyword is now accepted by ``@vectorize`` and
+``@guvectorize``, matching the behavior of ``@njit``. This enables
+consistent option passing in frameworks like Dask that apply ``nogil``
+uniformly.

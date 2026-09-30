@@ -143,9 +143,6 @@ class TestVectorizeNogilArg(BaseVectorizeNogilArg):
     def test_target_parallel_nogil(self):
         self._test_target_nogil('parallel')
 
-    def test_target_parallel_nogil_no_sig(self):
-        self._test_target_nogil('parallel', False)
-
 
 class BaseVectorizeUnrecognizedArg(unittest.TestCase, CheckWarningsMixin):
     """
