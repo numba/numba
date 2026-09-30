@@ -434,6 +434,71 @@ def get_ret_dtype_if_any(aryty, dtype):
     return ret_dtype
 
 
+def _sum_integer_memory_order(context, builder, aryty, ary, ret_dtype):
+    intp = context.get_value_type(types.intp)
+    result = cgutils.alloca_once_value(
+        builder, context.get_constant(ret_dtype, 0))
+
+    def accumulate(ptr):
+        value = load_item(context, builder, aryty, ptr)
+        value = context.cast(builder, value, aryty.dtype, ret_dtype)
+        # Reassociation is valid only with wrapping, not no-overflow, addition.
+        total = builder.add(builder.load(result), value)
+        builder.store(total, result)
+
+    if aryty.layout in ('C', 'F'):
+        with cgutils.for_range(builder, ary.nitems, intp=intp) as loop:
+            accumulate(builder.gep(ary.data, [loop.index]))
+    else:
+        shape = list(cgutils.unpack_tuple(builder, ary.shape))
+        strides = list(cgutils.unpack_tuple(builder, ary.strides))
+        magnitudes = [
+            builder.select(builder.icmp_signed('<', stride, intp(0)),
+                           builder.neg(stride), stride)
+            for stride in strides
+        ]
+        for i in range(1, aryty.ndim):
+            for j in range(i, 0, -1):
+                swap = builder.icmp_unsigned('<', magnitudes[j - 1],
+                                             magnitudes[j])
+                for values in (magnitudes, shape, strides):
+                    left, right = values[j - 1], values[j]
+                    values[j - 1] = builder.select(swap, right, left)
+                    values[j] = builder.select(swap, left, right)
+
+        data = ary.data
+        for size, stride in zip(shape, strides):
+            negative = builder.icmp_signed('<', stride, intp(0))
+            last = builder.select(builder.icmp_signed('>', size, intp(0)),
+                                  builder.sub(size, intp(1)), intp(0))
+            offset = builder.select(negative, builder.mul(last, stride),
+                                    intp(0))
+            data = cgutils.pointer_add(builder, data, offset)
+        strides = magnitudes
+
+        for i in range(1, aryty.ndim):
+            outer_single = builder.icmp_signed('==', shape[i - 1], intp(1))
+            inner_single = builder.icmp_signed('==', shape[i], intp(1))
+            adjacent = builder.icmp_unsigned(
+                '==', strides[i - 1], builder.mul(shape[i], strides[i]))
+            merge = builder.or_(adjacent,
+                                builder.or_(outer_single, inner_single))
+            merged_size = builder.mul(shape[i - 1], shape[i])
+            merged_stride = builder.select(inner_single,
+                                           strides[i - 1], strides[i])
+            shape[i - 1] = builder.select(merge, intp(1), shape[i - 1])
+            shape[i] = builder.select(merge, merged_size, shape[i])
+            strides[i] = builder.select(merge, merged_stride, strides[i])
+
+        with cgutils.loop_nest(builder, shape, intp) as indices:
+            offset = intp(0)
+            for index, stride in zip(indices, strides):
+                offset = builder.add(offset, builder.mul(index, stride))
+            accumulate(cgutils.pointer_add(builder, data, offset))
+
+    return builder.load(result)
+
+
 @intrinsic
 def _numpy_sum(typingctx, aryty, axisty, dtype):
     ret_dtype = get_ret_dtype_if_any(aryty, dtype)
@@ -443,6 +508,15 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
         ary, _, _ = args
 
         ary = make_array(aryty)(context, builder, ary)
+        if (is_nonelike(axisty)
+                and isinstance(aryty.dtype, (types.Integer, types.Boolean))
+                and isinstance(ret_dtype, types.Integer)
+                # Bound the generated sorting network for arbitrary strides.
+                and (aryty.layout in ('C', 'F') or aryty.ndim <= 4)):
+            result = _sum_integer_memory_order(
+                context, builder, aryty, ary, ret_dtype)
+            return impl_ret_borrowed(context, builder, sig.return_type, result)
+
         if isinstance(ret_dtype, types.NPTimedelta):
             zero = context.get_constant(ret_dtype, ret_dtype(0))
         else:
