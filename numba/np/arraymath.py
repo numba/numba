@@ -617,13 +617,14 @@ def array_sum(a, axis=None, dtype=None):
 
         return array_sum_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        if is_nonelike(dtype):
-            acc_init = as_dtype(a).type(0)
-        else:
-            acc_init = as_dtype(dtype).type(0)
+        acc_ty = get_accumulator_type(a) if is_nonelike(dtype) else dtype.dtype
+        cast_required = acc_ty != a
 
         def scalar_sum_impl(a, axis=None, dtype=None):
-            return acc_init + a
+            res = a
+            if cast_required:
+                res = cast_accumulator(res, acc_ty)
+            return res
 
         return scalar_sum_impl
 
@@ -646,10 +647,14 @@ def array_prod(a):
 
         return array_prod_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        acc_init = as_dtype(get_accumulator_type(a)).type(1)
+        acc_ty = get_accumulator_type(a)
+        cast_required = acc_ty != a
 
         def scalar_prod_impl(a):
-            return acc_init * a
+            res = a
+            if cast_required:
+                res = cast_accumulator(res, acc_ty)
+            return res
 
         return scalar_prod_impl
 
@@ -809,13 +814,14 @@ def array_cumsum(a, axis=None, dtype=None):
 
         return array_cumsum_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        if is_nonelike(dtype):
-            acc_init = as_dtype(a).type(0)
-        else:
-            acc_init = as_dtype(dtype).type(0)
+        acc_ty = get_accumulator_type(a) if is_nonelike(dtype) else dtype.dtype
+        cast_required = acc_ty != a
 
         def scalar_cumsum_impl(a, axis=None, dtype=None):
-            return acc_init + a
+            res = a
+            if cast_required:
+                res = cast_accumulator(res, acc_ty)
+            return res
 
         return scalar_cumsum_impl
 
