@@ -292,6 +292,7 @@ Pull-Requests:
 * PR `#10867 <https://github.com/numba/numba/pull/10867>`_: Cherry pick win-arm64 CI fix to release0.68 (`swap357 <https://github.com/swap357>`_)
 * PR `#10869 <https://github.com/numba/numba/pull/10869>`_: Cherry-pick Azure CI fix on release0.68 (`swap357 <https://github.com/swap357>`_)
 * PR `#10874 <https://github.com/numba/numba/pull/10874>`_: Update 0.68 release notes (`swap357 <https://github.com/swap357>`_)
+* PR `#10877 <https://github.com/numba/numba/pull/10877>`_: Update version support table with release date (`swap357 <https://github.com/swap357>`_)
 
 Authors:
 
