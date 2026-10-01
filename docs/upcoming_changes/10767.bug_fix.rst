@@ -1,0 +1,6 @@
+Fix ``np.clip`` result shape for broadcast bounds
+-------------------------------------------------
+
+``np.clip`` now returns the correct result shape when ``a_min`` or ``a_max``
+broadcasts to a shape larger than ``a``. The output allocation preserves
+NumPy-compatible layout behavior for F-contiguous inputs.
