@@ -4802,8 +4802,9 @@ def _parse_empty_like_args(context, builder, sig, args):
 
 def _parse_empty_like_args_with_shape(context, builder, sig, args):
     """
-    Parse the arguments of a np.empty_like() call that was given the shape
-    kwarg: take the shape from the kwarg instead of the prototype.
+    Parse the arguments of a np.empty_like() call with the shape kwarg
+    present in the signature: take the shape from the kwarg unless it is
+    None, in which case fall back to the prototype's shape.
     """
     ty_shape = sig.args[2]
     if is_nonelike(ty_shape):
@@ -4893,8 +4894,8 @@ def ol_np_empty_like(arr, dtype=None, shape=None):
             raise errors.TypingError(msg)
         # NumPy's 'K' keeps the input's layout only if the number of
         # dimensions matches; otherwise the result is C-ordered.
-        if isinstance(arr, types.Array) and arr.ndim == ndim \
-                and arr.layout != 'A':
+        if (isinstance(arr, types.Array) and arr.ndim == ndim
+                and arr.layout != 'A'):
             layout = arr.layout
         else:
             layout = 'C'
