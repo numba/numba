@@ -71,14 +71,33 @@ dependencies there. Read more about the Numba dependencies here:
 `numba-source-install-check`.
 
 When working with a source checkout of Numba you will also need a development
-build of llvmlite. These are available from the ``numba/label/dev`` channel on
-`anaconda.org <https://anaconda.org/numba/llvmlite>`_.
+build of llvmlite. Development builds of llvmlite are not published on PyPI,
+so they must be obtained from the ``numba/label/dev`` channel on
+`anaconda.org <https://anaconda.org/numba/llvmlite>`_, or built from source.
 
 To create an environment with the required dependencies, noting the use of the
 double-colon syntax (``numba/label/dev::llvmlite``) to install the latest
 development version of the llvmlite library::
 
    $ conda create -n numbaenv python=3.10 numba/label/dev::llvmlite numpy scipy jinja2 cffi
+
+If you prefer to use ``pip``, the latest development build of llvmlite can be
+installed from the Numba dev index::
+
+   $ pip install -i https://pypi.anaconda.org/numba/label/dev/simple --pre --upgrade llvmlite
+
+Alternatively, llvmlite can be built from source. This requires the LLVM
+development package, which is available from the ``numba/label/llvm_wheel``
+channel::
+
+   $ conda install -c numba/label/llvm_wheel llvmdev
+   $ git clone https://github.com/numba/llvmlite.git
+   $ cd llvmlite
+   $ pip install -e .
+
+This builds the ``main`` branch of llvmlite, which matches the development
+version required by Numba's ``main`` branch. Released tags of llvmlite are
+usually too old to satisfy this requirement.
 
 .. note::
    This installs an environment based on Python 3.10, but you can of course

@@ -91,6 +91,26 @@ for a special LLVM build.  If you are building from source for the purposes of
 Numba development, see :ref:`buildenv` for details on how to create a Numba
 development environment with conda.
 
+Note that a development build of llvmlite is required when working with the
+Numba ``main`` branch, and development builds of llvmlite are not published on
+PyPI. The latest development build can be installed from the Numba dev
+index::
+
+    $ pip install -i https://pypi.anaconda.org/numba/label/dev/simple --pre --upgrade llvmlite
+
+Alternatively, llvmlite can be built from source. This requires the LLVM
+development package, which is available from the ``numba/label/llvm_wheel``
+channel::
+
+    $ conda install -c numba/label/llvm_wheel llvmdev
+    $ git clone https://github.com/numba/llvmlite.git
+    $ cd llvmlite
+    $ pip install -e .
+
+This builds the ``main`` branch of llvmlite, which matches the development
+version required by Numba's ``main`` branch. Released tags of llvmlite are
+usually too old to satisfy this requirement.
+
 If you are building Numba from source for other reasons, first follow the
 `llvmlite installation guide <https://llvmlite.readthedocs.io/en/latest/admin-guide/install.html>`_.
 Once that is completed, you can download the latest Numba source code from
@@ -115,7 +135,7 @@ Source archives of the latest release can also be found on
 
 Then you can build and install Numba from the top level of the source tree::
 
-    $ python setup.py install
+    $ pip install -e .
 
 If you wish to run the test suite, see the instructions in the
 :ref:`developer documentation <running-tests>`.
