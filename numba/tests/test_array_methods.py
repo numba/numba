@@ -1380,59 +1380,33 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             with self.subTest("Test np.sum with {} input ".format(arr.dtype)):
                 self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
-    def test_sum_axis_kws1(self):
+    def test_sum_axis_kws(self):
         """ test sum with axis parameter over a whole range of dtypes  """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        signed_dtypes_no_int32 = [
-            np.float64, np.float32, np.int64, np.complex64,
+        signed_dtypes = [
+            np.float64, np.float32, np.int64, np.int32, np.complex64,
             np.complex128,
             #   TODO: Once hashing of timedelta64 is implemented,
             #   we can add it to the list of tested dtypes in this test.
             #   TIMEDELTA_M
         ]
 
-        unsigned_dtypes_no_uint32 = [np.uint64, np.bool_]
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
 
-        for arr in self.gen_sum_array_cases(signed_dtypes_no_int32, unsigned_dtypes_no_uint32):
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
             for axis in (0, 1, 2):
-                if axis > len(arr.shape)-1:
+                if axis > len(arr.shape) - 1:
                     continue
                 with self.subTest("Testing np.sum(axis) with {} "
-                                    "input ".format(arr.dtype)):
-                    self.assertPreciseEqual(pyfunc(arr, axis=axis),
-                                            cfunc(arr, axis=axis))
-
-    def test_sum_axis_kws2(self):
-        """  testing uint32 and int32 separately
-
-        uint32 and int32 must be tested separately because NumPy < 2.0
-        accumulates into the 32-bit default integer on 64-bit Windows, while
-        Numba accumulates into the platform integer. See issue #10846.
-        """
-        pyfunc = array_sum_axis_kws
-        cfunc = jit(nopython=True)(pyfunc)
-        signed_dtypes_only_int32 = [np.int32]
-
-        unsigned_dtypes_only_uint32 = [np.uint32]
-
-        for arr in self.gen_sum_array_cases(signed_dtypes_only_int32, unsigned_dtypes_only_uint32):
-            for axis in (0, 1, 2):
-                if axis > len(arr.shape)-1:
-                    continue
-                with self.subTest("Testing np.sum(axis) with {} "
-                                    "input ".format(arr.dtype)):
+                                  "input ".format(arr.dtype)):
                     npy_res = pyfunc(arr, axis=axis)
                     numba_res = cfunc(arr, axis=axis)
                     if isinstance(numba_res, np.ndarray):
                         # See issue #10846, the accumulator dtype must
                         # match numpy
-                        self.assertEqual(
-                            numba_res.dtype,
-                            npy_res.dtype)
-                        self.assertPreciseEqual(
-                            npy_res,
-                            numba_res)
+                        self.assertEqual(numba_res.dtype, npy_res.dtype)
+                        self.assertPreciseEqual(npy_res, numba_res)
                     else:
                         # the results are scalars
                         self.assertEqual(npy_res, numba_res)

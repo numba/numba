@@ -447,6 +447,26 @@ def cast_accumulator(result, acc_ty):
     return acc_ty(result)
 
 
+def make_scalar_reduction_impl_axis(a, acc_ty):
+    if acc_ty == a:
+        def scalar_reduction_impl(a, axis=None, dtype=None):
+            return a
+    else:
+        def scalar_reduction_impl(a, axis=None, dtype=None):
+            return cast_accumulator(a, acc_ty)
+    return scalar_reduction_impl
+
+
+def make_scalar_reduction_impl(a, acc_ty):
+    if acc_ty == a:
+        def scalar_reduction_impl(a):
+            return a
+    else:
+        def scalar_reduction_impl(a):
+            return cast_accumulator(a, acc_ty)
+    return scalar_reduction_impl
+
+
 def get_ret_dtype_if_any(aryty, dtype):
     if is_nonelike(dtype):
         return get_accumulator_type(aryty.dtype)
@@ -618,15 +638,7 @@ def array_sum(a, axis=None, dtype=None):
         return array_sum_impl
     elif isinstance(a, (types.Number, types.Boolean)):
         acc_ty = get_accumulator_type(a) if is_nonelike(dtype) else dtype.dtype
-        cast_required = acc_ty != a
-
-        def scalar_sum_impl(a, axis=None, dtype=None):
-            res = a
-            if cast_required:
-                res = cast_accumulator(res, acc_ty)
-            return res
-
-        return scalar_sum_impl
+        return make_scalar_reduction_impl_axis(a, acc_ty)
 
 
 @overload(np.prod)
@@ -648,15 +660,7 @@ def array_prod(a):
         return array_prod_impl
     elif isinstance(a, (types.Number, types.Boolean)):
         acc_ty = get_accumulator_type(a)
-        cast_required = acc_ty != a
-
-        def scalar_prod_impl(a):
-            res = a
-            if cast_required:
-                res = cast_accumulator(res, acc_ty)
-            return res
-
-        return scalar_prod_impl
+        return make_scalar_reduction_impl(a, acc_ty)
 
 
 @intrinsic
@@ -815,15 +819,7 @@ def array_cumsum(a, axis=None, dtype=None):
         return array_cumsum_impl
     elif isinstance(a, (types.Number, types.Boolean)):
         acc_ty = get_accumulator_type(a) if is_nonelike(dtype) else dtype.dtype
-        cast_required = acc_ty != a
-
-        def scalar_cumsum_impl(a, axis=None, dtype=None):
-            res = a
-            if cast_required:
-                res = cast_accumulator(res, acc_ty)
-            return res
-
-        return scalar_cumsum_impl
+        return make_scalar_reduction_impl_axis(a, acc_ty)
 
 
 @overload(np.cumprod)
