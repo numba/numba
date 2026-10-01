@@ -1019,8 +1019,8 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
         self.assertIn("Invalid NumPy dtype specified: 'ABCDEF'", excstr)
 
 
-
-class TestNdEmptyLikeShape(ConstructorLikeBaseTest, TestCase):
+class TestNdEmptyLikeShape(MemoryLeakMixin, ConstructorLikeBaseTest,
+                           TestCase):
     # Tests for the shape kwarg of np.empty_like (zeros_like and ones_like
     # do not support it, so these are kept out of TestNdEmptyLike, which
     # they inherit from)
@@ -1074,7 +1074,7 @@ class TestNdEmptyLikeShape(ConstructorLikeBaseTest, TestCase):
             return np.empty_like(arr, shape=(m, n))
         ret = func(np.zeros((2, 3)), 3, 4)
         self.assertEqual(ret.shape, (3, 4))
-        self.assertEqual(ret.flags.c_contiguous, True)
+        self.assertTrue(ret.flags.c_contiguous)
 
     def test_shape_kwarg_fortran(self):
         # the layout of the prototype is kept when shape is overridden;
@@ -1110,6 +1110,16 @@ class TestNdEmptyLikeShape(ConstructorLikeBaseTest, TestCase):
         self.assertEqual(ret.dtype, np.dtype(np.int32))
 
     def test_shape_kwarg_scalar_prototype(self):
+        # dtype comes from the scalar itself
+        def func(n):
+            return np.empty_like(n, shape=(2, 3))
+        cfunc = jit(func)
+        ret = cfunc(np.float64(1.5))
+        self.assertEqual(ret.shape, (2, 3))
+        self.assertEqual(ret.dtype, np.dtype(np.float64))
+
+    def test_shape_kwarg_scalar_prototype_dtype(self):
+        # scalar prototype with an explicit dtype
         def func(n):
             return np.empty_like(n, shape=(2, 3), dtype=np.int32)
         cfunc = jit(func)
@@ -1118,6 +1128,9 @@ class TestNdEmptyLikeShape(ConstructorLikeBaseTest, TestCase):
         self.assertEqual(ret.dtype, np.dtype(np.int32))
 
     def test_shape_kwarg_negative(self):
+        # exception path leaves the NRT alloc/free counts unbalanced
+        self.disable_leak_check()
+
         @jit
         def func(arr, n):
             return np.empty_like(arr, shape=(n, 2))
