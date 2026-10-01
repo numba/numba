@@ -1,0 +1,9 @@
+Fix the accumulator dtypes of reductions to match NumPy
+-------------------------------------------------------
+
+The accumulator dtypes of ``np.sum``, ``np.prod``, ``np.cumsum``,
+``np.cumprod``, ``np.nansum`` and ``np.nanprod`` now match NumPy: booleans
+and integers narrower than NumPy's default integer accumulate into that
+integer (``intp``/``uintp``, or ``int32``/``uint32`` on 64-bit Windows with
+NumPy < 2.0). In particular ``np.nansum`` and
+``np.nanprod`` no longer convert unsigned integer inputs to signed ``intp``.
