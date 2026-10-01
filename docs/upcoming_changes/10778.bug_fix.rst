@@ -1,4 +1,4 @@
-Fix scalar handling in``np.nanprod``
+Fix scalar handling in ``np.nanprod``
 ------------------------------------
 
 Fix scalar handling in the ``np.nanprod`` function. Previously,
