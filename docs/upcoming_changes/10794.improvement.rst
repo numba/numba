@@ -1,0 +1,5 @@
+Add support for ``axis`` and ``dtype`` arguments to ``np.prod``
+---------------------------------------------------------------
+
+``np.prod`` now supports the ``axis`` and ``dtype`` arguments, including
+tuple values for ``axis``, matching NumPy's behaviour.

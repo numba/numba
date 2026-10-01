@@ -210,6 +210,18 @@ def array_cumsum_axis_dtype_kws(a, dtype, axis):
 def array_sum_axis_dtype_pos(a, a1, a2):
     return a.sum(a1, a2)
 
+def array_prod_axis_kws(a, axis):
+    return a.prod(axis=axis)
+
+def array_prod_axis_dtype_kws(a, dtype, axis):
+    return a.prod(axis=axis, dtype=dtype)
+
+def np_prod_axis_kws(a, axis):
+    return np.prod(a, axis=axis)
+
+def np_prod_axis_dtype_kws(a, dtype, axis):
+    return np.prod(a, axis=axis, dtype=dtype)
+
 def array_sum_const_multi(arr, axis):
     # use np.sum with different constant args multiple times to check
     # for internal compile cache to see if constant-specialization is
@@ -1352,7 +1364,7 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         check_err(np.array([1, 2]))
         check_err(np.array([]))
-    
+
     def gen_sum_array_cases(self, signed_dtypes, unsigned_dtypes):
         for arr_dtype in signed_dtypes + unsigned_dtypes:
             yield np.ones((5, 4, 3), arr_dtype)
@@ -1360,6 +1372,19 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         for arr_dtype in signed_dtypes:
             yield np.ones((5, 4, 3), arr_dtype) * -5
+
+    def gen_prod_array_cases(self, signed_dtypes, unsigned_dtypes):
+        for arr_dtype in signed_dtypes + unsigned_dtypes:
+            arr = (np.arange(60) % 7 + 1).astype(arr_dtype).reshape(5, 4, 3)
+            yield arr
+            absorbing = arr.copy()
+            absorbing[3, 2, 1] = 0
+            yield absorbing
+            yield np.full(1, 7, arr_dtype)
+
+            if arr_dtype in signed_dtypes:
+                yield -arr
+                yield -absorbing
 
     def test_sum(self):
         """ test sum over a whole range of dtypes, no axis or dtype parameter
@@ -1592,6 +1617,233 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
         self.assertPreciseEqual(pyfunc(a, 2, dtype),
                                 cfunc(a, 2, dtype))
+
+    def test_prod_axis_kws1(self):
+        """ test prod with axis parameter over a whole range of dtypes  """
+        pyfunc = array_prod_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        signed_dtypes_no_int32 = [
+            np.float64, np.float32, np.int64, np.complex64,
+            np.complex128,
+        ]
+
+        unsigned_dtypes_no_uint32 = [np.uint64, np.bool_]
+
+        for arr in self.gen_prod_array_cases(signed_dtypes_no_int32,
+                                            unsigned_dtypes_no_uint32):
+            for axis in (0, 1, 2):
+                if axis > len(arr.shape)-1:
+                    continue
+                with self.subTest("Testing np.prod(axis) with {} "
+                                  "input ".format(arr.dtype)):
+                    self.assertPreciseEqual(pyfunc(arr, axis=axis),
+                                            cfunc(arr, axis=axis))
+
+    def test_prod_axis_kws2(self):
+        """  testing uint32 and int32 separately
+
+        uint32 and int32 must be tested separately because Numpy's current
+        behaviour is different in 64bits Windows (accumulates as int32)
+        and 64bits Linux (accumulates as int64), while Numba accumulates
+        int32 as int64 and uint32 as uint64, when the OS is 64bits. No
+        testing has been done for behaviours in 32 bits platforms.
+        """
+        pyfunc = array_prod_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        signed_dtypes_only_int32 = [np.int32]
+        # expected return dtypes in Numba
+        out_dtypes = {np.dtype('int32'): np.int64,
+                      np.dtype('uint32'): np.uint64,
+                      np.dtype('int64'): np.int64}
+
+        unsigned_dtypes_only_uint32 = [np.uint32]
+
+        for arr in self.gen_prod_array_cases(signed_dtypes_only_int32,
+                                             unsigned_dtypes_only_uint32):
+            for axis in (0, 1, 2):
+                if axis > len(arr.shape)-1:
+                    continue
+                with self.subTest("Testing np.prod(axis) with {} "
+                                  "input ".format(arr.dtype)):
+                    npy_res = pyfunc(arr, axis=axis)
+                    numba_res = cfunc(arr, axis=axis)
+                    expected_dtype = np.dtype(out_dtypes[arr.dtype])
+                    if isinstance(numba_res, np.ndarray):
+                        self.assertEqual(numba_res.dtype, expected_dtype)
+                    # NumPy's dtype may differ from Numba's (e.g. on 32 bit
+                    # Windows), so only the NumPy result is cast to the
+                    # expected accumulator dtype before comparing values.
+                    # Numba boxes scalar results as Python scalars, which
+                    # carry no dtype of their own.
+                    self.assertPreciseEqual(
+                        npy_res.astype(expected_dtype), numba_res)
+
+    def test_prod_axis_dtype_kws(self):
+        """ test prod with axis and dtype parameters over a whole range
+        of dtypes """
+        pyfunc = array_prod_axis_dtype_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
+                         np.complex64, np.complex128]
+
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
+
+        out_dtypes = {np.dtype('float64'): [np.float64],
+                      np.dtype('float32'): [np.float64, np.float32],
+                      np.dtype('int64'): [np.float64, np.int64, np.float32],
+                      np.dtype('int32'): [np.float64, np.int64, np.float32,
+                                          np.int32],
+                      np.dtype('uint32'): [np.float64, np.int64, np.float32],
+                      np.dtype('uint64'): [np.float64, np.uint64],
+                      np.dtype('bool'): [np.float64, np.int64, np.float32,
+                                         np.int32, np.bool_],
+                      np.dtype('complex64'): [np.complex64, np.complex128],
+                      np.dtype('complex128'): [np.complex128]}
+
+        for arr in self.gen_prod_array_cases(signed_dtypes, unsigned_dtypes):
+            for out_dtype in out_dtypes[arr.dtype]:
+                for axis in (0, 1, 2):
+                    if axis > len(arr.shape) - 1:
+                        continue
+                    subtest_str = ("Testing np.prod with {} input and {} "
+                                   "output ".format(arr.dtype, out_dtype))
+                    with self.subTest(subtest_str):
+                        py_res = pyfunc(arr, axis=axis, dtype=out_dtype)
+                        nb_res = cfunc(arr, axis=axis, dtype=out_dtype)
+                        self.assertPreciseEqual(py_res, nb_res)
+
+    def test_prod_timedelta_unsupported(self):
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        def prod(a):
+            return np.prod(a)
+
+        def prod_axis(a):
+            return np.prod(a, axis=0)
+
+        a = np.arange(6, dtype='timedelta64[s]')
+
+        for pyfunc, arr in ((prod, a), (prod_axis, a.reshape(2, 3))):
+            cfunc = jit(nopython=True)(pyfunc)
+            with self.subTest(pyfunc.__name__):
+                with self.assertRaises(TypingError) as raises:
+                    cfunc(arr)
+                self.assertIn(
+                    "NumPy prod does not support operands with "
+                    "dtype timedelta64[s]",
+                    str(raises.exception))
+
+    def test_prod_axis_tuple(self):
+        """ test prod with axis as a tuple """
+        pyfunc = array_prod_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+        a = (np.arange(60, dtype=np.intp) % 7 + 1).reshape(5, 4, 3)
+
+        data = [-2, -1, 0, 1, 2]
+        all_perms = list(chain.from_iterable(
+            permutations(data, r) for r in range(len(data) + 1)
+        ))
+        for axes in all_perms:
+            with self.subTest(axes=axes):
+                # Check for duplicate axis
+                np_axes = (np.array(axes) % 3)
+                if len(np_axes) == len(np.unique(np_axes)):
+                    self.assertPreciseEqual(pyfunc(a, axes), cfunc(a, axes))
+
+    def test_prod_axis_tuple_duplicates(self):
+        """ test prod with a tuple axis containing duplicate values """
+        self.disable_leak_check()
+        pyfunc = array_prod_axis_kws
+        err = ValueError if numpy_version < (1, 25) else np.exceptions.AxisError
+        cfunc = jit(nopython=True)(pyfunc)
+        a = (np.arange(60, dtype=np.intp) % 7 + 1).reshape(5, 4, 3)
+
+        data = [-3, -2, -1, 0, 1, 2, 3]
+        all_perms = list(chain.from_iterable(
+            permutations(data, r) for r in range(len(data) + 1)
+        ))
+        for axes in all_perms:
+            with self.subTest(axes=axes):
+                # Check for duplicate axis
+                if 3 in axes:
+                    # 3 is out of bounds for an array of dimension 3
+                    # but -3 is not.
+                    with self.assertRaises(err) as c_raises:
+                        cfunc(a, axes)
+                    # This will raise a different exception than the duplicate
+                    # axis case, so we need to check for the correct error
+                    # message.
+                    self.assertIn(
+                        "out of bounds for array of dimension 3",
+                        str(c_raises.exception)
+                    )
+                    with self.assertRaises(err) as py_raises:
+                        pyfunc(a, axes)
+                    self.assertEqual(
+                        str(c_raises.exception),
+                        str(py_raises.exception)
+                    )
+                    continue
+                np_axes = (np.array(axes) % 3)
+                if len(np_axes) != len(np.unique(np_axes)):
+                    with self.assertRaises(ValueError) as c_raises:
+                        cfunc(a, axes)
+                    self.assertIn(
+                        "duplicate value in 'axis'",
+                        str(c_raises.exception)
+                    )
+                    with self.assertRaises(ValueError) as py_raises:
+                        pyfunc(a, axes)
+                    self.assertEqual(
+                        str(c_raises.exception),
+                        str(py_raises.exception)
+                    )
+
+    def test_prod_axis_empty_tuple(self):
+        """ test np.prod with axis=() (no reduction) and an explicit dtype """
+        method = jit(nopython=True)(array_prod_axis_dtype_kws)
+        function = jit(nopython=True)(np_prod_axis_dtype_kws)
+
+        a = (np.arange(60) % 7 + 1).astype(np.int32).reshape(5, 4, 3)
+        for dtype in (np.int64, np.uint64, np.float64, np.float32):
+            with self.subTest(dtype=dtype):
+                # method form: a.prod(axis=(), dtype=...)
+                self.assertPreciseEqual(
+                    array_prod_axis_dtype_kws(a, dtype, ()),
+                    method(a, dtype, ()))
+                # function form: np.prod(a, axis=(), dtype=...)
+                self.assertPreciseEqual(
+                    np_prod_axis_dtype_kws(a, dtype, ()),
+                    function(a, dtype, ()))
+
+    def test_prod_function_form(self):
+        """ test the top-level np.prod function form with axis and dtype """
+        np_axis = jit(nopython=True)(np_prod_axis_kws)
+        np_axis_dtype = jit(nopython=True)(np_prod_axis_dtype_kws)
+
+        a = (np.arange(60) % 7 + 1).astype(np.int64).reshape(5, 4, 3)
+        for axis in (0, 1, 2):
+            with self.subTest(axis=axis):
+                self.assertPreciseEqual(np_prod_axis_kws(a, axis),
+                                        np_axis(a, axis))
+        for dtype in (np.int64, np.float64, np.float32):
+            for axis in (0, 1, 2):
+                with self.subTest(dtype=dtype, axis=axis):
+                    self.assertPreciseEqual(
+                        np_prod_axis_dtype_kws(a, dtype, axis),
+                        np_axis_dtype(a, dtype, axis))
+
+    def test_prod_axis_overflow(self):
+        """ test that the prod accumulator does not overflow (int32 -> int64)
+        """
+        pyfunc = array_prod_axis_kws
+        cfunc = jit(nopython=True)(pyfunc)
+
+        # 100 ** 5 overflows int32, so the accumulator must be int64
+        a = np.full((5, 2), 100, np.int32)
+        expected = np.array([100 ** 5, 100 ** 5], dtype=np.int64)
+        self.assertPreciseEqual(cfunc(a, axis=0), expected)
 
     def test_sum_1d_kws(self):
         # check 1d reduces to scalar
