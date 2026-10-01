@@ -1138,6 +1138,21 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
                 with self.subTest(pyfunc=pyfunc.__name__, dtype=dtype):
                     self.assertEqual(got_dtype, np.asarray(expected).dtype)
 
+        # Only some of the reductions have a scalar variant, but those that do
+        # must return the accumulator dtype too.
+        scalar_pyfuncs = [array_sum_global, array_prod_global,
+                          array_cumsum_global]
+        for pyfunc in scalar_pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for dtype in dtypes:
+                val = dtype(3)
+                expected = pyfunc(val)
+                cfunc(val)
+                got_dtype = self.get_return_dtype(cfunc, val)
+                with self.subTest(pyfunc=pyfunc.__name__, dtype=dtype,
+                                  scalar=True):
+                    self.assertEqual(got_dtype, np.asarray(expected).dtype)
+
     def check_aggregation_magnitude(self, pyfunc, is_prod=False):
         """
         Check that integer overflows are avoided (issue #931).

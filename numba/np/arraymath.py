@@ -419,7 +419,7 @@ def get_mask(context, builder, mask_length, axis):
 
 
 def get_accumulator_type(ty):
-    """numpy's accumulator dtype: booleans and integers narrower than the
+    """NumPy's accumulator dtype: booleans and integers narrower than the
     default platform integer accumulate into that integer (signed or
     unsigned)."""
     # NumPy < 2.0 used the C ``long`` as the default integer, which is 32-bit
