@@ -959,13 +959,12 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
     # https://github.com/numpy/numpy/blob/95e3e7f445407e4f355b23d6a9991d8774f0eb0c/numpy/random/tests/test_generator_mt19937.py#L936
     # Written in following format for semblance with existing Generator tests.
     def test_shuffle(self):
-        test_sizes = [(10, 20, 30)]
+        size_axes = [((100,), 0), ((100,), -1),
+                     ((10, 20, 30), 0), ((10, 20, 30), 1), ((10, 20, 30), 2)]
         bitgen_types = [None, MT19937]
-        axes = [0, 1, 2]
 
-        for _size, _bitgen, _axis in itertools.product(test_sizes,
-                                                       bitgen_types,
-                                                       axes):
+        for (_size, _axis), _bitgen in itertools.product(size_axes,
+                                                         bitgen_types):
             with self.subTest(_size=_size, _bitgen=_bitgen, _axis=_axis):
                 def dist_func(x, size, dtype):
                     arr = x.random(size=size)
@@ -987,6 +986,17 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
         rng = lambda: np.random.default_rng(1)
 
         self.assertPreciseEqual(dist_func(rng(), a), nb_func(rng(), b))
+
+    def test_shuffle_1d_strided(self):
+        def dist_func(x, arr):
+            x.shuffle(arr[::3])
+            return arr
+
+        nb_func = numba.njit(dist_func)
+        rng = lambda: np.random.default_rng(1)
+
+        self.assertPreciseEqual(dist_func(rng(), np.arange(100)),
+                                nb_func(rng(), np.arange(100)))
 
     def test_shuffle_check(self):
         self.disable_leak_check()
