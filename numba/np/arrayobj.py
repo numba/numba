@@ -671,6 +671,9 @@ def broadcast_index(builder, idx, extent):
     """
     Map a loop counter onto a dimension that is broadcast against it, i.e.
     whose extent is either 1 or the full loop extent.
+
+    Note: using builder.srem instead of umin would trigger additional idivq 
+    operations, which cause performance issues for large arrays.
     """
     fnty = ir.FunctionType(idx.type, [idx.type, idx.type])
     umin = builder.module.declare_intrinsic('llvm.umin', [idx.type], fnty)
@@ -1335,6 +1338,9 @@ class FancyIndexer(object):
 
 
 def get_subspace_shape(context, builder, array_indices):
+    if len(array_indices) == 1:
+        return tuple(cgutils.unpack_tuple(builder, array_indices[0][3].shape))
+
     max_dims = max([ary[2].ndim for ary in array_indices])
 
     def bdcast_idx_shapes(*args):
