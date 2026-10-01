@@ -1,0 +1,13 @@
+Fix race condition in GUFunc caching that can cause segfaults
+-------------------------------------------------------------
+
+Fixed a race condition in the cache used by ``@guvectorize`` functions. When
+multiple processes compiled the same function concurrently, the cache could
+contain a kernel and wrapper built for different symbols. Calling the cached
+function could then result in a segmentation fault.
+
+The kernel symbol is now included in the wrapper cache key. This prevents
+mismatched cache entries from being reused and causes the wrapper to be
+recompiled when necessary. In addition, attempting to build a ufunc entry
+point for an unresolved symbol now raises ``RuntimeError`` instead of passing
+a null function pointer to NumPy.
