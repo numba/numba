@@ -649,7 +649,8 @@ Array creation routines
 * :func:`numpy.ones` (only the 2 first arguments)
 * :func:`numpy.ones_like` (only the 2 first arguments)
 * :func:`numpy.empty` (only the 2 first arguments)
-* :func:`numpy.empty_like` (only the 2 first arguments)
+* :func:`numpy.empty_like` (only the 2 first arguments and the ``shape``
+  keyword argument)
 * :func:`numpy.full` (only the 3 first arguments)
 * :func:`numpy.full_like` (only the 3 first arguments)
 * :func:`numpy.eye`
