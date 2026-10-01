@@ -751,8 +751,18 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     if call_expr.op == 'call':
         args = list(call_expr.args)
         if call_expr.vararg:
-            msg = "Calling a closure with *args is unsupported."
-            raise errors.UnsupportedError(msg, call_expr.loc)
+            # unpack a locally built tuple into direct arguments; a single
+            # definition for the tuple and each item guarantees the values
+            # cannot have changed between the build_tuple and the call
+            dfn = guard(get_definition, func_ir, call_expr.vararg)
+            defs = func_ir._definitions
+            if (isinstance(dfn, ir.Expr) and dfn.op == 'build_tuple'
+                    and all(len(defs.get(v.name, ())) == 1
+                            for v in [call_expr.vararg] + list(dfn.items))):
+                args.extend(dfn.items)
+            else:
+                msg = "Calling a closure with *args is unsupported."
+                raise errors.UnsupportedError(msg, call_expr.loc)
     elif call_expr.op == 'getattr':
         args = [call_expr.value]
     elif ir_utils.is_operator_or_getitem(call_expr):

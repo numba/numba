@@ -1,0 +1,8 @@
+Support calling closures with ``*args``
+---------------------------------------
+
+Calling a closure with an unpacked tuple, e.g. ``closure(*args)``, previously
+raised ``UnsupportedError``. When the tuple is built in the enclosing
+function, the closure inliner now unpacks it into direct arguments and
+inlines the call as usual. Varargs that are not locally built tuples (e.g. a
+tuple passed in as a parameter) remain unsupported.
