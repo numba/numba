@@ -38,13 +38,13 @@ class _TypeMetaclass(abc.ABCMeta):
     def __init__(
         cls, name: str, bases: tuple[type, ...], orig_vars: dict[str, Any]
     ) -> None: ...
-    def __call__(cls, *args: Any, **kwargs: Any) -> Any: ...
+    def __call__(cls: type[_T1], *args: Any, **kwargs: Any) -> _T1: ...
 
 class Type(metaclass=_TypeMetaclass):
-    reflected: ClassVar[bool] = False
+    reflected: bool = False
+    mutable: bool = False
 
     name: str
-    mutable: bool = False
 
     def __init__(self, name: str) -> None: ...
 
