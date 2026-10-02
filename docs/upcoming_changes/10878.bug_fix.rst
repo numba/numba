@@ -1,0 +1,6 @@
+Suppress warnings from branches removed by dead branch pruning
+--------------------------------------------------------------
+
+Warnings raised while partially typing code that is later removed by dead
+branch pruning (e.g. the untaken side of an ``isinstance`` check) are no
+longer emitted.
