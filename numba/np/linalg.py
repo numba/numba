@@ -2923,9 +2923,9 @@ def kron_impl(a, b):
     fix_b = _kron_normaliser_impl(b)
     ret_c = _kron_return(a, b)
 
-    # this is fine because the ufunc for the Hadamard product
-    # will reject differing dtypes in a and b.
-    dt = getattr(a, 'dtype', a)
+    dt = np_support.from_dtype(np.promote_types(
+        np_support.as_dtype(getattr(a, 'dtype', a)),
+        np_support.as_dtype(getattr(b, 'dtype', b))))
 
     def kron_impl(a, b):
 
