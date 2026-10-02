@@ -33,6 +33,11 @@ class Registry(object):
 
         The decorated implementation has the signature
         (context, builder, sig, args).
+
+        Notes
+        -----
+        Use of this API is discouraged. See coding_guidelines.rst in the
+        developer docs.
         """
         def decorate(impl):
             self.functions.append((impl, func, argtys))
@@ -51,6 +56,11 @@ class Registry(object):
 
         The decorated implementation will have the signature
         (context, builder, typ, val).
+
+        Notes
+        -----
+        Use of this API is discouraged. See coding_guidelines.rst in the
+        developer docs.
         """
         def decorate(impl):
             return self._decorate_attr(impl, ty, attr, self.getattrs,
@@ -65,6 +75,11 @@ class Registry(object):
         (context, builder, typ, val, attr).  The implementation is
         called for attributes which haven't been explicitly registered
         with lower_getattr().
+
+        Notes
+        -----
+        Use of this API is discouraged. See coding_guidelines.rst in the
+        developer docs.
         """
         return self.lower_getattr(ty, None)
 
@@ -75,6 +90,11 @@ class Registry(object):
 
         The decorated implementation will have the signature
         (context, builder, sig, args).
+
+        Notes
+        -----
+        Use of this API is discouraged. See coding_guidelines.rst in the
+        developer docs.
         """
         def decorate(impl):
             return self._decorate_attr(impl, ty, attr, self.setattrs,
@@ -89,6 +109,11 @@ class Registry(object):
         (context, builder, sig, args, attr).  The implementation is
         called for attributes which haven't been explicitly registered
         with lower_setattr().
+
+        Notes
+        -----
+        Use of this API is discouraged. See coding_guidelines.rst in the
+        developer docs.
         """
         return self.lower_setattr(ty, None)
 
@@ -99,6 +124,11 @@ class Registry(object):
 
         The decorated implementation will have the signature
         (context, builder, fromty, toty, val).
+
+        Notes
+        -----
+        Use of this API is discouraged. See coding_guidelines.rst in the
+        developer docs.
         """
         def decorate(impl):
             self.casts.append((impl, (fromty, toty)))
@@ -111,6 +141,11 @@ class Registry(object):
 
         The decorated implementation will have the signature
         (context, builder, ty, pyval).
+
+        Notes
+        -----
+        Use of this API is discouraged. See coding_guidelines.rst in the
+        developer docs.
         """
         def decorate(impl):
             self.constants.append((impl, (ty,)))
@@ -132,6 +167,11 @@ class RegistryLoader(BaseRegistryLoader):
 # (functions, attributes, type casts)
 builtin_registry = Registry('builtin_registry')
 
+
+# Notes
+# -----
+# Use of the following ``lower_*`` APIs is discouraged.
+# See coding_guidelines.rst in the developer docs.
 lower_builtin = builtin_registry.lower
 lower_getattr = builtin_registry.lower_getattr
 lower_getattr_generic = builtin_registry.lower_getattr_generic

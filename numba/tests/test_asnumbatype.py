@@ -18,6 +18,7 @@ from numba.core.extending import (register_model, type_callable, unbox,
 from numba.core.types import Number
 from numba.core.typing.typeof import typeof, typeof_impl
 from numba.core.typing.asnumbatype import as_numba_type, AsNumbaTypeRegistry
+from numba.core.utils import PYVERSION
 from numba.experimental.jitclass import jitclass
 from numba.tests.support import TestCase
 
@@ -53,6 +54,29 @@ class TestAsNumbaType(TestCase):
             self.assertEqual(as_numba_type(ty), ty)
 
     def test_single_containers(self):
+        # Native container types
+        self.assertEqual(
+            as_numba_type(list[float]),
+            types.ListType(self.float_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(dict[float, str]),
+            types.DictType(self.float_nb_type, self.str_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(set[complex]),
+            types.SetType(self.complex_nb_type),
+        )
+        self.assertEqual(
+            as_numba_type(tuple[float, float]),
+            types.Tuple([self.float_nb_type, self.float_nb_type]),
+        )
+        self.assertEqual(
+            as_numba_type(tuple[float, complex]),
+            types.Tuple([self.float_nb_type, self.complex_nb_type]),
+        )
+
+        # Corresponding deprecated aliases
         self.assertEqual(
             as_numba_type(py_typing.List[float]),
             types.ListType(self.float_nb_type),
@@ -63,7 +87,7 @@ class TestAsNumbaType(TestCase):
         )
         self.assertEqual(
             as_numba_type(py_typing.Set[complex]),
-            types.Set(self.complex_nb_type),
+            types.SetType(self.complex_nb_type),
         )
         self.assertEqual(
             as_numba_type(py_typing.Tuple[float, float]),
@@ -95,11 +119,34 @@ class TestAsNumbaType(TestCase):
         self.assertIn("Cannot type Union that is not an Optional",
                       str(raises.exception))
 
+    @unittest.skipUnless(PYVERSION >= (3, 14),
+                         "Syntax only supported from 3.14 onwards")
+    def test_optional_syntax_OR(self):
+        self.assertEqual(as_numba_type(int | None),
+                         types.Optional(self.int_nb_type))
+
     def test_nested_containers(self):
-        IntList = py_typing.List[int]
         self.assertEqual(
-            as_numba_type(py_typing.List[IntList]),
+            as_numba_type(list[list[int]]),
             types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(list[py_typing.List[int]]),
+            types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(py_typing.List[list[int]]),
+            types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(py_typing.List[py_typing.List[int]]),
+            types.ListType(types.ListType(self.int_nb_type)),
+        )
+        self.assertEqual(
+            as_numba_type(list[dict[float, bool]]),
+            types.ListType(
+                types.DictType(self.float_nb_type, self.bool_nb_type)
+            ),
         )
         self.assertEqual(
             as_numba_type(py_typing.List[py_typing.Dict[float, bool]]),
@@ -110,7 +157,7 @@ class TestAsNumbaType(TestCase):
         self.assertEqual(
             as_numba_type(
                 py_typing.Set[py_typing.Tuple[py_typing.Optional[int], float]]),
-            types.Set(types.Tuple(
+            types.SetType(types.Tuple(
                 [types.Optional(self.int_nb_type), self.float_nb_type])),
         )
 
@@ -155,6 +202,26 @@ class TestAsNumbaType(TestCase):
         ]
 
         for bad_py_type in any_types:
+            with self.assertRaises(TypingError) as raises:
+                as_numba_type(bad_py_type)
+            self.assertIn(
+                "Cannot infer Numba type of Python type",
+                str(raises.exception),
+            )
+
+    def test_non_homogenous_type_throws(self):
+        # Non-generic types of native container are not strictly homogeneous,
+        # therefore not supported. Also, tuples with inhomogeneous types are
+        # excluded.
+        native_no_args_types = [
+            list,
+            set,
+            dict,
+            tuple,
+            tuple[int, list],
+        ]
+
+        for bad_py_type in native_no_args_types:
             with self.assertRaises(TypingError) as raises:
                 as_numba_type(bad_py_type)
             self.assertIn(

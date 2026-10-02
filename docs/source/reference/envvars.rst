@@ -126,6 +126,19 @@ These variables influence what is printed out during compilation of
    allocation and ``0xDE`` on deallocation, both to help with debugging memory
    leaks.
 
+.. envvar:: NUMBA_DEBUG_NRT_STACK_LIMIT
+
+   :ref:`Numba run time (NRT) <arch-numba-runtime>` calls to reference counting
+   operations will print `n` frames of backtrace from the stack present at the time
+   the call was generated during compilation. The purpose of this is to make it
+   easier to locate the code responsible for generating reference counting
+   operations. This environment variable has no effect unless the environment
+   variable ``NUMBA_DEBUG_NRT`` is enabled. Default value is zero.
+
+   Note that this functionality isn't cache friendly, so it should be used with
+   caution. It changes ABI call interface so users are required to clean the cache
+   and recompile their code after setting the flag.
+
 .. envvar:: NUMBA_NRT_STATS
 
    If set to non-zero, enable the
@@ -464,6 +477,13 @@ Options for the compilation cache.
 
     Also see :ref:`docs on cache sharing <cache-sharing>` and
     :ref:`docs on cache clearing <cache-clearing>`
+
+    .. warning::
+
+        The on-disk cache uses :mod:`pickle`, so loading a malicious
+        cache file can execute arbitrary code. Do not set
+        ``NUMBA_CACHE_DIR`` to a shared, world-writable, or otherwise
+        untrusted location (see :ref:`cache-security`).
 
 .. envvar:: NUMBA_CACHE_LOCATOR_CLASSES
 

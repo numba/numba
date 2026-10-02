@@ -9,7 +9,7 @@ from numba import types
 from numba.tests.support import TestCase, MemoryLeakMixin
 from numba.np.random.generator_methods import _get_proper_func
 from numba.np.random.generator_core import next_uint32, next_uint64, next_double
-from numpy.random import MT19937, Generator
+from numpy.random import MT19937, PCG64, Generator
 from numba.core.errors import TypingError
 from numba.tests.support import run_in_new_process_caching, SerialMixin
 
@@ -1223,6 +1223,37 @@ class TestRandomGenerators(MemoryLeakMixin, TestCase):
                     x.binomial(n, p, size=size)
                 self.check_numpy_parity(dist_func, None,
                                         None, size, None, 0)
+
+    def test_binomial_btpe_squeeze_parity(self):
+        # Regression test guarding the BTPE sign correction fix in
+        # distributions.c. The PCG64 state below exercises the rejection
+        # window where the corrected error terms flip the accept/reject
+        # outcome: 238 with numpy >= 2.5's squeeze, 227 before.
+        # https://github.com/numpy/numpy/pull/31238
+        from numba.np.numpy_support import numpy_version
+
+        state = {
+            'bit_generator': 'PCG64',
+            'state': {
+                'state': 339225526786748945562563845880185242573,
+                'inc': 114135179160287400024908587472913682319,
+            },
+            'has_uint32': 0,
+            'uinteger': 0,
+        }
+
+        def make_rng():
+            bg = PCG64()
+            bg.state = state
+            return Generator(bg)
+
+        @numba.jit
+        def foo(rng):
+            return rng.binomial(500, 0.5)
+
+        expected = 238 if numpy_version >= (2, 5) else 227
+        self.assertEqual(foo.py_func(make_rng()), expected)
+        self.assertEqual(foo(make_rng()), expected)
 
     def test_binomial_specific_issues(self):
         # The algorithm for "binomial" is quite involved. This test contains
