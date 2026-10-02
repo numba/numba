@@ -613,6 +613,65 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertIn('array.astype if dtype is a string it must be constant',
                       str(raises.exception))
 
+    def test_array_astype_copy(self):
+        # See issue #10085: astype(dtype, copy=False) must avoid the copy when
+        # no conversion is needed, and still copy when one is.
+
+        def copy_true(arr):
+            return arr.astype(np.float64, copy=True)
+
+        def copy_false(arr):
+            return arr.astype(np.float64, copy=False)
+
+        # No conversion needed: copy=False returns a view aliasing the input,
+        # copy=True (and the default) returns an independent array.
+        arr = np.arange(8, dtype=np.float64)
+
+        got = njit(copy_false)(arr)
+        self.assertEqual(got.ctypes.data, arr.ctypes.data)  # shares memory
+
+        got = njit(copy_true)(arr)
+        self.assertNotEqual(got.ctypes.data, arr.ctypes.data)  # independent
+        self.assertPreciseEqual(got, arr.astype(np.float64))
+
+        # Conversion needed: copy=False must still allocate a new array.
+        iarr = np.arange(8, dtype=np.int32)
+        got = njit(copy_false)(iarr)
+        self.assertNotEqual(got.ctypes.data, iarr.ctypes.data)
+        self.assertPreciseEqual(got, iarr.astype(np.float64))
+
+        # Non-contiguous layout (1D and 2D column slice)
+        nc_1d = np.arange(12.0)[::2]
+        got = njit(copy_false)(nc_1d)
+        self.assertTrue(np.shares_memory(nc_1d, got))
+
+        col_2d = np.arange(12.0).reshape(3, 4)[:, :2]
+        got = njit(copy_false)(col_2d)
+        self.assertTrue(np.shares_memory(col_2d, got))
+
+        # Readonly input array
+        ro_arr = np.arange(4.0)
+        ro_arr.flags.writeable = False
+        got = njit(copy_false)(ro_arr)
+        self.assertTrue(np.shares_memory(ro_arr, got))
+
+        # parallel=True
+        @njit(parallel=True)
+        def par_assign(n):
+            a = np.zeros(n)
+            b = a.astype(np.float64, copy=False)
+            b[:] = 5.0
+            return a
+
+        self.assertPreciseEqual(par_assign(4), np.full(4, 5.0))
+
+        # copy must be a compile-time constant.
+        with self.assertRaises(TypingError):
+            @njit
+            def foo(arr, c):
+                return arr.astype(np.float64, copy=c)
+            foo(arr, False)
+
     def test_array_tobytes(self):
         self.check_layout_dependent_func(
             array_tobytes,
