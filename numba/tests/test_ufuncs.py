@@ -380,6 +380,39 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     def test_remainder_ufunc(self):
         self.basic_ufunc_test(np.remainder)
 
+    def test_signed_divrem_min_int_overflow(self):
+        for dtype in (np.int8, np.int16, np.int32, np.int64):
+            info = np.iinfo(dtype)
+            values = (info.min, info.min + 1, -1, 0, 1, info.max)
+            operator_dtype = np.promote_types(dtype, np.intp).type
+
+            @njit
+            def ufuncs(x, y):
+                return (np.remainder(x, y), np.mod(x, y), np.divmod(x, y),
+                        np.floor_divide(x, y))
+
+            @njit
+            def operators(x, y):
+                return x % y, x // y
+
+            for x, y in itertools.product(values, repeat=2):
+                with np.errstate(divide='ignore', invalid='ignore',
+                                 over='ignore'):
+                    a, b = dtype(x), dtype(y)
+                    remainder = np.remainder(a, b)
+                    floor_divide = np.floor_divide(a, b)
+                    expected = (remainder, np.mod(a, b), np.divmod(a, b),
+                                floor_divide)
+                    if y:
+                        promoted_a = operator_dtype(a)
+                        promoted_b = operator_dtype(b)
+                        operator_expected = (promoted_a % promoted_b,
+                                             promoted_a // promoted_b)
+                self.assertPreciseEqual(ufuncs(a, b), expected)
+                if y:
+                    self.assertPreciseEqual(operators(a, b),
+                                            operator_expected)
+
     def test_mod_ufunc(self):
         additional_inputs = [
             ((np.uint64(np.iinfo(np.uint64).max), np.uint64(16)), types.uint64)
