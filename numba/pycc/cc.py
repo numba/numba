@@ -42,6 +42,14 @@ class CC(object):
     _extra_ldflags = {
         # Comment out due to odd behavior with GCC 4.9+ with LTO
         # 'posix': ['-flto'],
+        # On macOS, if the object files carry debug info (e.g. when the
+        # interpreter's sysconfig compiles extensions with ``-g``), ld
+        # embeds an N_OSO debug-map entry per object holding the object's
+        # absolute path and mtime. Because pycc builds the objects in a
+        # randomly-named temp directory, those paths (and mtimes) make the
+        # emitted binary non-reproducible (see issue #10668). ``-Wl,-S``
+        # strips the debug map while keeping the symbols needed at runtime.
+        'darwin': ['-Wl,-S'],
         }
 
     def __init__(self, extension_name, source_module=None):
@@ -162,9 +170,19 @@ class CC(object):
 
     def _get_mixin_defines(self):
         # Macro definitions required by modulemixin.c
+        from numba import _helperlib
         return [
             ('PYCC_MODULE_NAME', self._basename),
             ('PYCC_USE_NRT', int(self._use_nrt)),
+            # modulemixin.c #includes _helperlib.c -> _lapack.c, whose Fortran
+            # integer width (LP64 vs ILP64) is fixed at compile time by
+            # NUMBA_LAPACK_BUILD_ILP64.  It must match the numba this AOT module
+            # is built with, otherwise the AOT BLAS/LAPACK wrappers pass
+            # wrong-width integers to scipy at runtime -- silent corruption or a
+            # crash (see e.g. an ILP64 numba: np.dot in an AOT module segfaults
+            # in the BLAS call).  Mirror numba's own build width.
+            ('NUMBA_LAPACK_BUILD_ILP64',
+             int(getattr(_helperlib, "LAPACK_BUILD_ILP64", 0))),
             ]
 
     def _get_extra_cflags(self):

@@ -181,7 +181,7 @@ class Type(metaclass=_TypeMetaclass):
         return signature(self, # return_type
                          *args)
 
-    def __getitem__(self, args):
+    def __getitem__(self, args, /):
         """
         Return an array of this type.
         """
@@ -215,7 +215,7 @@ class Type(metaclass=_TypeMetaclass):
 
         return ndim, layout
 
-    def cast_python_value(self, args):
+    def cast_python_value(self, args, /):
         raise NotImplementedError
 
 

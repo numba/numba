@@ -45,11 +45,18 @@ jobs:
     - script: |
         set -e
         export PATH=$HOME/miniconda3/bin:$PATH
-        # using conda-forge because main only have version < 1.0
-        conda create -n mypy311 -y -c conda-forge python=3.11 mypy 
-        conda run -n mypy311 mypy
-      displayName: 'Mypy'
-      condition: eq(variables['RUN_MYPY'], 'yes')
+        conda run -n $CONDA_ENV pip install -r maint/requirements_pyrefly.txt
+        conda run -n $CONDA_ENV pyrefly check --no-progress-bar --summary=full
+      displayName: 'Pyrefly check'
+      condition: eq(variables['RUN_PYREFLY'], 'yes')
+
+    - script: |
+        set -e
+        export PATH=$HOME/miniconda3/bin:$PATH
+        conda run -n $CONDA_ENV pip install -r maint/stubtest/requirements_stubtest.txt
+        conda run -n $CONDA_ENV python maint/stubtest.py
+      displayName: 'Stubtest'
+      condition: eq(variables['RUN_STUBTEST'], 'yes')
 
     - script: |
         set -e

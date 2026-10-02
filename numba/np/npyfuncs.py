@@ -291,7 +291,7 @@ def _fabs(context, builder, arg):
 
 def np_complex_div_impl(context, builder, sig, args):
     # Extracted from numpy/core/src/umath/loops.c.src,
-    # inspired by complex_div_impl
+    # inspired by numba.cpython.numbers.complex_div_impl
     # variables named coherent with loops.c.src
     # This is implemented using the approach described in
     #   R.L. Smith. Algorithm 116: Complex division.

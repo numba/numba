@@ -1,5 +1,6 @@
 import collections
 import itertools
+import typing
 
 import numpy as np
 
@@ -16,6 +17,11 @@ Point = collections.namedtuple('Point', ('x', 'y', 'z'))
 Point2 = collections.namedtuple('Point2', ('x', 'y', 'z'))
 
 Empty = collections.namedtuple('Empty', ())
+
+class PointWithDefaults(typing.NamedTuple):
+    x: int
+    y: int = 2
+    z: int = 3
 
 def tuple_return_usecase(a, b):
     return a, b
@@ -483,6 +489,23 @@ class TestNamedTuple(TestCase, MemoryLeakMixin):
         check(make_point)
         check(make_point_kws)
 
+    def test_construct_with_defaults(self):
+        pyfunc = lambda x, z: PointWithDefaults(x, z=z)
+        cfunc = jit(nopython=True)(pyfunc)
+        for args in (5, 6), (5.5, 6j):
+            expected = pyfunc(*args)
+            got = cfunc(*args)
+            self.assertIs(type(got), type(expected))
+            self.assertPreciseEqual(got, expected)
+
+    def test_construct_with_defaults_and_access_field(self):
+        pyfunc = lambda x: PointWithDefaults(x).y
+        cfunc = jit(nopython=True)(pyfunc)
+        expected = pyfunc(1)
+        got = cfunc(1)
+        self.assertIs(type(got), type(expected))
+        self.assertPreciseEqual(got, expected)
+
     def test_type(self):
         # Test the type() built-in on named tuples
         pyfunc = type_usecase
@@ -610,6 +633,42 @@ class TestConversions(TestCase):
         msg = "No conversion from UniTuple(int32 x 2) to UniTuple(float32 x 1)"
         self.assertIn(msg, str(raises.exception))
 
+    def test_namedtuple_conversions(self):
+        check = self.check_conversion
+        fromty = types.NamedUniTuple(types.int32, 3, Point)
+        check(fromty, types.NamedUniTuple(types.float32, 3, Point), Point(4, 5, 6))
+        check(fromty,
+            types.NamedTuple((types.float32, types.int16, types.int32), Point),
+            Point(4, 5, 6))
+        aty = types.NamedUniTuple(types.int32, 0, Empty)
+        bty = types.NamedTuple((), Empty)
+        check(aty, bty, Empty())
+        check(bty, aty, Empty())
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.UniTuple(types.float32, 3), Point(4, 5, 6))
+        msg = "No conversion from Point(int32 x 3) to UniTuple(float32 x 3)"
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.NamedUniTuple(types.int32, 3, Point2),
+                Point(4, 5, 6))
+        msg = "No conversion from Point(int32 x 3) to Point2(int32 x 3)"
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(types.UniTuple(types.int32, 3),
+                types.NamedUniTuple(types.int32, 3, Point),
+                Point(4, 5, 6))
+        msg = "No conversion from UniTuple(int32 x 3) to Point(int32 x 3)"
+        self.assertIn(msg, str(raises.exception))
+
+        with self.assertRaises(errors.TypingError) as raises:
+            check(fromty, types.NamedUniTuple(types.none, 3, Point),
+                Point(4, 5, 6))
+        msg = "No conversion from Point(int32 x 3) to Point(none x 3)"
+        self.assertIn(msg, str(raises.exception))
+
 
 class TestMethods(TestCase):
 
@@ -720,6 +779,64 @@ class TestTupleBuild(TestCase):
         check(lambda a: tuple(a), (4, 5))
         # Heterogeneous
         check(lambda a: tuple(a), (4, 5.5))
+
+    def test_many_positional_args_are_one_build_tuple(self):
+        # CPython emits BUILD_LIST/LIST_APPEND/LIST_TO_TUPLE/CALL_FUNCTION_EX
+        # for calls with more than 30 arguments. Coalescing the appends keeps
+        # the IR (and the LLVM generated from it) linear in the argument count
+        # instead of quadratic.
+        from numba.core import compiler, ir
+
+        n_args = 35
+        glbls = {"g": jit(lambda *a: a)}
+        # variables, not constants: CPython builds a constant tuple and a single
+        # LIST_EXTEND for literal arguments, which is not the path under test
+        src = "def f(x):\n    return g(%s)\n" % ", ".join(["x"] * n_args)
+        exec(src, glbls)
+
+        func_ir = compiler.run_frontend(glbls["f"])
+        build_tuples = [
+            stmt.value
+            for blk in func_ir.blocks.values()
+            for stmt in blk.body
+            if isinstance(stmt, ir.Assign)
+            and isinstance(stmt.value, ir.Expr)
+            and stmt.value.op == "build_tuple"
+        ]
+        # all the appends land in a single build_tuple (the empty list the
+        # peephole starts from may survive as dead code)
+        self.assertEqual(
+            [len(bt.items) for bt in build_tuples if bt.items], [n_args]
+        )
+        binops = [
+            stmt
+            for blk in func_ir.blocks.values()
+            for stmt in blk.body
+            if isinstance(stmt, ir.Assign)
+            and isinstance(stmt.value, ir.Expr)
+            and stmt.value.op == "binop"
+        ]
+        self.assertFalse(binops)
+
+        self.assertPreciseEqual(glbls["f"](3), (3,) * n_args)
+
+    def test_many_positional_args_mixed_with_unpack(self):
+        # runs of appends are coalesced around the extends, order preserved
+        @jit
+        def inner(*args):
+            return args
+
+        n = 33
+        glbls = {"inner": inner}
+        src = (
+            "def f(t, x):\n    return inner(%s, *t, x, *t)\n"
+            % ", ".join(["x"] * n)
+        )
+        exec(src, glbls)
+        pyfunc = glbls["f"]
+        cfunc = jit(pyfunc)
+        for arg in ((4, 5), (4, 5.5)):
+            self.assertPreciseEqual(cfunc(arg, 1), pyfunc(arg, 1))
 
     def test_unpack_with_predicate_fails(self):
         # this fails as the list_to_tuple/list_extend peephole bytecode

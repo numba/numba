@@ -14,6 +14,7 @@ from numba.tests.support import (
     TestCase, unittest, captured_stdout, MemoryLeakMixin,
     skip_parfors_unsupported, skip_unless_scipy, expected_failure_py311,
     expected_failure_py312, expected_failure_py313, expected_failure_py314,
+    expected_failure_py315,
 )
 
 
@@ -694,6 +695,7 @@ class TestTryExceptOtherControlFlow(TestCase):
     @expected_failure_py312
     @expected_failure_py313
     @expected_failure_py314
+    @expected_failure_py315
     def test_objmode(self):
         @njit
         def udt():
@@ -716,6 +718,7 @@ class TestTryExceptOtherControlFlow(TestCase):
     @expected_failure_py312
     @expected_failure_py313
     @expected_failure_py314
+    @expected_failure_py315
     def test_objmode_output_type(self):
         def bar(x):
             return np.asarray(list(reversed(x.tolist())))

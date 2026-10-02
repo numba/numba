@@ -24,6 +24,8 @@ def roots_impl(p):
     else:
         cast_t = as_dtype(ty)
 
+    real_output = not isinstance(ty, types.Complex)
+
     def roots_impl(p):
         # impl based on numpy:
         # https://github.com/numpy/numpy/blob/master/numpy/lib/polynomial.py
@@ -49,6 +51,17 @@ def roots_impl(p):
             A = np.diag(np.ones((n - 2,), cast_t), 1).T
             A[0, :] = -p[1:] / p[0]  # normalize
             roots = np.linalg.eigvals(A)
+            # roots assumed eigvals would only return real values for real
+            # input; domain-change raises were handled inside eigvals. From
+            # NumPy 2.5 on, eigvals always returns complex, so roots must
+            # check for a nonzero imag part and raise if needed, then drop
+            # the zero imag parts. Branch pruned for complex input.
+            if real_output:
+                if np.any(roots.imag):
+                    raise ValueError(
+                        "a real domain argument to roots cannot produce "
+                        "a complex domain result")
+                roots = roots.real.copy()
         else:
             roots = np.zeros(0, dtype=cast_t)
 
