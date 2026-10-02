@@ -542,10 +542,13 @@ class ArrayAttribute(AttributeTemplate):
             raise TypingError("astype(%s) not supported on %s: "
                               "cannot convert from %s to %s"
                               % (dtype, ary, ary.dtype, dtype))
-        layout = ary.layout if ary.layout in 'CF' else 'C'
-        # reset the write bit irrespective of whether the cast type is the same
-        # as the current dtype, this replicates numpy
-        retty = ary.copy(dtype=dtype, layout=layout, readonly=False)
+        if not copy.literal_value and ary.dtype == dtype:
+            layout = ary.layout
+            readonly = not ary.mutable
+        else:
+            layout = ary.layout if ary.layout in 'CF' else 'C'
+            readonly = False
+        retty = ary.copy(dtype=dtype, layout=layout, readonly=readonly)
 
         def astype_stub(dtype, copy=True):
             pass

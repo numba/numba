@@ -640,6 +640,31 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertNotEqual(got.ctypes.data, iarr.ctypes.data)
         self.assertPreciseEqual(got, iarr.astype(np.float64))
 
+        # Non-contiguous layout (1D and 2D column slice)
+        nc_1d = np.arange(12.0)[::2]
+        got = njit(copy_false)(nc_1d)
+        self.assertTrue(np.shares_memory(nc_1d, got))
+
+        col_2d = np.arange(12.0).reshape(3, 4)[:, :2]
+        got = njit(copy_false)(col_2d)
+        self.assertTrue(np.shares_memory(col_2d, got))
+
+        # Readonly input array
+        ro_arr = np.arange(4.0)
+        ro_arr.flags.writeable = False
+        got = njit(copy_false)(ro_arr)
+        self.assertTrue(np.shares_memory(ro_arr, got))
+
+        # parallel=True
+        @njit(parallel=True)
+        def par_assign(n):
+            a = np.zeros(n)
+            b = a.astype(np.float64, copy=False)
+            b[:] = 5.0
+            return a
+
+        self.assertPreciseEqual(par_assign(4), np.full(4, 5.0))
+
         # copy must be a compile-time constant.
         with self.assertRaises(TypingError):
             @njit
