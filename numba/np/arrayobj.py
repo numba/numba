@@ -672,7 +672,7 @@ def broadcast_index(builder, idx, extent):
     Map a loop counter onto a dimension that is broadcast against it, i.e.
     whose extent is either 1 or the full loop extent.
 
-    Note: using builder.srem instead of umin would trigger additional idivq 
+    Note: using builder.srem instead of umin would trigger additional idivq
     operations, which cause performance issues for large arrays.
     """
     fnty = ir.FunctionType(idx.type, [idx.type, idx.type])
