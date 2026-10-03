@@ -1,0 +1,7 @@
+Fix the result dtype of ``np.kron`` for mixed input dtypes
+----------------------------------------------------------
+
+``np.kron`` now returns the promotion of the dtypes of its two inputs, as
+NumPy does. It used the dtype of its first input, which truncated the result,
+e.g. ``np.kron(np.array([True]), np.array([5]))`` returned ``[True]`` instead
+of ``[5]``.
