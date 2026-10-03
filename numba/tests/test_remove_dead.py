@@ -204,6 +204,174 @@ class TestRemoveDead(TestCase):
             # recover global state
             ir_utils.alias_func_extensions = old_ext_handlers
 
+    def test_alias_dictionary_stored_value(self):
+        for method in ('get', 'setdefault', 'pop'):
+            @jit
+            def func(key):
+                value = np.zeros(2)
+                d = {1: value, 2: value}
+                default = np.ones(2)
+                if method == 'get':
+                    result = d.get(key, default)
+                elif method == 'setdefault':
+                    result = d.setdefault(key, default)
+                else:
+                    result = d.pop(key, default)
+                result[0] += 1000.
+                result[1] = 42.
+
+                # Inlining the closure runs untyped dead-code elimination.
+                def closure():
+                    return 1
+
+                _ = closure()
+                return d[2]
+
+            for key in (1, 3):
+                with self.subTest(method=method, key=key):
+                    self.assertPreciseEqual(func(key), func.py_func(key))
+
+    def test_alias_dictionary_default_value(self):
+        for method in ('get', 'setdefault', 'pop'):
+            @jit
+            def func(key):
+                d = {1: np.zeros(2)}
+                default = np.ones(2)
+                if method == 'get':
+                    result = d.get(key, default)
+                elif method == 'setdefault':
+                    result = d.setdefault(key, default)
+                else:
+                    result = d.pop(key, default)
+                result[0] += 1000.
+                result[1] = 42.
+
+                def closure():
+                    return 1
+
+                _ = closure()
+                return default
+
+            for key in (1, 3):
+                with self.subTest(method=method, key=key):
+                    self.assertPreciseEqual(func(key), func.py_func(key))
+
+    def test_alias_dictionary_default_keyword(self):
+        for method in ('get', 'setdefault', 'pop'):
+            @jit
+            def func():
+                d = numba.typed.Dict.empty(types.int64, types.float64[:])
+                default = np.ones(2)
+                if method == 'get':
+                    result = d.get(1, default=default)
+                elif method == 'setdefault':
+                    result = d.setdefault(1, default=default)
+                else:
+                    result = d.pop(1, default=default)
+                result[0] += 1000.
+
+                def closure():
+                    return 1
+
+                _ = closure()
+                return default
+
+            with self.subTest(method=method):
+                self.assertPreciseEqual(func(), func.py_func())
+
+    def test_alias_dictionary_default_vararg(self):
+        for method in ('get', 'setdefault', 'pop'):
+            for mixed in (False, True):
+                @jit
+                def func():
+                    d = numba.typed.Dict.empty(types.int64, types.float64[:])
+                    default = np.arange(6.)[::-1]
+                    args = (1, default)
+                    if method == 'get':
+                        if mixed:
+                            result = d.get(1, *(default,))
+                        else:
+                            result = d.get(*args)
+                    elif method == 'setdefault':
+                        if mixed:
+                            result = d.setdefault(1, *(default,))
+                        else:
+                            result = d.setdefault(*args)
+                    else:
+                        if mixed:
+                            result = d.pop(1, *(default,))
+                        else:
+                            result = d.pop(*args)
+                    result[0] += 1000.
+                    result[-1] = 42.
+
+                    def closure():
+                        return 1
+
+                    _ = closure()
+                    return default
+
+                with self.subTest(method=method, mixed=mixed):
+                    self.assertPreciseEqual(func(), func.py_func())
+
+    def test_alias_dictionary_setdefault_comprehension(self):
+        @jit
+        def func():
+            d = numba.typed.Dict.empty(types.int64, types.float64[:])
+            result = d.setdefault(1, np.zeros(2))
+            result[0] += 1000.
+            result[1] = 42.
+            _ = {i: 1 for i in range(3)}
+            return d[1]
+
+        self.assertPreciseEqual(func(), func.py_func())
+
+    def test_alias_dictionary_none_default(self):
+        for method in ('get', 'pop'):
+            @jit
+            def func(key):
+                value = np.zeros(2)
+                d = {1: value, 2: value}
+                if method == 'get':
+                    result = d.get(key)
+                else:
+                    result = d.pop(key, None)
+                if result is not None:
+                    result[0] += 1000.
+                    result[1] = 42.
+
+                def closure():
+                    return 1
+
+                _ = closure()
+                return d[2]
+
+            for key in (1, 3):
+                with self.subTest(method=method, key=key):
+                    self.assertPreciseEqual(func(key), func.py_func(key))
+
+    def test_alias_dictionary_mutation_order(self):
+        @jit
+        def func(key):
+            value = np.zeros(2)
+            default = np.ones(2)
+            d = {1: value}
+            default[0] += 10.
+            result = d.setdefault(key, default)
+            result[0] += 1000.
+            default[1] += 100.
+            result[1] += 42.
+
+            def closure():
+                return 1
+
+            _ = closure()
+            return d[key], default
+
+        for key in (1, 3):
+            with self.subTest(key=key):
+                self.assertPreciseEqual(func(key), func.py_func(key))
+
     def test_rm_dead_rhs_vars(self):
         """make sure lhs variable of assignment is considered live if used in
         rhs (test for #6715).
