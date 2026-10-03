@@ -1,0 +1,5 @@
+Remove the per-element integer division from advanced indexing
+--------------------------------------------------------------
+
+Advanced (fancy) array indexing is now implemented more efficiently, reversing
+a 2x performance regression for large arrays introduced in Numba v0.66.0.
