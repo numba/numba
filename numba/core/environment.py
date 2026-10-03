@@ -26,7 +26,8 @@ class Environment(_dynfunc.Environment):
             return inst
 
     def can_cache(self):
-        is_dyn = '__name__' not in self.globals
+        is_dyn = ('__name__' not in self.globals
+                  or self.globals.get('__name__') is None)
         return not is_dyn
 
     def __reduce__(self):
@@ -48,8 +49,11 @@ def _rebuild_env(modname, consts, env_name):
     if env is not None:
         return env
 
-    mod = importlib.import_module(modname)
-    env = Environment(mod.__dict__)
+    if modname is None:
+        mod = None
+    else:
+        mod = importlib.import_module(modname)
+    env = Environment(mod.__dict__ if mod is not None else {})
     env.consts[:] = consts
     env.env_name = env_name
     # Cache loaded object
