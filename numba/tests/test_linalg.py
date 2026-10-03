@@ -2729,6 +2729,24 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
         msg = "only supports 'C' or 'F' layout"
         self.assert_error(cfunc, args, msg, err=errors.TypingError)
 
+    def test_kron_mixed_dtypes(self):
+        cfunc = jit(kron_matrix)
+        cases = [
+            (np.array([True]), np.array([5])),
+            (np.arange(4).reshape(2, 2), np.ones((2, 3))),
+            (np.array([1, 2], np.int8), np.array([300], np.int16)),
+            (np.array([-1, 2], np.int8), np.array([200], np.uint8)),
+            (np.array([1.5], np.float32), np.array([[2]], np.int16)),
+            (np.array([[1j]]), np.array([2.5])),
+            (np.array([1, 2]), 3.5),
+            (2, np.array([1.5, 2.5])),
+        ]
+        for a, b in cases:
+            expected = kron_matrix(a, b)
+            got = cfunc(a, b)
+            self.assertEqual(got.dtype, expected.dtype)
+            np.testing.assert_array_equal(got, expected)
+
 
 class TestHelpers(TestCase):
     def test_copy_to_fortran_order(self):
