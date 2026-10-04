@@ -850,6 +850,89 @@ class TestCacheZipLib(DispatcherCacheUsecasesTest):
         locator = ZipCacheLocator.from_function(mock_func, non_zip_path)
         self.assertIsNone(locator)
 
+    def test_zip_readonly_home_fails_at_import(self):
+        # A zip-backed cache=True function used to compile, then raise
+        # PermissionError from makedirs on the first call when the user cache
+        # could not be created. A module on disk fails at import instead.
+        source = (
+            "from numba import njit\n\n"
+            "@njit(cache=True)\n"
+            "def f():\n"
+            "    return 1\n"
+        )
+        tmp = temp_directory("test_zip_readonly_cache")
+        zip_path = os.path.join(tmp, "toy.zip")
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("toy.py", source)
+        home = os.path.join(tmp, "home")
+        os.mkdir(home)
+        os.chmod(home, 0o555)
+        env = os.environ.copy()
+        env.pop("NUMBA_CACHE_DIR", None)
+        env.pop("XDG_CACHE_HOME", None)
+        env["HOME"] = home
+        env["PYTHONPATH"] = zip_path
+        try:
+            popen = subprocess.Popen(
+                [sys.executable, "-c", "import toy; print(toy.f())"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+            )
+            out, err = popen.communicate()
+        finally:
+            os.chmod(home, 0o755)
+        self.assertNotEqual(popen.returncode, 0, msg=out + err)
+        message = (out + err).decode()
+        self.assertNotIn("PermissionError", message)
+        self.assertIn("no locator available", message)
+
+    def test_zip_cache_dir_overrides_readonly_home(self):
+        source = (
+            "from numba import njit\n\n"
+            "@njit(cache=True)\n"
+            "def f():\n"
+            "    return 1\n"
+        )
+        tmp = temp_directory("test_zip_cache_dir")
+        zip_path = os.path.join(tmp, "toy.zip")
+        with zipfile.ZipFile(zip_path, "w") as zf:
+            zf.writestr("toy.py", source)
+        home = os.path.join(tmp, "home")
+        cache = os.path.join(tmp, "cache")
+        os.mkdir(home)
+        os.mkdir(cache)
+        os.chmod(home, 0o555)
+        env = os.environ.copy()
+        env.pop("XDG_CACHE_HOME", None)
+        env["HOME"] = home
+        env["NUMBA_CACHE_DIR"] = cache
+        env["PYTHONPATH"] = zip_path
+        code = "import toy; print(toy.f())"
+        try:
+            first = subprocess.run(
+                [sys.executable, "-c", code],
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            second = subprocess.run(
+                [sys.executable, "-c", code],
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+        finally:
+            os.chmod(home, 0o755)
+        self.assertEqual(first.returncode, 0, msg=first.stderr)
+        self.assertEqual(first.stdout.strip(), "1")
+        self.assertEqual(second.returncode, 0, msg=second.stderr)
+        self.assertEqual(second.stdout.strip(), "1")
+        self.assertTrue(
+            os.listdir(cache),
+            msg="expected cache files under NUMBA_CACHE_DIR",
+        )
+
 
 @skip_parfors_unsupported
 class TestSequentialParForsCache(DispatcherCacheUsecasesTest):
