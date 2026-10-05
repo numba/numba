@@ -2407,6 +2407,9 @@ class ArrayAnalysis(object):
         # TODO: handle multi-D input arrays (calc array size)
         return None
 
+    def _analyze_op_call_numpy_astype(self, scope, equiv_set, loc, args, kws):
+        return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
+
     def _analyze_op_call_numpy_copy(self, scope, equiv_set, loc, args, kws):
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 

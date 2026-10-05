@@ -631,6 +631,21 @@ class TestArrayAnalysis(TestCase):
                                        self.with_equiv('F', 'D'),],
                                idempotent=False)
 
+    def test_astype(self):
+        def test_1(m, n):
+            A = np.ones((m, n))
+            B = A.astype(np.float32)
+            return B
+        self._compile_and_test(test_1, (types.intp, types.intp),
+                               equivs=[self.with_equiv('A', 'B')])
+
+        def test_2(n):
+            A = np.ones(n)
+            B = A.astype(np.float32, copy=False)
+            return B
+        self._compile_and_test(test_2, (types.intp,),
+                               equivs=[self.with_equiv('A', 'B')])
+
     @skip_unless_scipy
     def test_numpy_calls(self):
         def test_zeros(n):
