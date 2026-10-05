@@ -68,8 +68,8 @@ class EntireIterator():
         self.extra_iter_ptrs = extra_iter_ptrs if extra_iter_ptrs else []
 
     def _has_static_unit_stride(self):
-        return (self.dim == self.aryty.ndim - 1 and self.aryty.layout == 'C' or 
-               self.dim == 0 and self.aryty.layout == 'F')
+        return (self.dim == self.aryty.ndim - 1 and self.aryty.layout == 'C' or
+                self.dim == 0 and self.aryty.layout == 'F')
 
     def prepare(self):
         builder = self.builder
