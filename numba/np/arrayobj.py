@@ -5546,9 +5546,9 @@ def array_astype(context, builder, sig, args):
     rettype = sig.return_type
 
     # `copy` defaults to True (NumPy semantics). When copy=False is passed as a
-    # compile-time constant and no actual conversion is required (identical array
-    # type: dtype, layout and mutability all match), return the input array
-    # without allocating or copying -- this makes a redundant astype() a no-op.
+    # compile-time constant and no actual conversion is required (dtype,
+    # layout, and mutability all match), return the input array without
+    # allocating or copying. This makes a redundant astype() a no-op.
     copy = True
     if len(sig.args) > 2 and isinstance(sig.args[2], types.BooleanLiteral):
         copy = sig.args[2].literal_value
