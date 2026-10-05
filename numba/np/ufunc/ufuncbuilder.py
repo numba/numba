@@ -8,7 +8,7 @@ from numba.core import config, targetconfig
 from numba.core.decorators import jit
 from numba.core.descriptors import TargetDescriptor
 from numba.core.extending import is_jitted
-from numba.core.errors import NumbaDeprecationWarning
+from numba.core.errors import NumbaDeprecationWarning, NumbaInvalidConfigWarning
 from numba.core.options import TargetOptions, include_default_options
 from numba.core.registry import cpu_target
 from numba.core.target_extension import dispatcher_registry, target_registry
@@ -116,6 +116,15 @@ class UFuncDispatcher(serialize.ReduceMixin):
 
         topt = self.targetoptions.copy()
         topt.update(targetoptions)
+
+        if topt.get("nogil", False):
+            warnings.warn(
+                "nogil is set but has no effect: ufuncs and gufuncs "
+                "compiled by @vectorize/@guvectorize always release the "
+                "GIL via the NumPy ufunc dispatch machinery, regardless "
+                "of this option.",
+                NumbaInvalidConfigWarning,
+            )
 
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, topt)

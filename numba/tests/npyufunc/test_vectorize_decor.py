@@ -3,6 +3,7 @@ import math
 import numpy as np
 
 from numba import int32, uint32, float32, float64, jit, vectorize
+from numba.core.errors import NumbaInvalidConfigWarning
 from numba.tests.support import tag, CheckWarningsMixin
 import unittest
 
@@ -120,17 +121,23 @@ class TestVectorizeNopythonArg(BaseVectorizeNopythonArg):
         self._test_target_nopython('parallel', [])
 
 
-class BaseVectorizeNogilArg(unittest.TestCase):
+class BaseVectorizeNogilArg(unittest.TestCase, CheckWarningsMixin):
     """
     Test passing the nogil argument to the vectorize decorator (issue #1317).
+
+    `nogil` is accepted (rather than raising KeyError) but has no actual
+    effect, since ufuncs always release the GIL via NumPy's ufunc dispatch.
+    A NumbaInvalidConfigWarning should be raised to make that explicit.
     """
     def _test_target_nogil(self, target, with_sig=True):
         a = np.array([2.0], dtype=np.float32)
         b = np.array([3.0], dtype=np.float32)
         sig = [float32(float32, float32)]
         args = with_sig and [sig] or []
-        f = vectorize(*args, target=target, nogil=True)(vector_add)
-        np.testing.assert_array_equal(f(a, b), a + b)
+        with self.check_warnings(["nogil is set but has no effect"],
+                                  category=NumbaInvalidConfigWarning):
+            f = vectorize(*args, target=target, nogil=True)(vector_add)
+            np.testing.assert_array_equal(f(a, b), a + b)
 
 
 class TestVectorizeNogilArg(BaseVectorizeNogilArg):

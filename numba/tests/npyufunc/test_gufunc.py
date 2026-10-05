@@ -4,9 +4,9 @@ import pickle
 import numpy as np
 
 from numba import void, float32, float64, int32, int64, jit, guvectorize
-from numba.core.errors import TypingError
+from numba.core.errors import NumbaInvalidConfigWarning, TypingError
 from numba.np.ufunc import GUVectorize
-from numba.tests.support import TestCase, MemoryLeakMixin
+from numba.tests.support import CheckWarningsMixin, TestCase, MemoryLeakMixin
 
 
 def matmulcore(A, B, C):
@@ -24,7 +24,7 @@ def axpy(a, x, y, out):
     out[0] = a * x  + y
 
 
-class TestGUFunc(MemoryLeakMixin, TestCase):
+class TestGUFunc(MemoryLeakMixin, TestCase, CheckWarningsMixin):
     target = 'cpu'
 
     def check_matmul_gufunc(self, gufunc):
@@ -49,6 +49,19 @@ class TestGUFunc(MemoryLeakMixin, TestCase):
         gufunc = guvectorize([void(float32[:,:], float32[:,:], float32[:,:])],
                              '(m,n),(n,p)->(m,p)',
                              target=self.target)(matmulcore)
+
+        self.check_matmul_gufunc(gufunc)
+
+    def test_guvectorize_nogil_warns(self):
+        # nogil is accepted (rather than raising KeyError, issue #1317) but
+        # has no effect, since gufuncs always release the GIL via NumPy's
+        # ufunc dispatch machinery.
+        with self.check_warnings(["nogil is set but has no effect"],
+                                  category=NumbaInvalidConfigWarning):
+            gufunc = guvectorize(
+                [void(float32[:, :], float32[:, :], float32[:, :])],
+                '(m,n),(n,p)->(m,p)',
+                target=self.target, nogil=True)(matmulcore)
 
         self.check_matmul_gufunc(gufunc)
 
