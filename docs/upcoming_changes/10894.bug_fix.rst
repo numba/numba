@@ -1,0 +1,7 @@
+Zip-backed caches use NUMBA_CACHE_DIR and fail at import if unwritable
+----------------------------------------------------------------------
+
+Functions compiled with ``cache=True`` from a module inside a zip archive now
+use the directory in ``NUMBA_CACHE_DIR`` when it is set. As with the other
+cache locators, a cache directory that cannot be created is now reported when
+the module is imported, instead of as a ``PermissionError`` on the first call.

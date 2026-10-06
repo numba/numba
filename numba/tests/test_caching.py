@@ -850,6 +850,9 @@ class TestCacheZipLib(DispatcherCacheUsecasesTest):
         locator = ZipCacheLocator.from_function(mock_func, non_zip_path)
         self.assertIsNone(locator)
 
+    @skip_bad_access
+    @unittest.skipIf(os.name == "nt",
+                     "cannot easily make a directory read-only on Windows")
     def test_zip_readonly_home_fails_at_import(self):
         # A zip-backed cache=True function used to compile, then raise
         # PermissionError from makedirs on the first call when the user cache
@@ -887,6 +890,9 @@ class TestCacheZipLib(DispatcherCacheUsecasesTest):
         self.assertNotIn("PermissionError", message)
         self.assertIn("no locator available", message)
 
+    @skip_bad_access
+    @unittest.skipIf(os.name == "nt",
+                     "cannot easily make a directory read-only on Windows")
     def test_zip_cache_dir_overrides_readonly_home(self):
         source = (
             "from numba import njit\n\n"
