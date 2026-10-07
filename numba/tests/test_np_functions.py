@@ -1716,6 +1716,12 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
             [0, 1, np.nan], repeat=2)], dtype=np.complex64)
         check(np.sort(pool), pool)
 
+        # `a` and `v` mix complex64 and complex128; 0.1 differs between them
+        pool = np.array([complex(*c) for c in itertools.product(
+            [0, 0.1, 1, np.nan], repeat=2)])
+        check(np.sort(pool.astype(np.complex64)), pool)
+        check(np.sort(pool), pool.astype(np.complex64))
+
         if REDUCED_TESTING:
             # Essential complex number test only
             a = np.array([1 + 0j, 2 + 1j, 3 + 0j])

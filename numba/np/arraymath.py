@@ -4470,8 +4470,8 @@ def less_than_or_equal_complex(a, b):
 
 @register_jitable
 def _less_than_or_equal(a, b):
-    if isinstance(a, (complex, types.complex64, types.complex128)) or \
-            isinstance(b, (complex, types.complex64, types.complex128)):
+    if isinstance(a, (types.complex64, types.complex128)) or \
+            isinstance(b, (types.complex64, types.complex128)):
         return less_than_or_equal_complex(a, b)
 
     elif isinstance(b, (float, types.float32, types.float64)):
@@ -4483,8 +4483,8 @@ def _less_than_or_equal(a, b):
 
 @register_jitable
 def _less_than(a, b):
-    if isinstance(a, (complex, types.complex64, types.complex128)) or \
-            isinstance(b, (complex, types.complex64, types.complex128)):
+    if isinstance(a, (types.complex64, types.complex128)) or \
+            isinstance(b, (types.complex64, types.complex128)):
         return less_than_complex(a, b)
 
     elif isinstance(b, (float, types.float32, types.float64)):
