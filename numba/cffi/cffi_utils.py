@@ -5,7 +5,6 @@ obtaining the pointer and numba signature.
 """
 
 from types import BuiltinFunctionType
-import ctypes
 from functools import partial
 import numpy as np
 
@@ -36,6 +35,7 @@ def is_ffi_instance(obj):
     except TypeError: # Unhashable type possible
         return False
 
+
 def is_cffi_func(obj):
     """Check whether the obj is a CFFI function"""
     try:
@@ -45,6 +45,7 @@ def is_cffi_func(obj):
             return obj in _ool_func_types
         except Exception:
             return False
+
 
 def get_pointer(cffi_func):
     """
@@ -57,6 +58,7 @@ def get_pointer(cffi_func):
 
 
 _cached_type_map = None
+
 
 def _type_map():
     """
@@ -139,10 +141,10 @@ def map_struct_to_record_dtype(cffi_type):
     """Convert a cffi type into a NumPy Record dtype
     """
     fields = {
-            'names': [],
-            'formats': [],
-            'offsets': [],
-            'itemsize': ffi.sizeof(cffi_type),
+        'names': [],
+        'formats': [],
+        'offsets': [],
+        'itemsize': ffi.sizeof(cffi_type),
     }
     is_aligned = True
     for k, v in cffi_type.fields:
@@ -181,6 +183,7 @@ def make_function_type(cffi_func, use_record_dtype=False):
 
 registry = templates.Registry()
 
+
 @registry.register
 class FFI_from_buffer(templates.AbstractTemplate):
     key = 'ffi.from_buffer'
@@ -193,13 +196,18 @@ class FFI_from_buffer(templates.AbstractTemplate):
             raise TypingError("from_buffer() expected a buffer object, got %s"
                               % (ary,))
         if ary.layout not in ('C', 'F'):
-            raise TypingError("from_buffer() unsupported on non-contiguous buffers (got %s)"
-                              % (ary,))
+            raise TypingError(
+                "from_buffer() unsupported on non-contiguous buffers (got %s)"
+                % (ary,)
+            )
         if ary.layout != 'C' and ary.ndim > 1:
-            raise TypingError("from_buffer() only supports multidimensional arrays with C layout (got %s)"
-                              % (ary,))
+            raise TypingError(
+                "from_buffer() only supports multidimensional arrays with C "
+                "layout (got %s)" % (ary,)
+            )
         ptr = types.CPointer(ary.dtype)
         return templates.signature(ptr, ary)
+
 
 @registry.register_attr
 class FFIAttribute(templates.AttributeTemplate):
@@ -220,6 +228,7 @@ def register_module(mod):
             addr = mod.ffi.addressof(mod.lib, f.__name__)
             _ool_func_ptr[f] = int(mod.ffi.cast("uintptr_t", addr))
         _ffi_instances.add(mod.ffi)
+
 
 def register_type(cffi_type, numba_type):
     """
