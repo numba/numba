@@ -2644,19 +2644,39 @@ def array_flatten(context, builder, sig, args):
     return res
 
 
-@register_jitable
 def _np_clip_prepare_out(a, shape, out):
+    pass  # overloaded below
+
+
+@overload(_np_clip_prepare_out)
+def ol_np_clip_prepare_out(a, shape, out):
     # Returns the array the result is written into. NumPy broadcasts the
     # inputs onto a caller-provided output but never stretches the output
     # itself, so its shape has to match the shape of the result exactly.
     # Without this check the callers loop over the result shape and write
     # past the end of a too-small `out` (issue #10682).
-    if out is None:
-        return np.empty_like(a)
-    if out.shape != shape:
-        raise ValueError("clip: the shape of the 'out' array does not "
-                         "match the shape of the result")
-    return out
+    #
+    # Dispatch at the type level so that F-contiguous inputs produce
+    # F-contiguous outputs (issue #10760 / PR #10767).  np.empty() always
+    # returns C-order, so F-order inputs need the extra asfortranarray step.
+    if isinstance(a, types.Array) and a.layout == 'F':
+        def impl(a, shape, out):
+            if out is None:
+                return np.asfortranarray(np.empty(shape, a.dtype))
+            if out.shape != shape:
+                raise ValueError("clip: the shape of the 'out' array does not "
+                                 "match the shape of the result")
+            return out
+        return impl
+    else:
+        def impl(a, shape, out):
+            if out is None:
+                return np.empty(shape, a.dtype)
+            if out.shape != shape:
+                raise ValueError("clip: the shape of the 'out' array does not "
+                                 "match the shape of the result")
+            return out
+        return impl
 
 
 @register_jitable
