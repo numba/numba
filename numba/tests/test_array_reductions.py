@@ -1105,6 +1105,25 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_array_cumprod_global(self):
         self.check_cumulative(array_cumprod_global)
 
+    def check_cumulative_scalar(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        dtypes = [np.bool_, np.int8, np.int16, np.int32, np.int64,
+                  np.uint8, np.uint16, np.uint32, np.uint64,
+                  np.float32, np.float64, np.complex64, np.complex128]
+        for dtype in dtypes:
+            val = dtype(3)
+            with self.subTest(dtype=dtype):
+                nb_val = cfunc(val)
+                py_val = pyfunc(val)
+                self.assertEqual(nb_val.dtype, py_val.dtype)
+                self.assertPreciseEqual(nb_val, py_val)
+
+    def test_array_cumsum_scalar(self):
+        self.check_cumulative_scalar(array_cumsum_global)
+
+    def test_array_cumprod_scalar(self):
+        self.check_cumulative_scalar(array_cumprod_global)
+
     def get_return_dtype(self, cfunc, arr):
         arrty = typeof(arr)
         for sig in cfunc.nopython_signatures:
@@ -1141,14 +1160,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         # Only some of the reductions have a scalar variant, but those that do
         # must return the accumulator dtype too.
         scalar_pyfuncs = [array_sum_global, array_prod_global,
-                          array_cumsum_global]
+                          array_cumsum_global, array_cumprod_global]
         for pyfunc in scalar_pyfuncs:
             cfunc = jit(nopython=True)(pyfunc)
             for dtype in dtypes:
                 val = dtype(3)
                 expected = pyfunc(val)
-                cfunc(val)
-                got_dtype = self.get_return_dtype(cfunc, val)
+                got = cfunc(val)
+                if isinstance(got, np.ndarray):
+                    got_dtype = got.dtype
+                else:
+                    got_dtype = self.get_return_dtype(cfunc, val)
                 with self.subTest(pyfunc=pyfunc.__name__, dtype=dtype,
                                   scalar=True):
                     self.assertEqual(got_dtype, np.asarray(expected).dtype)

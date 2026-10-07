@@ -835,8 +835,10 @@ def array_cumsum(a, axis=None, dtype=None):
 
         return array_cumsum_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        acc_ty = get_accumulator_type(a) if is_nonelike(dtype) else dtype.dtype
-        return make_scalar_reduction_impl_axis(a, acc_ty)
+        def array_cumsum_scalar_impl(a, axis=None, dtype=None):
+            return _numpy_cumsum(np.array([a]), axis, dtype)
+
+        return array_cumsum_scalar_impl
 
 
 @overload(np.cumprod)
@@ -856,6 +858,16 @@ def array_cumprod(a):
             return out
 
         return array_cumprod_impl
+    elif isinstance(a, (types.Number, types.Boolean)):
+        dtype = as_dtype(get_accumulator_type(a))
+        acc_init = get_accumulator(dtype, 1)
+
+        def array_cumprod_scalar_impl(a):
+            out = np.empty(1, dtype)
+            out[0] = acc_init * a
+            return out
+
+        return array_cumprod_scalar_impl
 
 
 @overload(np.mean)
