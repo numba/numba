@@ -48,7 +48,29 @@ asm_sum_outer = """
 """    # noqa: E501
 
 
+asm_count = r"""
+    @counter = internal global i64 0
+
+    define i64 @next_count() noinline {
+      %.1 = load i64, ptr @counter
+      %.2 = add i64 %.1, 1
+      store i64 %.2, ptr @counter
+      ret i64 %.2
+    }
+    """
+
+asm_count_caller = r"""
+    declare i64 @next_count()
+
+    define i64 @caller() {
+      %.1 = call i64 @next_count()
+      ret i64 %.1
+    }
+    """
+
+
 ctypes_sum_ty = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_int)
+ctypes_count_ty = ctypes.CFUNCTYPE(ctypes.c_int64)
 
 
 class JITCPUCodegenTestCase(TestCase):
@@ -105,6 +127,21 @@ class JITCPUCodegenTestCase(TestCase):
         cfunc = ctypes_sum_ty(ptr)
         self.assertEqual(cfunc(2, 3), 5)
 
+    def test_library_calls_own_copy(self):
+        # Each copy of next_count() counts its own calls.
+        library = self.compile_module(asm_count_caller, asm_count)
+        linked = library._linking_libraries[0]
+        ptr = linked.get_pointer_to_function("next_count")
+        next_count = ctypes_count_ty(ptr)
+        self.assertEqual(next_count(), 1)
+        self.assertEqual(next_count(), 2)
+        caller = ctypes_count_ty(library.get_pointer_to_function("caller"))
+        self.assertEqual(caller(), 1)
+        self.assertEqual(linked.get_pointer_to_function("next_count"), ptr)
+        mod = library._get_module_for_linking()
+        self.assertEqual(mod.get_function("next_count").linkage,
+                         ll.Linkage.linkonce_odr)
+
     def test_magic_tuple(self):
         tup = self.codegen.magic_tuple()
         pickle.dumps(tup)
@@ -150,6 +187,20 @@ class JITCPUCodegenTestCase(TestCase):
         library.enable_object_caching()
         state = library.serialize_using_object_code()
         self._check_unserialize_other_process(state)
+
+    def test_unserialized_library_calls_own_copy(self):
+        library = self.compile_module(asm_count_caller, asm_count)
+        library.enable_object_caching()
+        state = library.serialize_using_object_code()
+        codegen = JITCPUCodegen('other_codegen')
+        linked = codegen.create_library('linked')
+        linked.add_llvm_module(ll.parse_assembly(asm_count))
+        next_count = ctypes_count_ty(
+            linked.get_pointer_to_function("next_count"))
+        self.assertEqual(next_count(), 1)
+        library = codegen.unserialize_library(state)
+        caller = ctypes_count_ty(library.get_pointer_to_function("caller"))
+        self.assertEqual(caller(), 1)
 
     def test_cache_disabled_inspection(self):
         """
