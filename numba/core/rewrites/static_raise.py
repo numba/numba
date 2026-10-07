@@ -1,5 +1,5 @@
 from numba.core import errors, ir, consts
-from numba.core.rewrites import register_rewrite, Rewrite
+from numba.core.rewrites.registry import register_rewrite, Rewrite
 
 
 @register_rewrite('before-inference')
