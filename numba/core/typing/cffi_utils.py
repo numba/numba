@@ -91,6 +91,12 @@ def _type_map():
             ffi.typeof('size_t') :              types.uintp,
             ffi.typeof('void') :                types.void,
         }
+        # Complex types, guarded as some cffi builds can't parse '_Complex'.
+        try:
+            _cached_type_map[ffi.typeof('float _Complex')] = types.complex64
+            _cached_type_map[ffi.typeof('double _Complex')] = types.complex128
+        except cffi.CDefError:
+            pass
     return _cached_type_map
 
 
