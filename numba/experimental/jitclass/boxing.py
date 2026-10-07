@@ -159,9 +159,14 @@ def _specialize_box(typ):
         "__rand__",
         "__ror__",
         "__rxor__",
+        "__del__",
     }
     for name, func in typ.methods.items():
         if name == "__init__":
+            continue
+        if name == "__del__":
+            # __del__ is invoked from NRT-managed destruction; avoid
+            # exposing a Python-level __del__ that would double-run it.
             continue
         if (
             name.startswith("__")

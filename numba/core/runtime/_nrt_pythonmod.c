@@ -185,6 +185,7 @@ declmethod(MemInfo_data);
 declmethod(MemInfo_varsize_free);
 declmethod(MemInfo_varsize_realloc);
 declmethod(MemInfo_release);
+declmethod(MemInfo_from_data);
 declmethod(Allocate);
 declmethod(Free);
 declmethod(get_api);
