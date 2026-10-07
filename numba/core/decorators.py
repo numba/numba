@@ -42,6 +42,15 @@ def jit(signature_or_function=None, locals=MappingProxyType({}), cache=False,
         Mapping of local variable names to Numba types. Used to override the
         types deduced by Numba's type inference engine.
 
+    cache: bool
+        Set to True to enable a file-based cache of compilation results to
+        avoid recompilation when the function was already compiled in a
+        previous invocation. Default value is False.
+        WARNING: Loading a malicious cache file can execute arbitrary code.
+        See the "Notes on Caching" page in the Numba developer
+        documentation for details:
+        https://numba.readthedocs.io/en/stable/developer/caching.html
+
     pipeline_class: type numba.compiler.CompilerBase
             The compiler pipeline type for customizing the compilation stages.
 

@@ -585,7 +585,9 @@ class DeviceNDArray(DeviceNDArrayBase):
     def reshape(self, *newshape, **kws):
         """
         Reshape the array without changing its contents, similarly to
-        :meth:`numpy.ndarray.reshape`. Example::
+        :meth:`numpy.ndarray.reshape`.
+
+        Example::
 
             d_arr = d_arr.reshape(20, 50, order='F')
         """

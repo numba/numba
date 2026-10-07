@@ -53,7 +53,7 @@ jobs:
   linux-aarch64-build:
     name: linux-aarch64-build-wheel (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     defaults:
       run:
         shell: bash -elx {0}
@@ -138,7 +138,7 @@ jobs:
   linux-aarch64-test:
     name: linux-aarch64-test (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, linux-aarch64-build]
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     defaults:
       run:
         shell: bash -elx {0}

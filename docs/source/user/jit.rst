@@ -182,7 +182,11 @@ a file-based cache.  This is done by passing ``cache=True``::
    def f(x, y):
        return x + y
 
+.. warning::
 
+   The cache is deserialized with :mod:`pickle`, so loading a
+   malicious cache file can execute arbitrary code. The cache
+   directory must be treated as trusted (see :ref:`cache-security`).
 
 .. note::
     Caching of compiled functions has several known limitations:
