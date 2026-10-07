@@ -1,0 +1,8 @@
+Jitted functions call their own copies of the functions they call
+-----------------------------------------------------------------
+
+A jitted function now always calls its own linked-in copies of the jitted
+functions it calls. Before, the process-wide JIT symbol table bound those calls
+to whichever definition was loaded first, so a ``cache=True`` function called
+the separately compiled callees on its first run and its own copies on later
+runs. With ``fastmath=True`` the two could return different results.
