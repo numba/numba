@@ -1,4 +1,4 @@
-Build using PEP-517 compatability
+Build using PEP-517 compatibility
 ---------------------------------
 
 Numba now includes a pyproject.toml file indicating the minimum build
