@@ -1,0 +1,7 @@
+Fix slice assignments to arrays reassigned in a loop with ``parallel=True``
+---------------------------------------------------------------------------
+
+With ``parallel=True``, a slice assignment in a loop, such as ``buf[:] = 0.0``
+after ``buf = rows[i]``, could use the length of the array that ``buf`` had
+before the loop. The assignment could then change no elements, or write past
+the end of the array.
