@@ -1107,8 +1107,9 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def check_cumulative_scalar(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
-        dtypes = [np.bool_, np.int8, np.uint8, np.int16, np.int32,
-                  np.uint32, np.float32, np.float64, np.complex64]
+        dtypes = [np.bool_, np.int8, np.int16, np.int32, np.int64,
+                  np.uint8, np.uint16, np.uint32, np.uint64,
+                  np.float32, np.float64, np.complex64, np.complex128]
         for dtype in dtypes:
             val = dtype(3)
             with self.subTest(dtype=dtype):
