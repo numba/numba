@@ -177,7 +177,9 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     # Prepare Environment
     envname = context.get_env_name(cres.fndesc)
     env = cres.environment
-    envptr = builder.load(context.declare_env_global(builder.module, envname))
+    envptr = builder.load(context.declare_env_global(
+        builder.module, envname,
+        referencer_name=cres.fndesc.mangled_name))
 
     # Emit loop
     loopcount = builder.load(arg_dims, name="loopcount")
