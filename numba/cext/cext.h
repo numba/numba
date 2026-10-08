@@ -17,5 +17,6 @@ aligned_size(Py_ssize_t sz);
 
 #include "dictobject.h"
 #include "listobject.h"
+#include "setobject.h"
 
 #endif // end NUMBA_EXTENSION_HELPER_H_

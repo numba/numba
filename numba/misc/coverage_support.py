@@ -133,6 +133,8 @@ if coverage_available:
         unlock_data: Callable[[], None]
         warn: coverage.types.TWarnFn
         packed_arcs: bool
+        # ref: https://github.com/numba/numba/issues/10589
+        tool_id: Optional[int] = None
 
         _activity: bool = field(default=False)
 

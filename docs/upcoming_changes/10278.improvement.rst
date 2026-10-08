@@ -1,0 +1,5 @@
+Namedtuple defaults and same-class casts
+----------------------------------------
+
+Namedtuple constructors now honor default field values, and namedtuples of
+the same Python class can be cast when their field types are compatible.

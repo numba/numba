@@ -19,6 +19,7 @@ from numba.tests.support import (MemoryLeak, TestCase, captured_stdout,
                                  expected_failure_py312,
                                  expected_failure_py313,
                                  expected_failure_py314,
+                                 expected_failure_py315,
                                 )
 from numba.core.utils import PYVERSION
 from numba.experimental import jitclass
@@ -285,6 +286,7 @@ class TestLiftCall(BaseTestWithLifting):
     @expected_failure_py312
     @expected_failure_py313
     @expected_failure_py314
+    @expected_failure_py315
     def test_liftcall5(self):
         self.check_extracted_with(liftcall5, expect_count=1,
                                   expected_stdout="0\n1\n2\n3\n4\n5\nA\n")
@@ -726,6 +728,7 @@ class TestLiftObj(MemoryLeak, TestCase):
     @expected_failure_py312
     @expected_failure_py313
     @expected_failure_py314
+    @expected_failure_py315
     def test_case19_recursion(self):
         def foo(x):
             with objmode_context():

@@ -26,7 +26,7 @@ DATETIME_UNITS = {
     '': 14,   # "generic", i.e. unit-less
 }
 
-NAT = np.timedelta64('nat').astype(np.int64)
+NAT = np.timedelta64('nat', 's').astype(np.int64)
 
 # NOTE: numpy has several inconsistent functions for timedelta casting:
 # - can_cast_timedelta64_{metadata,units}() disallows "safe" casting

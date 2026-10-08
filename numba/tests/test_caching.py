@@ -1,11 +1,13 @@
 import importlib
 import inspect
+import hashlib
 import multiprocessing
 import os
 import shutil
 import stat
 import subprocess
 import sys
+import time
 import traceback
 import unittest
 import warnings
@@ -14,7 +16,6 @@ from pathlib import Path
 
 import llvmlite.binding as ll
 import numpy as np
-from math import floor
 
 from numba import njit
 from numba.core import codegen
@@ -25,7 +26,7 @@ from numba.core.caching import (
     InTreeCacheLocator,
     InTreeCacheLocatorFsAgnostic,
 )
-from numba.core.errors import NumbaWarning
+from numba.core.errors import NumbaWarning, NumbaDeprecationWarning
 from numba.parfors import parfor
 from numba.tests.support import (
     SerialMixin,
@@ -228,6 +229,19 @@ class BaseCacheTest(TestCase):
         sys.modules.pop(self.modname, None)
         sys.path.remove(self.tempdir)
 
+    @staticmethod
+    def _module_cached_path(module):
+        # Python 3.15 no longer sets module.__cached__, use
+        # __spec__.cached instead. See:
+        # https://docs.python.org/3/deprecations/pending-removal-in-3.15.html
+        cached = getattr(module, '__cached__', None)
+        if cached is not None:
+            return cached
+        spec = getattr(module, '__spec__', None)
+        if spec is not None:
+            return spec.cached
+        return None
+
     def import_module(self):
         # Import a fresh version of the test module.  All jitted functions
         # in the test module will start anew and load overloads from
@@ -235,10 +249,10 @@ class BaseCacheTest(TestCase):
         old = sys.modules.pop(self.modname, None)
         if old is not None:
             # Make sure cached bytecode is removed
-            cached = [old.__cached__]
-            for fn in cached:
+            cached_path = self._module_cached_path(old)
+            if cached_path:
                 try:
-                    os.unlink(fn)
+                    os.unlink(cached_path)
                 except FileNotFoundError:
                     pass
         mod = import_dynamic(self.modname)
@@ -584,6 +598,38 @@ class TestCache(DispatcherCacheUsecasesTest):
         # wouldn't be met)
         self.check_pycache(0)
 
+    def test_nbi_reproducible_after_touch(self):
+        def nbi_hashes():
+            return {
+                fn: hashlib.md5(
+                    open(os.path.join(self.cache_dir, fn), "rb").read()
+                ).hexdigest()
+                for fn in self.cache_contents()
+                if fn.endswith(".nbi")
+            }
+
+        # Compile and cache
+        mod = self.import_module()
+        mod.add_usecase(2, 3)
+        h1 = nbi_hashes()
+        self.assertTrue(h1, "No .nbi files found after compilation")
+
+        # Touch source file (mtime changes, content unchanged), clear cache
+        time.sleep(1)
+        os.utime(self.modfile, None)
+        shutil.rmtree(self.cache_dir)
+
+        # Recompile — same source content, new mtime
+        mod = self.import_module()
+        mod.add_usecase(2, 3)
+        h2 = nbi_hashes()
+
+        self.assertEqual(
+            h1, h2,
+            ".nbi file differs after touch with unchanged content — "
+            "source stamp embeds mtime instead of content hash"
+        )
+
     @skip_bad_access
     @unittest.skipIf(os.name == "nt",
                      "cannot easily make a directory read-only on Windows")
@@ -739,6 +785,8 @@ def add(x, y):
         zip_path = os.path.join(self.tempdir, zip_filename)
         with zipfile.ZipFile(zip_path, "w") as zf:
             zf.writestr(mod_filename, mod_content)
+            zf.writestr("test_zip_pkg/__init__.py", "")
+            zf.writestr("test_zip_pkg/nested.py", mod_content)
 
         # Add the zip file to sys.path
         sys.path.insert(0, zip_path)
@@ -749,6 +797,8 @@ def add(x, y):
         sys.path.pop(0)
         # Remove the module from sys.modules to clean up
         sys.modules.pop("test_module", None)
+        sys.modules.pop("test_zip_pkg", None)
+        sys.modules.pop("test_zip_pkg.nested", None)
 
     def test_zip_caching(self):
         # (note that `self.import_module()` fails because its checks are
@@ -777,6 +827,19 @@ def add(x, y):
         # Check if the cache was hit
         self.check_hits(test_module.add, 1)
 
+    def test_zip_caching_nested(self):
+        nested = importlib.import_module("test_zip_pkg.nested")
+
+        self.assertEqual(nested.add(2, 3), 5)
+        self.check_hits(nested.add, 0, 1)
+
+        del sys.modules["test_zip_pkg.nested"]
+        importlib.invalidate_caches()
+        nested = importlib.import_module("test_zip_pkg.nested")
+
+        self.assertEqual(nested.add(2, 3), 5)
+        self.check_hits(nested.add, 1)
+
 
 class TestCacheZipLib(DispatcherCacheUsecasesTest):
     """
@@ -793,6 +856,17 @@ class TestCacheZipLib(DispatcherCacheUsecasesTest):
         self.assertIsNotNone(locator)
         self.assertEqual(locator._zip_path, str(Path("/path/to/archive.zip")))
         self.assertEqual(locator._internal_path, "module.py")
+
+    def test_zip_locator_nested_internal_path(self):
+
+        def mock_func():
+            pass
+
+        zip_path = str(Path("/path/to/archive.zip/pkg/sub/module.py"))
+
+        locator = ZipCacheLocator.from_function(mock_func, zip_path)
+        self.assertEqual(locator._zip_path, str(Path("/path/to/archive.zip")))
+        self.assertEqual(locator._internal_path, "pkg/sub/module.py")
 
     def test_zip_locator_non_zip_path(self):
 
@@ -1259,66 +1333,27 @@ class TestCacheLocatorEnvironmentIntegration(TestCase):
 
 
 class TestInTreeCacheLocatorFsAgnostic(TestCase):
-    """Test _InTreeCacheLocatorFsAgnostic class functionality."""
+    """Test InTreeCacheLocatorFsAgnostic deprecation."""
 
-    def test_source_stamp_precision(self):
-        """Test that FsAgnostic locator floors timestamp to seconds."""
+    def test_deprecation_warning(self):
+        """Instantiating the locator emits a NumbaDeprecationWarning."""
         from .dummy_module import function
 
         source = inspect.getfile(function)
 
-        # Create regular and FsAgnostic locators
+        with self.assertWarns(NumbaDeprecationWarning) as cm:
+            locator = InTreeCacheLocatorFsAgnostic.from_function(
+                function, source
+            )
+
+        self.assertIsNotNone(locator)
+        self.assertIn("InTreeCacheLocatorFsAgnostic is deprecated",
+                      str(cm.warning))
+
+        # Despite deprecation, the stamp must match the parent (content hash).
         regular_locator = InTreeCacheLocator.from_function(function, source)
-        fs_agnostic_locator = InTreeCacheLocatorFsAgnostic.from_function(
-            function, source
-        )
-
-        # Both should be valid locators
-        self.assertIsNotNone(regular_locator)
-        self.assertIsNotNone(fs_agnostic_locator)
-
-        # Get source stamps
-        regular_stamp = regular_locator.get_source_stamp()
-        fs_agnostic_stamp = fs_agnostic_locator.get_source_stamp()
-
-        # Verify structure: (timestamp, size)
-        self.assertEqual(len(regular_stamp), 2)
-        self.assertEqual(len(fs_agnostic_stamp), 2)
-
-        # The second element (size) should be the same
-        self.assertEqual(regular_stamp[1], fs_agnostic_stamp[1])
-
-        # The first element (timestamp) in fs_agnostic should be floored
-        self.assertEqual(fs_agnostic_stamp[0], floor(regular_stamp[0]))
-
-        # Verify that fs_agnostic timestamp is always <= regular timestamp
-        self.assertLessEqual(fs_agnostic_stamp[0], regular_stamp[0])
-
-    def test_timestamp_precision_on_fs(self):
-        """Test FsAgnostic timestamp handling using filesystem mtime."""
-
-        from .dummy_module import function
-
-        source = inspect.getfile(function)
-
-        # Test with a file that has a precise timestamp
-        fs_agnostic_locator = InTreeCacheLocatorFsAgnostic.from_function(
-            function, source
-        )
-
-        # Get file stat
-        stat_result = os.stat(source)
-        original_mtime = stat_result.st_mtime
-
-        # Get stamp from locator
-        stamp = fs_agnostic_locator.get_source_stamp()
-
-        # Verify that the timestamp is floored
-        expected_timestamp = floor(original_mtime)
-        self.assertEqual(stamp[0], expected_timestamp)
-
-        # Verify size is correct
-        self.assertEqual(stamp[1], stat_result.st_size)
+        self.assertEqual(locator.get_source_stamp(),
+                         regular_locator.get_source_stamp())
 
 
 if __name__ == '__main__':

@@ -44,7 +44,7 @@ def _gentmpfile(suffix):
         try:
             ntf.close()
             os.remove(ntf)
-        except:
+        except Exception:
             pass
         else:
             os.rmdir(tmpdir)

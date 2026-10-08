@@ -426,7 +426,7 @@ class BaseContext(object):
         """
         Hook for subclasses to apply target-specific attributes (e.g. signext).
         """
-        pass    
+        pass
 
     def declare_external_function(self, module, fndesc):
         fnty = self.get_external_function_type(fndesc)
@@ -889,6 +889,11 @@ class BaseContext(object):
         """
         Like compile_subroutine(), but also call the function with the given
         *args*.
+
+        Notes
+        -----
+        Use of this API is discouraged. See coding_guidelines.rst in the
+        developer docs.
         """
         if locals is None:
             locals = {}

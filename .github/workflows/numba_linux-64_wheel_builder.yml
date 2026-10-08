@@ -6,9 +6,10 @@ on:
   pull_request:
     paths:
       - .github/workflows/numba_linux-64_wheel_builder.yml
-      - .github/workflows/wheel_workflow_matrix.json
+      - buildscripts/github/evaluate.py
       - buildscripts/github/build_wheel_linux.sh
       - buildscripts/github/repair_wheel_linux.sh
+      - buildscripts/github/test_wheel_contents.py
       - setup.py
   workflow_dispatch:
     inputs:
@@ -31,6 +32,9 @@ env:
   ARTIFACT_RETENTION_DAYS: 7
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
   CONDA_CHANNEL_NUMBA: numba/label/dev
+  MANYLINUX_IMAGE: "manylinux_2_28_x86_64:2026.08.08-1"
+  # dump Python tracebacks of all threads on fatal signals (segfaults)
+  PYTHONFAULTHANDLER: "1"
   # Set USE_TBB to true by default, only override if explicitly set to false
   USE_TBB: ${{ github.event_name == 'workflow_dispatch' && inputs.use_tbb != false || true }}
 
@@ -41,29 +45,20 @@ jobs:
       build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
       test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_WORKFLOW_INPUT: ${{ toJson(github.event.inputs) }}
+          GITHUB_PLATFORM: linux-64
+          GITHUB_PKG_TYPE: wheel
         run: |
-          BUILD_MATRIX_JSON=$(jq -c .wheel_build_matrix .github/workflows/wheel_workflow_matrix.json)
-          TEST_MATRIX_JSON=$(jq -c .wheel_test_matrix .github/workflows/wheel_workflow_matrix.json)
-
-          # Add canonical python versions to both matrices
-          BUILD_MATRIX_EXTENDED=$(echo "$BUILD_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
-          ')
-
-          TEST_MATRIX_EXTENDED=$(echo "$TEST_MATRIX_JSON" | jq -c '
-            map(. + {"python_canonical": (.["python-version"] | split(".") | .[:2] | join("."))})
-          ')
-
-          echo "Build Matrix JSON: $BUILD_MATRIX_EXTENDED"
-          echo "Test Matrix JSON: $TEST_MATRIX_EXTENDED"
-          echo "build-matrix-json=$BUILD_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
-          echo "test-matrix-json=$TEST_MATRIX_EXTENDED" >> $GITHUB_OUTPUT
+          python buildscripts/github/evaluate.py
 
   linux-64-build:
-    name: linux-64-build-wheel (py ${{ matrix.python-version }}, np ${{ matrix.numpy_build }})
+    name: linux-64-build-wheel (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_build }})
     needs: load-matrix
     runs-on: ubuntu-latest
     defaults:
@@ -76,15 +71,15 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: llvmlite-linux-64-py${{ matrix.python_canonical }}
+          name: llvmlite-linux-64-py${{ matrix.python_major_minor }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
@@ -93,7 +88,10 @@ jobs:
       - name: Build wheel in manylinux docker container
         run: |
           # Construct the expected Python executable path inside the container
-          PYTHON_EXECUTABLE="/opt/python/${{ matrix.python_tag }}-${{ matrix.python_tag }}/bin/python"
+          # For free-threaded builds (e.g. cp314t), the manylinux path is cp314-cp314t
+          TAG="${{ matrix.python_tag }}"
+          VER_TAG="${TAG%t}"
+          PYTHON_EXECUTABLE="/opt/python/${VER_TAG}-${TAG}/bin/python"
           echo "Using Python executable: $PYTHON_EXECUTABLE"
 
           # Prepare build environment
@@ -102,7 +100,7 @@ jobs:
           # Run the build script inside Docker container
           docker run --rm \
             -v ${{ github.workspace }}:/io \
-            quay.io/pypa/manylinux2014_x86_64 \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
             bash /io/buildscripts/github/build_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
             "${USE_TBB}" \
@@ -116,13 +114,16 @@ jobs:
       - name: Repair and patch wheel in manylinux docker container
         run: |
           # Construct the expected Python executable path inside the container
-          PYTHON_EXECUTABLE="/opt/python/${{ matrix.python_tag }}-${{ matrix.python_tag }}/bin/python"
+          # For free-threaded builds (e.g. cp314t), the manylinux path is cp314-cp314t
+          TAG="${{ matrix.python_tag }}"
+          VER_TAG="${TAG%t}"
+          PYTHON_EXECUTABLE="/opt/python/${VER_TAG}-${TAG}/bin/python"
           echo "Using Python executable: $PYTHON_EXECUTABLE"
 
           # Run the repair script in Docker
           docker run --rm \
             -v ${{ github.workspace }}:/io \
-            quay.io/pypa/manylinux2014_x86_64 \
+            quay.io/pypa/${{ env.MANYLINUX_IMAGE }} \
             bash /io/buildscripts/github/repair_wheel_linux.sh \
             "$PYTHON_EXECUTABLE" \
             "$USE_TBB" \
@@ -132,9 +133,9 @@ jobs:
           ls -la wheelhouse/
 
       - name: Upload numba wheel
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: numba_linux-64_wheel_py${{ matrix.python_canonical }}
+          name: numba_linux-64_wheel_py${{ matrix.python_major_minor }}
           path: wheelhouse/*.whl
           compression-level: 0
           retention-days: ${{ env.ARTIFACT_RETENTION_DAYS }}
@@ -142,7 +143,7 @@ jobs:
 
 
   linux-64-test:
-    name: linux-64-test (py ${{ matrix.python-version }}, np ${{ matrix.numpy_test }})
+    name: linux-64-test (py ${{ matrix.python_version_full }}, np ${{ matrix.numpy_test }})
     needs: [load-matrix, linux-64-build]
     runs-on: ubuntu-latest
     env:
@@ -157,33 +158,42 @@ jobs:
 
     steps:
       - name: Setup Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: ${{ matrix.python_version_full }}
           allow-prereleases: true
 
       - name: Download Numba wheel artifact
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: numba_linux-64_wheel_py${{ matrix.python_canonical }}
+          name: numba_linux-64_wheel_py${{ matrix.python_major_minor }}
           path: dist
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: llvmlite-linux-64-py${{ matrix.python_canonical }}
+          name: llvmlite-linux-64-py${{ matrix.python_major_minor }}
           path: llvmlite_wheels
           run-id: ${{ inputs.llvmlite_wheel_runid }}
           repository: numba/llvmlite
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install catchsegv
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y glibc-tools
+          # verify catchsegv is installed
+          catchsegv --version
 
       - name: Validate and test wheel
         env:
           NUMBA_DIST_TEST: 1
           TESTS_TO_RUN: "numba.tests.test_dist_validation"
         run: |
-          PYTHON_PATH=$(which python${{ matrix.python_canonical }})
+          # Pin to the setup-python interpreter: a login shell (bash -el) can
+          # re-source profiles and reorder PATH, so bare `python` is unreliable.
+          PYTHON_PATH=$(which python${{ matrix.python_major_minor }})
           $PYTHON_PATH -m pip install --upgrade pip twine lief
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
@@ -193,7 +203,7 @@ jobs:
           fi
           $PYTHON_PATH -m twine check dist/*.whl
 
-          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} setuptools
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} "setuptools>=69.0.0"
 
           if [ "$USE_TBB" = "true" ]; then
             $PYTHON_PATH -m pip install tbb
@@ -201,20 +211,8 @@ jobs:
             NUMBA_THREADING_LAYER=tbb $PYTHON_PATH -c "import numba; numba.get_num_threads(); print(numba.threading_layer())"
           fi
 
-          # Disable NumPy dispatching to AVX512_SKX if the CPU supports it AND it's
-          # in NumPy's dispatch list. This avoids low accuracy SVML libm replacements.
-          # This is needed because only dispatched features can be disabled via NPY_DISABLE_CPU_FEATURES.
-          _NPY_CMD='from numba.misc import numba_sysinfo; si=numba_sysinfo.get_sysinfo();\
-                    print(si["NumPy AVX512_SKX detected"] and "AVX512_SKX" in si.get("NumPy Supported SIMD dispatch", ()))'
-          DISABLE_AVX512_SKX=$($PYTHON_PATH -c "$_NPY_CMD")
-          echo "Disable AVX512_SKX: $DISABLE_AVX512_SKX"
-
-          if [[ "$DISABLE_AVX512_SKX" == "True" ]]; then
-              export NPY_DISABLE_CPU_FEATURES="AVX512_SKX"
-          fi
-
           # print Numba system information
           $PYTHON_PATH -m numba -s
 
-          # run tests
-          $PYTHON_PATH -m numba.runtests $TESTS_TO_RUN -m 4 -v
+          # run tests under catchsegv to obtain native backtraces on segfault
+          catchsegv $PYTHON_PATH -m numba.runtests $TESTS_TO_RUN -m 4 -v
