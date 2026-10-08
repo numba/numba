@@ -1401,10 +1401,20 @@ class ArrayAnalysis(object):
                 If insert_equiv() returns False then no changes were made and
                 all equivalence classes are consistent upon a redefinition so
                 no invalidation is needed and we don't call define().
+
+                A conflicting redefinition must invalidate the variable before
+                any insertion. Otherwise insert_equiv() merges the class of the
+                new value with the class of the previous definition, and that
+                merge remains after define() removes the variable.
             """
             needs_define = True
             if shape is not None:
-                needs_define = equiv_set.insert_equiv(lhs, shape)
+                if (lhs.name in equiv_set.defs
+                        and not equiv_set.is_equiv(lhs, shape)):
+                    equiv_set.define(lhs, redefined, self.func_ir, typ)
+                    needs_define = False
+                else:
+                    needs_define = equiv_set.insert_equiv(lhs, shape)
             if needs_define:
                 equiv_set.define(lhs, redefined, self.func_ir, typ)
         elif isinstance(inst, (ir.StaticSetItem, ir.SetItem)):
@@ -1556,6 +1566,10 @@ class ArrayAnalysis(object):
             )
         elif expr.attr == "shape":
             shape = equiv_set.get_shape(expr.value)
+            if shape is None and self._isarray(expr.value.name):
+                # The shape of the array is not tracked, for example after a
+                # redefinition invalidated it. This tuple is its shape.
+                equiv_set.insert_equiv(expr.value, lhs)
             return ArrayAnalysis.AnalyzeResult(shape=shape)
         elif expr.attr in ("real", "imag") and self._isarray(expr.value.name):
             # Shape of real or imag attr is the same as the shape of the array
@@ -2129,6 +2143,17 @@ class ArrayAnalysis(object):
             if result[0] is not None:
                 expr.index_var = result[0]
             return result[1]
+        if (
+            isinstance(expr.index, int)
+            and isinstance(self.typemap[lhs.name], types.Integer)
+            and not equiv_set.has_shape(var)
+        ):
+            # The elements have no size variable yet, for example in a shape
+            # tuple of an array whose shape is not tracked. Put lhs in the
+            # class of the element so that lhs becomes its size variable.
+            names = equiv_set._get_names(var)
+            require(expr.index < len(names))
+            return ArrayAnalysis.AnalyzeResult(shape=names[expr.index])
         shape = equiv_set._get_shape(var)
         if isinstance(expr.index, int):
             require(expr.index < len(shape))

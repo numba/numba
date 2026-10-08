@@ -2734,6 +2734,43 @@ class TestParforsSlice(TestParforsBase):
 
             self.check(test_impl, X)
 
+    def check_loop_redefinition(self, test_impl):
+        # Each test_impl writes rows of a[:3]. The last row of a is outside
+        # that view and must not change. A seed of 0 detects a store that
+        # does nothing, and a seed of 6 detects a store past the row.
+        for seed in (0, 6):
+            with self.subTest(seed=seed):
+                self.check(test_impl, np.ones((4, 4)), seed,
+                           check_arg_equality=[np.testing.assert_equal] * 2,
+                           check_scheduling=False)
+
+    def test_parfor_slice_loop_redefinition_in_body(self):
+        # The new value of a loop-carried array must not take the shape of
+        # the value before the loop.
+        def test_impl(a, seed):
+            rows = a[:3]
+            buf = np.empty(seed)
+            for i in range(rows.shape[0]):
+                buf = rows[i]
+                buf[:] = 0.0
+            return buf
+
+        self.check_loop_redefinition(test_impl)
+
+    def test_parfor_slice_loop_redefinition_size(self):
+        # The new value of a loop-carried size must not make the row size
+        # equal to the value before the loop.
+        def test_impl(a, seed):
+            rows = a[:3]
+            n = seed
+            for i in range(rows.shape[0]):
+                row = rows[i]
+                n = len(row)
+                row[:] = 0.0
+            return n
+
+        self.check_loop_redefinition(test_impl)
+
 
 @skip_parfors_unsupported
 class TestParforsOptions(TestParforsBase):
