@@ -1,0 +1,6 @@
+Fix ``np.fmod`` for negative signed integers
+--------------------------------------------
+
+``np.fmod`` on signed integers used an unsigned remainder, so negative
+operands gave wrong results, e.g. ``np.fmod(-4, 10)`` returned ``2`` instead
+of ``-4``. The result now takes the sign of the dividend, as in NumPy.
