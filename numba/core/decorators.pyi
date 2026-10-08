@@ -107,6 +107,8 @@ def cfunc(
     locals: _ToLocals = ...,
     cache: bool = False,
     pipeline_class: type[compiler.CompilerBase] | None = None,
+    *,
+    nopython: bool = False,
     **options: Unpack[_JITOptions],
 ) -> _CFuncWrapper: ...
 
