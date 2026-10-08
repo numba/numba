@@ -404,6 +404,12 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         (3, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), slice(None), np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]])), # Non-consecutive multidimensional array indices
         (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), 3, Ellipsis), # Consecutive multidimensional array indices with Ellipsis
         (np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), 3, Ellipsis, np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]])), # Non-consecutive multidimensional array indices with Ellipsis
+
+        # Multidimensional array indices that broadcast against each other
+        (3, np.array([[0], [1], [3]]), np.array([[0,1,3,4,2]]), slice(None)), # Column against row
+        (3, np.array([[0], [1], [3]]), slice(None), np.array([[0,1,3,4,2]])), # Column against row, non-consecutive
+        (np.array([[0], [1], [3]]), np.array([[0,1,3,4,2]]), 3, Ellipsis), # Column against row, with Ellipsis
+        (3, np.array([[2]]), np.array([[0,1,3,4,2], [0,1,2,3,2], [3,1,3,4,1]]), slice(None)), # Scalar-shaped against full
     ]
 
     def setUp(self):
