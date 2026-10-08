@@ -649,6 +649,7 @@ class CPUCodeLibrary(CodeLibrary):
             str(self._codegen._create_empty_module(self.name)))
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
+        self._privatized = set()
 
     def _optimize_functions(self, ll_module):
         """
@@ -695,7 +696,8 @@ class CPUCodeLibrary(CodeLibrary):
         Internal: get a LLVM module suitable for linking multiple times
         into another library.  Exported functions are made "linkonce_odr"
         to allow for multiple definitions, inlining, and removal of
-        unused exports.
+        unused exports.  So are the "linkonce_odr" functions that
+        JITCodeLibrary made private.
 
         See discussion in https://github.com/numba/numba/pull/890
         """
@@ -707,7 +709,9 @@ class CPUCodeLibrary(CodeLibrary):
         nfuncs = 0
         for fn in mod.functions:
             nfuncs += 1
-            if not fn.is_declaration and fn.linkage == ll.Linkage.external:
+            if not fn.is_declaration and (
+                    fn.linkage == ll.Linkage.external
+                    or fn.name in self._privatized):
                 to_fix.append(fn.name)
         if nfuncs == 0:
             # This is an issue which can occur if loading a module
@@ -982,6 +986,18 @@ class AOTCodeLibrary(CPUCodeLibrary):
 
 
 class JITCodeLibrary(CPUCodeLibrary):
+
+    def _optimize_final_module(self):
+        super()._optimize_final_module()
+        # All objects share one MCJIT symbol table, in which a weak
+        # definition yields to an earlier one of the same name.  Private
+        # copies make this object call its own code, and stay out of
+        # that table.
+        for fn in self._final_module.functions:
+            if (not fn.is_declaration
+                    and fn.linkage == ll.Linkage.linkonce_odr):
+                fn.linkage = 'private'
+                self._privatized.add(fn.name)
 
     def get_pointer_to_function(self, name):
         """
