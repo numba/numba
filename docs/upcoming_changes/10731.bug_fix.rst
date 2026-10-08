@@ -1,0 +1,8 @@
+Type stubs added for ``numba.types``
+------------------------------------
+
+Since version 0.66.0, static type checkers such as ``mypy`` were unable to
+resolve the names re-exported by ``numba.types``, e.g.
+``from numba.types import CPointer`` reported an ``attr-defined`` error. A stub
+file is now shipped for ``numba.types``, so that these names are visible to
+type checkers again.
