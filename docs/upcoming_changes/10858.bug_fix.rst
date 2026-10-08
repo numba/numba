@@ -1,0 +1,6 @@
+Fix disk cache crash for ``exec()``'d functions with ``__module__=None``
+------------------------------------------------------------------------
+
+Fixes #10485. When a function is created via ``exec()`` and has
+``__module__=None``, using ``@njit(cache=True)`` crashes on the second
+run when loading from disk cache with an ``AttributeError``.

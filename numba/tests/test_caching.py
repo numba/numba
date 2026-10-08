@@ -7,6 +7,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 import unittest
@@ -17,7 +18,7 @@ from pathlib import Path
 import llvmlite.binding as ll
 import numpy as np
 
-from numba import njit
+from numba import njit, jit
 from numba.core import codegen
 from numba.core.caching import (
     UserWideCacheLocator,
@@ -124,6 +125,29 @@ def check_generator_cache():
     assert exp == got
 
 
+def check_exec_cache():
+    src_file = os.path.join(
+        tempfile.gettempdir(),
+        "numba_exec_cache_wrapper.py"
+    )
+
+    if not os.path.exists(src_file):
+        with open(src_file, "w") as fh:
+            fh.write("def wrapper(*args): return _inner(*args)\n")
+
+    @jit
+    def add_one(x):
+        return x + 1
+
+    env = {"_inner": add_one}
+    exec(compile(open(src_file).read(), src_file, "exec"), env)
+    f = jit(cache=True)(env["wrapper"])
+    result = f(np.array([1.0, 2.0, 3.0]))
+    assert result[0] == 2.0
+    assert result[1] == 3.0
+    assert result[2] == 4.0
+
+
 class TestCaching(SerialMixin, TestCase):
     def run_test(self, func):
         func()
@@ -138,6 +162,9 @@ class TestCaching(SerialMixin, TestCase):
 
     def test_generator_cache(self):
         self.run_test(check_generator_cache)
+
+    def test_exec_cache(self):
+        self.run_test(check_exec_cache)
 
     def test_omitted(self):
 
