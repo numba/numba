@@ -10,7 +10,7 @@ from numba.core.typing.templates import (AttributeTemplate, AbstractTemplate,
 from numba.np.numpy_support import (ufunc_find_matching_loop,
                              supported_ufunc_loop, as_dtype,
                              from_dtype, as_dtype, resolve_output_type,
-                             carray, farray, _ufunc_loop_sig)
+                             carray, farray, _ufunc_loop_sig, numpy_version)
 from numba.core.errors import (TypingError, NumbaPerformanceWarning,
                                NumbaTypeError, NumbaAssertionError)
 from numba import pndindex
@@ -286,6 +286,8 @@ bit_twiddling_functions = ["bitwise_and", "bitwise_or",
                            "bitwise_xor", "invert",
                            "left_shift", "right_shift",
                            "bitwise_not" ]
+if numpy_version >= (2, 0):
+    bit_twiddling_functions.append("bitwise_count")
 
 comparison_functions = [ "greater", "greater_equal", "less",
                          "less_equal", "not_equal", "equal",

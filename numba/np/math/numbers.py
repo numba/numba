@@ -203,6 +203,17 @@ def uint_abs_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, x)
 
 
+def int_bitwise_count_impl(context, builder, sig, args):
+    [ty] = sig.args
+    [val] = args
+    if isinstance(ty, types.Integer) and ty.signed:
+        is_neg = builder.icmp_signed('<', val, Constant(val.type, 0))
+        val = builder.select(is_neg, builder.neg(val), val)
+    res = builder.ctpop(val)
+    res = context.cast(builder, res, ty, sig.return_type)
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
 def int_shl_impl(context, builder, sig, args):
     [valty, amtty] = sig.args
     [val, amt] = args

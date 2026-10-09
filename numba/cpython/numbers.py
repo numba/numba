@@ -1453,3 +1453,33 @@ def scalar_view(scalar, viewty):
 
 overload_method(types.Float, 'view')(scalar_view)
 overload_method(types.Integer, 'view')(scalar_view)
+
+
+#-------------------------------------------------------------------------------
+# bit_count
+
+@intrinsic
+def _int_bit_count(typingctx, x):
+    if not isinstance(x, types.Integer):
+        return
+
+    def codegen(context, builder, sig, args):
+        [argty] = sig.args
+        [val] = args
+        if argty.signed:
+            is_neg = builder.icmp_signed('<', val, Constant(val.type, 0))
+            val = builder.select(is_neg, builder.neg(val), val)
+        res = builder.ctpop(val)
+        return context.cast(builder, res, argty, sig.return_type)
+
+    return types.intp(x), codegen
+
+
+@overload_method(types.Integer, 'bit_count')
+def impl_int_bit_count(n):
+    return lambda n: _int_bit_count(n)
+
+
+@overload_method(types.Boolean, 'bit_count')
+def impl_boolean_bit_count(b):
+    return lambda b: 1 if b else 0
