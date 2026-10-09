@@ -994,6 +994,37 @@ class TestCacheWithCpuSetting(DispatcherCacheUsecasesTest):
         self.assertEqual(key_modified[1][1], cpu_codegen._get_host_cpu_name())
         self.assertEqual(key_modified[1][2], my_cpu_features)
 
+    def test_user_set_config_settings(self):
+        # Changing configuration settings that alter code generation must
+        # not reuse cache entries compiled under a different setting.
+        # See issue #10821.
+        self.check_pycache(0)
+
+        self.run_in_separate_process(envvars={'NUMBA_OPT': '3',
+                                              'NUMBA_BOUNDSCHECK': '0'})
+        cache_size = len(self.cache_contents())
+        mtimes = self.get_cache_mtimes()
+
+        self.run_in_separate_process(envvars={'NUMBA_OPT': '0',
+                                              'NUMBA_BOUNDSCHECK': '0'})
+        self.check_later_mtimes(mtimes)
+        self.assertGreater(len(self.cache_contents()), cache_size)
+        cache_size = len(self.cache_contents())
+
+        self.run_in_separate_process(envvars={'NUMBA_OPT': '3',
+                                              'NUMBA_BOUNDSCHECK': '1'})
+        self.assertGreater(len(self.cache_contents()), cache_size)
+
+        # Check cache index has one entry per configuration
+        mod = self.import_module()
+        cache = mod.add_usecase._cache
+        cache_index = cache._cache_file._load_index()
+        self.assertEqual(len(cache_index), 3)
+        # (NUMBA_OPT, NUMBA_BOUNDSCHECK) components of each key
+        opt_boundscheck = {(key[1][3][0], key[1][3][4])
+                           for key in cache_index.keys()}
+        self.assertEqual(opt_boundscheck, {(3, 0), (0, 0), (3, 1)})
+
 
 class TestMultiprocessCache(BaseCacheTest):
 
