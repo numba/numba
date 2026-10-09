@@ -667,6 +667,39 @@ if numpy_version < (2, 0):
 # Advanced / fancy indexing
 
 
+def broadcast_index(builder, idx, extent):
+    """
+    Map a loop counter onto a dimension that is broadcast against it, i.e.
+    whose extent is either 1 or the full loop extent.
+
+    Previous versions of this code used to use the LLVM signed remainder
+    instructions `srem`. However, since domain of the arguments when
+    broadcasting an index is restricted, it is sufficient (and faster) to use
+    the unsigned minimum instrinsic `umin` here. The `idx` parameter is
+    guaranteed to be in the range `[0, n-1]`  and the `extent` parameter is
+    guaranteed to be either `1` or `n` exactly -- where `n` is the true extent
+    of the dimension of the array being broadcast. Importantly `idx` can never
+    take on negative values, since Numba controls the loop iteration and will
+    loop any variable from `0` to `n-1`.  Additionally, `extent` can be neither
+    `0` nor a value between `1` and `n`. If extent were `0` there is no
+    dimension to broadcast and the loop would never run. If `extent` were
+    something other than `1` or `n` this would be an illegal broadcast which
+    would have been rejected long before this code is executed.
+    Computationally, the advantage is that the unsigned minimum `umin`
+    intrinsic is significantly less computationally intensive as it lowers to a
+    simple combination of compare and select  instructions whereas computing
+    the signed remainder `srem` requires multiple divisions, subtractions and
+    shuffling.
+
+    See also: https://github.com/numba/numba/issues/10851
+    See also: https://github.com/numba/numba/pull/10852
+
+    """
+    fnty = ir.FunctionType(idx.type, [idx.type, idx.type])
+    umin = builder.module.declare_intrinsic('llvm.umin', [idx.type], fnty)
+    return builder.call(umin, [idx, builder.sub(extent, extent.type(1))])
+
+
 class Indexer(object):
     """
     Generic indexer interface, for generating indices over a fancy indexed
@@ -856,7 +889,7 @@ class IntegerArrayIndexer(Indexer):
                 len(self.global_ary_idx_list) - len(self.idx_shape):]
         ]
         indices = [
-            builder.srem(indices[i], self.idx_shape[i])
+            broadcast_index(builder, indices[i], self.idx_shape[i])
             for i in range(len(self.idx_shape))
         ]
 
@@ -1325,6 +1358,9 @@ class FancyIndexer(object):
 
 
 def get_subspace_shape(context, builder, array_indices):
+    if len(array_indices) == 1:
+        return tuple(cgutils.unpack_tuple(builder, array_indices[0][3].shape))
+
     max_dims = max([ary[2].ndim for ary in array_indices])
 
     def bdcast_idx_shapes(*args):
@@ -1542,7 +1578,7 @@ def maybe_copy_source(context, builder, use_copy, indexer,
             )
 
         src_indices = [
-            builder.srem(src_indices[i], src_shapes[i])
+            broadcast_index(builder, src_indices[i], src_shapes[i])
             for i in range(len(src_shapes))
         ]
         with builder.if_else(use_copy, likely=False) as (if_copy, otherwise):

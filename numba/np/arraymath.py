@@ -13,6 +13,7 @@ from numba.np.types.datetime import NPDatetime, NPTimedelta
 import numpy as np
 
 from numba.core import types, cgutils
+from numba.core.config import IS_WIN32
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
@@ -66,10 +67,24 @@ class EntireIterator():
         self.extra_strides = extra_strides if extra_strides else []
         self.extra_iter_ptrs = extra_iter_ptrs if extra_iter_ptrs else []
 
+    def _has_static_unit_stride(self):
+        if self.dim == self.aryty.ndim - 1 and self.aryty.layout == 'C':
+            return True
+        if self.dim == 0 and self.aryty.layout == 'F':
+            return True
+        return False
+
     def prepare(self):
         builder = self.builder
         self.size = builder.extract_value(self.ary.shape, self.dim)
-        self.dim_stride = builder.extract_value(self.ary.strides, self.dim)
+        if self._has_static_unit_stride():
+            itemsize = self.context.get_abi_sizeof(
+                self.context.get_data_type(self.aryty.dtype))
+            self.dim_stride = self.context.get_constant(
+                types.intp, itemsize)
+        else:
+            self.dim_stride = builder.extract_value(
+                self.ary.strides, self.dim)
         self.index = cgutils.alloca_once(builder, self.ll_intp)
         self.extra_dim_strides = [
             builder.extract_value(self.extra_strides[i], self.dim)
@@ -140,7 +155,7 @@ class EntireIterator():
 
 class ArrayIterator:
     def __init__(self, context, builder, aryty, ary,
-                 extra_masks=None, extra_arys=None):
+                 extra_masks=None, extra_arys=None, order='C'):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -173,6 +188,11 @@ class ArrayIterator:
                 self.extra_iter_ptrs.append(extra_iter_ptr)
                 self.extra_types.append(extra_ary.data.type)
 
+        if order == 'K' and aryty.layout == 'F':
+            dims = list(reversed(range(aryty.ndim)))
+        else:
+            dims = list(range(aryty.ndim))
+
         self.indexers = [
             EntireIterator(
                 context,
@@ -184,7 +204,7 @@ class ArrayIterator:
                 self.extra_variations,
                 self.extra_strides,
                 self.extra_iter_ptrs,
-            ) for dim in range(aryty.ndim)
+            ) for dim in dims
         ]
 
     def make_stride_from_mask(self, context, builder, mask, strides):
@@ -417,21 +437,60 @@ def get_mask(context, builder, mask_length, axis):
     return builder.load(stack)
 
 
+def get_accumulator_type(ty):
+    """NumPy's accumulator dtype: booleans and integers narrower than the
+    default platform integer accumulate into that integer (signed or
+    unsigned)."""
+    # NumPy < 2.0 used the C ``long`` as the default integer, which is 32-bit
+    # on 64-bit Windows, whereas Numba's ``intp`` is pointer sized. See
+    # issue #10846.
+    if IS_WIN32 and numpy_version < (2, 0):
+        platform_int, platform_uint = types.int32, types.uint32
+        platform_bits = types.int32.bitwidth
+    else:
+        platform_int, platform_uint = types.intp, types.uintp
+        platform_bits = types.intp.bitwidth
+    if ty == types.bool_:
+        return platform_int
+    if isinstance(ty, types.Integer) and ty.bitwidth < platform_bits:
+        return platform_int if ty.signed else platform_uint
+    return ty
+
+
+def needs_accumulator_cast(ty):
+    return isinstance(ty, types.Integer) and ty.bitwidth < types.intp.bitwidth
+
+
+@register_jitable
+def cast_accumulator(result, acc_ty):
+    return acc_ty(result)
+
+
+def make_scalar_reduction_impl_axis(a, acc_ty):
+    if acc_ty == a:
+        def scalar_reduction_impl(a, axis=None, dtype=None):
+            return a
+    else:
+        def scalar_reduction_impl(a, axis=None, dtype=None):
+            return cast_accumulator(a, acc_ty)
+    return scalar_reduction_impl
+
+
+def make_scalar_reduction_impl(a, acc_ty):
+    if acc_ty == a:
+        def scalar_reduction_impl(a):
+            return a
+    else:
+        def scalar_reduction_impl(a):
+            return cast_accumulator(a, acc_ty)
+    return scalar_reduction_impl
+
+
 def get_ret_dtype_if_any(aryty, dtype):
     if is_nonelike(dtype):
-        ret_dtype = aryty.dtype
-        if ret_dtype == types.bool_:
-            ret_dtype = types.intp
-        if (
-            isinstance(aryty.dtype, types.Integer) and
-            aryty.dtype.bitwidth < types.intp.bitwidth
-        ):
-            # For signed integers smaller than intp,
-            # use intp as the accumulator
-            ret_dtype = types.intp
+        return get_accumulator_type(aryty.dtype)
     else:
-        ret_dtype = dtype.dtype
-    return ret_dtype
+        return dtype.dtype
 
 
 @intrinsic
@@ -461,7 +520,8 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
             add_funcfn = context.get_function(fnty, fn_sig)
 
         # Loop on source and copy to destination
-        with ArrayIterator(context, builder, aryty, ary) as iter_val_ptr:
+        with ArrayIterator(context, builder, aryty, ary,
+                           order='K') as iter_val_ptr:
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
                 builder.load(result),
@@ -518,7 +578,7 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
         mask = get_mask(context, builder, aryty.ndim, axis)
         # Loop on source and copy to destination
         with ArrayIterator(
-            context, builder, aryty, ary, (mask,), (res,)
+            context, builder, aryty, ary, (mask,), (res,), order='K'
         ) as (ary_iter_ptr, res_ptr_tup):
             res_ptr = res_ptr_tup[0]
             val = load_item(context, builder, aryty, ary_iter_ptr)
@@ -597,39 +657,30 @@ def array_sum(a, axis=None, dtype=None):
 
         return array_sum_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        if is_nonelike(dtype):
-            acc_init = as_dtype(a).type(0)
-        else:
-            acc_init = as_dtype(dtype).type(0)
-
-        def scalar_sum_impl(a, axis=None, dtype=None):
-            return acc_init + a
-
-        return scalar_sum_impl
+        acc_ty = get_accumulator_type(a) if is_nonelike(dtype) else dtype.dtype
+        return make_scalar_reduction_impl_axis(a, acc_ty)
 
 
 @overload(np.prod)
 @overload_method(types.Array, "prod")
 def array_prod(a):
     if isinstance(a, types.Array):
-        dtype = as_dtype(a.dtype)
-
-        acc_init = get_accumulator(dtype, 1)
+        acc_ty = get_accumulator_type(a.dtype)
+        acc_init = get_accumulator(as_dtype(acc_ty), 1)
+        cast_required = needs_accumulator_cast(acc_ty)
 
         def array_prod_impl(a):
             c = acc_init
             for v in np.nditer(a):
                 c *= v.item()
+            if cast_required:
+                c = cast_accumulator(c, acc_ty)
             return c
 
         return array_prod_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        acc_init = as_dtype(a).type(1)
-
-        def scalar_prod_impl(a):
-            return acc_init * a
-
-        return scalar_prod_impl
+        acc_ty = get_accumulator_type(a)
+        return make_scalar_reduction_impl(a, acc_ty)
 
 
 @intrinsic
@@ -787,28 +838,15 @@ def array_cumsum(a, axis=None, dtype=None):
 
         return array_cumsum_impl
     elif isinstance(a, (types.Number, types.Boolean)):
-        if is_nonelike(dtype):
-            acc_init = as_dtype(a).type(0)
-        else:
-            acc_init = as_dtype(dtype).type(0)
-
-        def scalar_cumsum_impl(a, axis=None, dtype=None):
-            return acc_init + a
-
-        return scalar_cumsum_impl
+        acc_ty = get_accumulator_type(a) if is_nonelike(dtype) else dtype.dtype
+        return make_scalar_reduction_impl_axis(a, acc_ty)
 
 
 @overload(np.cumprod)
 @overload_method(types.Array, "cumprod")
 def array_cumprod(a):
     if isinstance(a, types.Array):
-        is_integer = a.dtype in types.signed_domain
-        is_bool = a.dtype == types.bool_
-        if (is_integer and a.dtype.bitwidth < types.intp.bitwidth)\
-                or is_bool:
-            dtype = as_dtype(types.intp)
-        else:
-            dtype = as_dtype(a.dtype)
+        dtype = as_dtype(get_ret_dtype_if_any(a, None))
 
         acc_init = get_accumulator(dtype, 1)
 
@@ -1863,12 +1901,10 @@ def np_nanstd(a, axis=None, dtype=None, out=None, ddof=0):
 def np_nansum(a):
     if not isinstance(a, types.Array):
         return
-    if isinstance(a.dtype, types.Integer):
-        retty = types.intp
-    else:
-        retty = a.dtype
-    zero = retty(0)
+    acc_ty = get_accumulator_type(a.dtype)
+    zero = get_accumulator(as_dtype(acc_ty), 0)
     isnan = get_isnan(a.dtype)
+    cast_required = needs_accumulator_cast(acc_ty)
 
     def nansum_impl(a):
         c = zero
@@ -1876,6 +1912,8 @@ def np_nansum(a):
             v = view.item()
             if not isnan(v):
                 c += v
+        if cast_required:
+            c = cast_accumulator(c, acc_ty)
         return c
 
     return nansum_impl
@@ -1885,12 +1923,10 @@ def np_nansum(a):
 def np_nanprod(a):
     if not isinstance(a, types.Array):
         return
-    if isinstance(a.dtype, types.Integer):
-        retty = types.intp
-    else:
-        retty = a.dtype
-    one = retty(1)
+    acc_ty = get_accumulator_type(a.dtype)
+    one = get_accumulator(as_dtype(acc_ty), 1)
     isnan = get_isnan(a.dtype)
+    cast_required = needs_accumulator_cast(acc_ty)
 
     def nanprod_impl(a):
         c = one
@@ -1898,6 +1934,8 @@ def np_nanprod(a):
             v = view.item()
             if not isnan(v):
                 c *= v
+        if cast_required:
+            c = cast_accumulator(c, acc_ty)
         return c
 
     return nanprod_impl

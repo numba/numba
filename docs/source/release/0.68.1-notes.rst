@@ -1,0 +1,70 @@
+
+Version 0.68.1 (12 October 2026)
+================================
+
+This is a patch release of Numba that fixes two performance regressions
+(``np.sum`` and fancy indexing), aligns the accumulator dtypes of
+reductions with NumPy, and fixes caching of functions
+imported from a zip archive on Windows.
+
+Performance Improvements and Changes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``np.sum`` performance regression from ``ArrayIterator``
+--------------------------------------------------------
+
+``np.sum`` performance was regressed when ``ArrayIterator`` was adopted. The
+innermost loop now uses a static stride constant, which restores vectorization,
+and ``order='K'`` iteration over Fortran-layout arrays proceeds in reverse so
+the innermost loop does less work.
+
+(`PR-#10850 <https://github.com/numba/numba/pull/10850>`__)
+
+Remove the per-element integer division from advanced indexing
+--------------------------------------------------------------
+
+Advanced (fancy) array indexing is now implemented more efficiently, reversing
+a 2x performance regression for large arrays introduced in Numba v0.66.0.
+
+(`PR-#10852 <https://github.com/numba/numba/pull/10852>`__)
+
+
+Bug Fixes
+~~~~~~~~~
+
+Fix the accumulator dtypes of reductions to match NumPy
+-------------------------------------------------------
+
+The accumulator dtypes of ``np.sum``, ``np.prod``, ``np.cumsum``,
+``np.cumprod``, ``np.nansum`` and ``np.nanprod`` now match NumPy: booleans
+and integers narrower than NumPy's default integer accumulate into that
+integer (``intp``/``uintp``, or ``int32``/``uint32`` on 64-bit Windows with
+NumPy < 2.0). In particular ``np.nansum`` and
+``np.nanprod`` no longer convert unsigned integer inputs to signed ``intp``.
+
+(`PR-#10866 <https://github.com/numba/numba/pull/10866>`__)
+
+Fix caching of functions imported from a zip archive on Windows
+---------------------------------------------------------------
+
+Importing a module that defines a ``cache=True`` function from a zip archive
+no longer raises ``KeyError`` on Windows. The path of the module inside the
+archive is now built with ``/`` separators, as zip member names require.
+
+(`PR-#10896 <https://github.com/numba/numba/pull/10896>`__)
+
+Pull-Requests:
+
+* PR `#10850 <https://github.com/numba/numba/pull/10850>`_: Fix performance regressions introduced by ArrayIterator (`kc611 <https://github.com/kc611>`_)
+* PR `#10852 <https://github.com/numba/numba/pull/10852>`_: Fix fancy indexing performance regression (`cliffckerr <https://github.com/cliffckerr>`_ `esc <https://github.com/esc>`_)
+* PR `#10866 <https://github.com/numba/numba/pull/10866>`_: Add NumPy parity for sum and cumsum accumulators (`kc611 <https://github.com/kc611>`_)
+* PR `#10896 <https://github.com/numba/numba/pull/10896>`_: Fix ZipCacheLocator to handle Windows-style paths in `_split_zip_path` (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#10906 <https://github.com/numba/numba/pull/10906>`_: doc: update 0.68 release notes, remove incorrect attribution (`swap357 <https://github.com/swap357>`_)
+
+Authors:
+
+* `cliffckerr <https://github.com/cliffckerr>`_
+* `esc <https://github.com/esc>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `kc611 <https://github.com/kc611>`_
+* `swap357 <https://github.com/swap357>`_

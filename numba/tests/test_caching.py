@@ -785,6 +785,8 @@ def add(x, y):
         zip_path = os.path.join(self.tempdir, zip_filename)
         with zipfile.ZipFile(zip_path, "w") as zf:
             zf.writestr(mod_filename, mod_content)
+            zf.writestr("test_zip_pkg/__init__.py", "")
+            zf.writestr("test_zip_pkg/nested.py", mod_content)
 
         # Add the zip file to sys.path
         sys.path.insert(0, zip_path)
@@ -795,6 +797,8 @@ def add(x, y):
         sys.path.pop(0)
         # Remove the module from sys.modules to clean up
         sys.modules.pop("test_module", None)
+        sys.modules.pop("test_zip_pkg", None)
+        sys.modules.pop("test_zip_pkg.nested", None)
 
     def test_zip_caching(self):
         # (note that `self.import_module()` fails because its checks are
@@ -823,6 +827,19 @@ def add(x, y):
         # Check if the cache was hit
         self.check_hits(test_module.add, 1)
 
+    def test_zip_caching_nested(self):
+        nested = importlib.import_module("test_zip_pkg.nested")
+
+        self.assertEqual(nested.add(2, 3), 5)
+        self.check_hits(nested.add, 0, 1)
+
+        del sys.modules["test_zip_pkg.nested"]
+        importlib.invalidate_caches()
+        nested = importlib.import_module("test_zip_pkg.nested")
+
+        self.assertEqual(nested.add(2, 3), 5)
+        self.check_hits(nested.add, 1)
+
 
 class TestCacheZipLib(DispatcherCacheUsecasesTest):
     """
@@ -839,6 +856,17 @@ class TestCacheZipLib(DispatcherCacheUsecasesTest):
         self.assertIsNotNone(locator)
         self.assertEqual(locator._zip_path, str(Path("/path/to/archive.zip")))
         self.assertEqual(locator._internal_path, "module.py")
+
+    def test_zip_locator_nested_internal_path(self):
+
+        def mock_func():
+            pass
+
+        zip_path = str(Path("/path/to/archive.zip/pkg/sub/module.py"))
+
+        locator = ZipCacheLocator.from_function(mock_func, zip_path)
+        self.assertEqual(locator._zip_path, str(Path("/path/to/archive.zip")))
+        self.assertEqual(locator._internal_path, "pkg/sub/module.py")
 
     def test_zip_locator_non_zip_path(self):
 
