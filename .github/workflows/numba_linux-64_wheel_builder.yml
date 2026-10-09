@@ -200,7 +200,7 @@ jobs:
           fi
           $PYTHON_PATH -m twine check dist/*.whl
 
-          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} "setuptools>=69.0.0"
+          $PYTHON_PATH -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }} "setuptools>=77.0.3 "
 
           if [ "$USE_TBB" = "true" ]; then
             $PYTHON_PATH -m pip install tbb
