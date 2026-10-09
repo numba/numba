@@ -3134,6 +3134,27 @@ class ParforFusionPass(ParforPassStates):
         unwrap_parfor_blocks(parfor)
 
 
+def _strip_dels_recursive(blocks):
+    """Remove ir.Del nodes from the given blocks dict and from every nested
+    Parfor's init_block and loop_body (recursively).
+
+    ``numba.core.ir_utils.remove_dels`` only iterates ``blocks.values()`` and
+    does not descend into ``Parfor.init_block`` / ``Parfor.loop_body``, so dels
+    embedded in sub-parfor bodies (e.g. the ``argmax_parallel_impl``
+    ``.ravel()`` replacement) survive and later trip ``enforce_no_dels`` at
+    the next FunctionPass boundary inside the gufunc inner pipeline.
+    """
+    ir_utils.remove_dels(blocks)
+    for block in blocks.values():
+        for stmt in block.body:
+            if isinstance(stmt, Parfor):
+                stmt.init_block.body = [
+                    s for s in stmt.init_block.body
+                    if not isinstance(s, ir.Del)
+                ]
+                _strip_dels_recursive(stmt.loop_body)
+
+
 class ParforPreLoweringPass(ParforPassStates):
 
     """ParforPreLoweringPass class is responsible for preparing parfors for lowering.
@@ -3141,6 +3162,12 @@ class ParforPreLoweringPass(ParforPassStates):
 
     def run(self):
         """run parfor prelowering pass"""
+
+        # Strip ir.Del nodes that may have been carried in from the preceding
+        # IRProcessing / typeinfer stage, including dels nested inside sub-parfor
+        # bodies (``remove_dels`` on its own does not recurse into Parfor
+        # ``init_block`` / ``loop_body``).
+        _strip_dels_recursive(self.func_ir.blocks)
 
         # push function call variables inside parfors so gufunc function
         # wouldn't need function variables as argument
@@ -3203,6 +3230,16 @@ class ParforPreLoweringPass(ParforPassStates):
             # Validate parameters:
             for p in parfors:
                 p.validate_params(self.typemap)
+
+            # Strip ir.Del nodes re-introduced by ``push_call_vars`` /
+            # ``simplify`` / ``get_parfor_params`` above (``simplify`` runs the
+            # dead-code / copy-propagate chain which inserts dels into wrapped
+            # parfor blocks). Without this, enforce_no_dels fires at the next
+            # FunctionPass boundary with "Illegal IR, del found" when np.argmax
+            # (or any np reduction expanded to a sub-parfor) is reached from an
+            # ``inline="always"`` helper whose return value is a view into a
+            # numpy structured-dtype field.
+            _strip_dels_recursive(self.func_ir.blocks)
 
             if config.DEBUG_ARRAY_OPT_STATS:
                 name = self.func_ir.func_id.func_qualname
