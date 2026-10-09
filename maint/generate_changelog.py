@@ -30,7 +30,10 @@ CHANGE_LOG = "CHANGE_LOG"
 RELEASE_NOTES_DIR = Path("docs/source/release")
 COAUTHOR_RE = re.compile(r"^Co-authored-by:\s*(.+?)\s*<(.+?)>", re.MULTILINE)
 _EMAIL_CACHE = {}
+# GitHub account logins, and the git committer name "GitHub", should
+# not be credited. web-flow is the account behind web UI merges.
 _SKIP_LOGINS = {"web-flow", "GitHub"}
+_SKIP_EMAILS = {"noreply@github.com"}
 
 
 def sh(*cmd):
@@ -86,6 +89,11 @@ def resolve_token(token):
     return token
 
 
+def _unresolvable_email(email):
+    """True only for addresses in ``_SKIP_EMAILS``."""
+    return email.lower() in _SKIP_EMAILS
+
+
 def resolve_email(gh, email):
     """Map a co-author email to a GitHub user (login, url); name-only if not."""
     if email in _EMAIL_CACHE:
@@ -95,9 +103,14 @@ def resolve_email(gh, email):
         if email.endswith("@users.noreply.github.com"):
             login = email.split("@")[0].split("+")[-1]
             user = gh.get_user(login)
-        else:
+        elif not _unresolvable_email(email):
             hits = gh.search_users(f"{email} in:email")
-            user = hits[0] if hits.totalCount else None
+            if hits.totalCount:
+                candidate = hits[0]
+                # in:email search is fuzzy and may return unrelated
+                # users; only accept an exact public-email match.
+                if (candidate.email or "").lower() == email.lower():
+                    user = candidate
     except GithubException:
         user = None
     _EMAIL_CACHE[email] = user
@@ -130,21 +143,33 @@ def git_identity(gh, git_user):
     return None
 
 
+def person_identity(gh, gh_user, git_user):
+    """Identity for a commit author or committer.
+
+    A login in ``_SKIP_LOGINS`` (e.g. web-flow) means the git identity
+    carries no credit information, so the git fallback is skipped too.
+    """
+    if getattr(gh_user, "login", None) in _SKIP_LOGINS:
+        return None
+    return gh_identity(gh_user) or git_identity(gh, git_user)
+
+
 def pr_authors(gh, pr):
     """Set of (login_or_name, url_or_None) including co-author trailers."""
     authors = set()
     for c in pr.get_commits():
-        ident = gh_identity(c.author) or git_identity(gh, c.commit.author)
-        if ident:
-            authors.add(ident)
-        ident = gh_identity(c.committer) or git_identity(
-            gh, c.commit.committer)
-        if ident:
-            authors.add(ident)
+        for gh_user, git_user in ((c.author, c.commit.author),
+                                  (c.committer, c.commit.committer)):
+            ident = person_identity(gh, gh_user, git_user)
+            if ident:
+                authors.add(ident)
         for name, email in COAUTHOR_RE.findall(c.commit.message):
             user = resolve_email(gh, email)
             ident = gh_identity(user) if user else None
-            authors.add(ident if ident else (name, None))
+            if not ident and name not in _SKIP_LOGINS:
+                ident = (name, None)
+            if ident:
+                authors.add(ident)
     return authors
 
 
