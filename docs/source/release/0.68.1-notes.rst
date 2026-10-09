@@ -48,3 +48,19 @@ no longer raises ``KeyError`` on Windows. The path of the module inside the
 archive is now built with ``/`` separators, as zip member names require.
 
 (`PR-#10896 <https://github.com/numba/numba/pull/10896>`__)
+
+Pull-Requests:
+
+* PR `#10850 <https://github.com/numba/numba/pull/10850>`_: Fix performance regressions introduced by ArrayIterator (`kc611 <https://github.com/kc611>`_)
+* PR `#10852 <https://github.com/numba/numba/pull/10852>`_: Fix fancy indexing performance regression (`cliffckerr <https://github.com/cliffckerr>`_ `esc <https://github.com/esc>`_)
+* PR `#10866 <https://github.com/numba/numba/pull/10866>`_: Add NumPy parity for sum and cumsum accumulators (`kc611 <https://github.com/kc611>`_)
+* PR `#10896 <https://github.com/numba/numba/pull/10896>`_: Fix ZipCacheLocator to handle Windows-style paths in `_split_zip_path` (`guilhermeleobas <https://github.com/guilhermeleobas>`_)
+* PR `#10906 <https://github.com/numba/numba/pull/10906>`_: doc: update 0.68 release notes, remove incorrect attribution (`swap357 <https://github.com/swap357>`_)
+
+Authors:
+
+* `cliffckerr <https://github.com/cliffckerr>`_
+* `esc <https://github.com/esc>`_
+* `guilhermeleobas <https://github.com/guilhermeleobas>`_
+* `kc611 <https://github.com/kc611>`_
+* `swap357 <https://github.com/swap357>`_
