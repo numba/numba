@@ -1,7 +1,11 @@
 
-Version 0.68.1 (Release Date)
-=============================
+Version 0.68.1 (12 October 2026)
+================================
 
+This is a patch release of Numba that fixes two performance regressions
+(``np.sum`` and fancy indexing), aligns the accumulator dtypes of
+reductions with NumPy, and fixes caching of functions
+imported from a zip archive on Windows.
 
 Performance Improvements and Changes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
