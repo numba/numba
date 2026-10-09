@@ -83,6 +83,7 @@ test:
     - ipykernel                # [py<315 and not (py==312 or (win and arm64))]
     # For memory monitoring
     - psutil                   # [py<315]
+    - py-lief                  # [py<315]
     # Need these for AOT. Do not init msvc as it may not be present
     - {{ compiler('c') }}      # [not (win or aarch64)]
     - {{ compiler('cxx') }}    # [not (win or aarch64)]

@@ -13,4 +13,6 @@ if [[ "$(uname -s)" == *"Linux"* ]] && [[ "$(uname -p)" == *"ppc64le"* ]]; then
     export CXX="$CXX -pthread"
 fi
 
+export NUMBA_PACKAGE_FORMAT="conda"
+
 MACOSX_DEPLOYMENT_TARGET=10.10 $PYTHON setup.py build_ext $EXTRA_BUILD_EXT_FLAGS build install --single-version-externally-managed --record=record.txt

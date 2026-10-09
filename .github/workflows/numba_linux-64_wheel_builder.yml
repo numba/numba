@@ -187,11 +187,14 @@ jobs:
           catchsegv --version
 
       - name: Validate and test wheel
+        env:
+          NUMBA_DIST_TEST: 1
+          TESTS_TO_RUN: "numba.tests.test_dist_validation"
         run: |
           # Pin to the setup-python interpreter: a login shell (bash -el) can
           # re-source profiles and reorder PATH, so bare `python` is unreliable.
           PYTHON_PATH=$(which python${{ matrix.python_major_minor }})
-          $PYTHON_PATH -m pip install --upgrade pip twine
+          $PYTHON_PATH -m pip install --upgrade pip twine lief
           ls -l dist
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               $PYTHON_PATH -m pip install --no-cache-dir llvmlite_wheels/*.whl
@@ -212,4 +215,4 @@ jobs:
           $PYTHON_PATH -m numba -s
 
           # run tests under catchsegv to obtain native backtraces on segfault
-          catchsegv $PYTHON_PATH -m numba.runtests -m 4 -v
+          catchsegv $PYTHON_PATH -m numba.runtests $TESTS_TO_RUN -m 4 -v

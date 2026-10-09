@@ -16,6 +16,8 @@ if "%ARCH%"=="arm64" (
   call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" x64 -vcvars_ver=14.44
 )
 
+set NUMBA_PACKAGE_FORMAT=conda
+
 %PYTHON% setup.py build install --single-version-externally-managed --record=record.txt
 
 exit /b %errorlevel%
