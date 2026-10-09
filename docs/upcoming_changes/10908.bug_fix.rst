@@ -1,0 +1,10 @@
+Fix parfor crash when inlined helper returns a view used by ``np.argmax``
+-------------------------------------------------------------------------
+
+Under ``@njit(parallel=True)``, chaining an ``inline="always"`` helper
+that returns a view into a numpy structured-dtype field into another
+``inline="always"`` helper whose body ends in ``np.argmax`` no longer
+raises ``CompilerError: Illegal IR, del found`` during parfor
+lowering. The ``ir.Del`` for the inlined view is now stripped from
+nested sub-parfor bodies before ``ParforPreLoweringPass`` enforces no
+dels.

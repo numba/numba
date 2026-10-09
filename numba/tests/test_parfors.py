@@ -3352,6 +3352,50 @@ class TestParforsMisc(TestParforsBase):
         self.assertEqual(issue_9678_serial(num_nodes),
                          issue_9678_parallel(num_nodes))
 
+    def test_issue_10908_inline_structured_dtype_argmax(self):
+        # issue 10908: under @njit(parallel=True), when an inline="always"
+        # helper that returns a view into a structured-dtype field is chained
+        # into another inline="always" helper whose body ends in np.argmax(),
+        # the ir.Del for the view ends up inside the sub-parfor that
+        # argmax_parallel_impl expands into. remove_dels only touches
+        # top-level blocks, so the Del survives into ParforPreLoweringPass
+        # and enforce_no_dels rejects it with "Illegal IR, del found".
+        @numba.njit(inline="always")
+        def sample_outcome(y_pred):
+            r = 0.5
+            t = 0.0
+            for i, p in enumerate(y_pred):
+                t += p
+                if r < t:
+                    return i
+            return int(np.argmax(y_pred))
+
+        @numba.njit(inline="always")
+        def normalise(feats):
+            new_probs = feats["pace_adjustments"]
+            total = 0.0
+            for i in range(len(new_probs)):
+                new_probs[i] = 0.1
+                total += new_probs[i]
+            for i in range(len(new_probs)):
+                new_probs[i] /= total
+            return new_probs
+
+        feats_dt = np.dtype([("pace_adjustments", np.float64, 10)])
+
+        @numba.njit(parallel=True)
+        def simulate(feats_all, result):
+            for i in prange(len(feats_all)):
+                result[i] = sample_outcome(y_pred=normalise(feats_all[i]))
+
+        n = 10
+        feats = np.zeros(n, dtype=feats_dt)
+        result = np.zeros(n, dtype=np.int32)
+        # Compilation alone exercises the regression — before the fix this
+        # raised "CompilerError: Illegal IR, del found" during native parfor
+        # lowering.
+        simulate(feats, result)
+
 
 @skip_parfors_unsupported
 class TestParforsDiagnostics(TestParforsBase):
