@@ -1,0 +1,4 @@
+Add Columns to ``ir.Loc``
+-------------------------
+
+The location of compile-time errors (``ir.Loc``) now contains the column number.
