@@ -5,3 +5,7 @@ Functions compiled with ``cache=True`` from a module inside a zip archive now
 use the directory in ``NUMBA_CACHE_DIR`` when it is set. As with the other
 cache locators, a cache directory that cannot be created is now reported when
 the module is imported, instead of as a ``PermissionError`` on the first call.
+This also means a zip-backed cache directory that exists and already holds
+cached results but is not writable is now rejected at import time, matching
+the behaviour of the other cache locators; previously a zip module could still
+load from such a cache.
