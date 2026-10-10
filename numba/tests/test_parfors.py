@@ -1075,6 +1075,16 @@ class TestParforNumPy(TestParforsBase):
         self.check(test_impl1, B)
         self.check(test_impl1, C)
         self.check(test_impl1, D)
+
+        # Boolean arrays: use assertEqual instead of check() because
+        # assert_almost_equal does not support boolean subtraction.
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.boolean[:],))
+            for arr in (np.array([False, True, False, True, False]),
+                        np.array([False, False, False]),
+                        np.array([True, True, True])):
+                self.assertEqual(pcfunc.entry_point(arr), impl(arr))
+
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
@@ -1112,6 +1122,16 @@ class TestParforNumPy(TestParforsBase):
         self.check(test_impl1, B)
         self.check(test_impl1, C)
         self.check(test_impl1, D)
+
+        # Boolean arrays: use assertEqual instead of check() because
+        # assert_almost_equal does not support boolean subtraction.
+        for impl in (test_impl1, test_impl2):
+            pcfunc = self.compile_parallel(impl, (types.boolean[:],))
+            for arr in (np.array([False, True, False, True, False]),
+                        np.array([False, False, False]),
+                        np.array([True, True, True])):
+                self.assertEqual(pcfunc.entry_point(arr), impl(arr))
+
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
@@ -1145,14 +1165,17 @@ class TestParforNumPy(TestParforsBase):
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
         D = np.array([1., 0., np.nan, 2., 3.])
+        E = np.array([False, True, False, True, False])  # see issue #5263
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
         self.check(test_impl1, D)
+        self.check(test_impl1, E)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
         self.check(test_impl2, D)
+        self.check(test_impl2, E)
 
         # checks that 0d array input raises
         msg = 'attempt to get argmax of an empty sequence'
@@ -1181,14 +1204,17 @@ class TestParforNumPy(TestParforsBase):
         B = np.random.randint(10, size=n).astype(np.int32)
         C = np.random.ranf((n, n))  # test multi-dimensional array
         D = np.array([1., 0., np.nan, 0., 3.])
+        E = np.array([True, True, False, True, False])  # see issue #5263
         self.check(test_impl1, A)
         self.check(test_impl1, B)
         self.check(test_impl1, C)
         self.check(test_impl1, D)
+        self.check(test_impl1, E)
         self.check(test_impl2, A)
         self.check(test_impl2, B)
         self.check(test_impl2, C)
         self.check(test_impl2, D)
+        self.check(test_impl2, E)
 
         # checks that 0d array input raises
         msg = 'attempt to get argmin of an empty sequence'

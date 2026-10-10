@@ -165,6 +165,8 @@ def min_parallel_impl(return_type, arg):
 # -----------------------------------------------------------------------------
 
 def get_type_max_value(typ):
+    if isinstance(typ, types.Boolean):
+        return True
     if isinstance(typ, types.Float):
         return np.inf
     if isinstance(typ, types.Integer):
@@ -172,6 +174,8 @@ def get_type_max_value(typ):
     raise NotImplementedError("Unsupported type")
 
 def get_type_min_value(typ):
+    if isinstance(typ, types.Boolean):
+        return False
     if isinstance(typ, types.Float):
         return -np.inf
     if isinstance(typ, types.Integer):
@@ -192,7 +196,11 @@ class MinValInfer(AbstractTemplate):
 def lower_get_type_min_value(context, builder, sig, args):
     typ = sig.args[0].dtype
 
-    if isinstance(typ, types.Integer):
+    if isinstance(typ, types.Boolean):
+        # Boolean value type is i1 in Numba (see BooleanModel).
+        lty = lir.IntType(1)
+        res = lir.Constant(lty, 0)
+    elif isinstance(typ, types.Integer):
         bw = typ.bitwidth
         lty = lir.IntType(bw)
         val = typ.minval
@@ -219,7 +227,11 @@ def lower_get_type_min_value(context, builder, sig, args):
 def lower_get_type_max_value(context, builder, sig, args):
     typ = sig.args[0].dtype
 
-    if isinstance(typ, types.Integer):
+    if isinstance(typ, types.Boolean):
+        # Boolean value type is i1 in Numba (see BooleanModel).
+        lty = lir.IntType(1)
+        res = lir.Constant(lty, 1)
+    elif isinstance(typ, types.Integer):
         bw = typ.bitwidth
         lty = lir.IntType(bw)
         val = typ.maxval
