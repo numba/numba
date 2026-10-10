@@ -457,11 +457,10 @@ class TestBuiltins(TestCase):
 
         cfunc = jit((types.int64, types.int64), **flags)(pyfunc)
 
-        def truncate_result(x, bits=64):
-            # Remove any extraneous bits (since Numba will return
-            # a 64-bit result by definition)
-            if x >= 0:
-                x &= (1 << (bits - 1)) - 1
+        def wrap_signed(x, bits=64):
+            x &= (1 << bits) - 1
+            if x >= 1 << (bits - 1):
+                x -= 1 << bits
             return x
 
         denominators = [1, 3, 7, 15, -1, -3, -7, -15, 2**63 - 1, -2**63]
@@ -469,7 +468,7 @@ class TestBuiltins(TestCase):
         for x, y, in itertools.product(numerators, denominators):
             expected_quot, expected_rem = pyfunc(x, y)
             quot, rem = cfunc(x, y)
-            f = truncate_result
+            f = wrap_signed
             self.assertPreciseEqual((f(quot), f(rem)),
                                     (f(expected_quot), f(expected_rem)))
 
