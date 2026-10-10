@@ -520,8 +520,18 @@ class ArrayAttribute(AttributeTemplate):
     @bound_function("array.astype")
     def resolve_astype(self, ary, args, kws):
         from .npydecl import parse_dtype
-        assert not kws
-        dtype, = args
+        kwargs = dict(kws)
+        copy = kwargs.pop('copy', types.BooleanLiteral(True))
+        if kwargs:
+            raise TypingError("Unsupported keywords: %r"
+                              % (list(kwargs.keys()),))
+        if not isinstance(copy, types.Boolean):
+            raise TypingError('"copy" must be a boolean')
+        if not isinstance(copy, types.BooleanLiteral):
+            raise RequireLiteralValue("array.astype 'copy' argument must be "
+                                      "a constant")
+        dtype_arg, = args
+        dtype = dtype_arg
         if isinstance(dtype, types.UnicodeType):
             raise RequireLiteralValue(("array.astype if dtype is a string it "
                                        "must be constant"))
@@ -532,11 +542,18 @@ class ArrayAttribute(AttributeTemplate):
             raise TypingError("astype(%s) not supported on %s: "
                               "cannot convert from %s to %s"
                               % (dtype, ary, ary.dtype, dtype))
-        layout = ary.layout if ary.layout in 'CF' else 'C'
-        # reset the write bit irrespective of whether the cast type is the same
-        # as the current dtype, this replicates numpy
-        retty = ary.copy(dtype=dtype, layout=layout, readonly=False)
-        return signature(retty, *args)
+        if not copy.literal_value and ary.dtype == dtype:
+            layout = ary.layout
+            readonly = not ary.mutable
+        else:
+            layout = ary.layout if ary.layout in 'CF' else 'C'
+            readonly = False
+        retty = ary.copy(dtype=dtype, layout=layout, readonly=readonly)
+
+        def astype_stub(dtype, copy=True):
+            pass
+        pysig = utils.pysignature(astype_stub)
+        return signature(retty, dtype_arg, copy).replace(pysig=pysig)
 
     @bound_function("array.ravel")
     def resolve_ravel(self, ary, args, kws):

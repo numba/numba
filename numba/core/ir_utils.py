@@ -719,7 +719,7 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
     # update definitions since they are not guaranteed to be up-to-date
     # FIXME keep definitions up-to-date to avoid the need for rebuilding
     func_ir._definitions = build_definitions(func_ir.blocks)
-    np_alias_funcs = ['ravel', 'transpose', 'reshape']
+    np_alias_funcs = ['ravel', 'transpose', 'reshape', 'astype']
 
     for bl in blocks.values():
         for instr in bl.body:
