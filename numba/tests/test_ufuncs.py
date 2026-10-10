@@ -413,6 +413,12 @@ class TestUFuncs(BasicUFuncTest, TestCase):
                     self.assertPreciseEqual(operators(a, b),
                                             operator_expected)
 
+            a = np.repeat(np.array(values, dtype=dtype), len(values))
+            b = np.tile(np.array(values, dtype=dtype), len(values))
+            with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
+                expected = ufuncs.py_func(a, b)
+            self.assertPreciseEqual(ufuncs(a, b), expected)
+
     def test_mod_ufunc(self):
         additional_inputs = [
             ((np.uint64(np.iinfo(np.uint64).max), np.uint64(16)), types.uint64)
