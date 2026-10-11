@@ -8,6 +8,7 @@ import math
 
 import types as pytypes
 import collections
+import operator
 import warnings
 
 import numba
@@ -766,6 +767,25 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                         _add_alias(lhs, expr.args[0].name, alias_map, arg_aliases)
                     if isinstance(fmod, ir.Var) and fname in np_alias_funcs:
                         _add_alias(lhs, fmod.name, alias_map, arg_aliases)
+                    if (isinstance(fmod, ir.Var)
+                            and fname in ('get', 'setdefault', 'pop')):
+                        receiver_type = (None if typemap is None
+                                         else typemap.get(fmod.name))
+                        if (receiver_type is None or
+                                isinstance(receiver_type, types.DictType)):
+                            # The result may be a stored value or the default.
+                            _add_alias(lhs, fmod.name, alias_map, arg_aliases)
+                            defaults = ([expr.args[1]] if len(expr.args) > 1
+                                        else [dict(expr.kws).get('default')])
+                            if expr.vararg is not None:
+                                defaults.extend(_get_vararg_aliases(
+                                    func_ir, expr.vararg))
+                            for default in defaults:
+                                if (default is not None
+                                        and not is_immutable_type(default.name,
+                                                                  typemap)):
+                                    _add_alias(lhs, default.name, alias_map,
+                                               arg_aliases)
 
     # copy to avoid changing size during iteration
     old_alias_map = copy.deepcopy(alias_map)
@@ -777,6 +797,31 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
             alias_map[w] = alias_map[v]
 
     return alias_map, arg_aliases
+
+
+def _get_vararg_aliases(func_ir, vararg):
+    """Find variables that may occur in an unpacked argument tuple."""
+    aliases = {}
+    work_list = [vararg]
+    while work_list:
+        var = work_list.pop()
+        if var.name in aliases:
+            continue
+        aliases[var.name] = var
+        for definition in func_ir._definitions.get(var.name, ()):
+            if isinstance(definition, ir.Var):
+                work_list.append(definition)
+            elif isinstance(definition, ir.Expr):
+                if definition.op in ('build_tuple', 'build_list'):
+                    work_list.extend(definition.items)
+                elif (definition.op == 'binop'
+                        and definition.fn is operator.add):
+                    work_list.extend((definition.lhs, definition.rhs))
+                elif (definition.op == 'call' and
+                        guard(find_const, func_ir, definition.func) is tuple):
+                    work_list.extend(definition.args)
+    return aliases.values()
+
 
 def _add_alias(lhs, rhs, alias_map, arg_aliases):
     if rhs in arg_aliases:
