@@ -1181,6 +1181,76 @@ def complex_div_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+def mixed_complex_impl(kernel):
+    def imp(context, builder, sig, args):
+        res = context.compile_internal(builder, kernel, sig, args)
+        return impl_ret_untracked(context, builder, sig.return_type, res)
+    return imp
+
+
+@mixed_complex_impl
+def complex_real_add_impl(z, x):
+    return complex(z.real + x, z.imag)
+
+
+@mixed_complex_impl
+def real_complex_add_impl(x, z):
+    return complex(x + z.real, z.imag)
+
+
+@mixed_complex_impl
+def complex_real_sub_impl(z, x):
+    return complex(z.real - x, z.imag)
+
+
+@mixed_complex_impl
+def real_complex_sub_impl(x, z):
+    return complex(x - z.real, -z.imag)
+
+
+@mixed_complex_impl
+def complex_real_mul_impl(z, x):
+    return complex(z.real * x, z.imag * x)
+
+
+@mixed_complex_impl
+def real_complex_mul_impl(x, z):
+    return complex(x * z.real, x * z.imag)
+
+
+@mixed_complex_impl
+def complex_real_div_impl(z, x):
+    if x == 0.0:
+        raise ZeroDivisionError("division by zero")
+    return complex(z.real / x, z.imag / x)
+
+
+@mixed_complex_impl
+def real_complex_div_impl(x, z):
+    c = z.real
+    d = z.imag
+    if abs(c) >= abs(d):
+        if c == 0.0:
+            raise ZeroDivisionError("division by zero")
+        ratio = d / c
+        denom = c + d * ratio
+        res = complex(x / denom, (-x * ratio) / denom)
+    elif abs(d) >= abs(c):
+        ratio = c / d
+        denom = c * ratio + d
+        res = complex((x * ratio) / denom, (-x) / denom)
+    else:
+        res = complex(NAN, NAN)
+
+    if (math.isnan(res.real) and math.isnan(res.imag) and math.isfinite(x)
+            and (math.isinf(c) or math.isinf(d))):
+        u = math.copysign(1.0 if math.isinf(c) else 0.0, c)
+        v = math.copysign(1.0 if math.isinf(d) else 0.0, d)
+        res = complex(0.0 * (x * u), 0.0 * (-x * v))
+
+    return res
+
+
 def complex_negate_impl(context, builder, sig, args):
     from numba.cpython import mathimpl
     [typ] = sig.args
@@ -1251,6 +1321,24 @@ lower_builtin(operator.eq, ty, ty)(complex_eq_impl)
 lower_builtin(operator.ne, ty, ty)(complex_ne_impl)
 
 lower_builtin(abs, ty)(complex_abs_impl)
+
+if utils.PYVERSION >= (3, 14):
+    lower_builtin(operator.add, ty, types.Float)(complex_real_add_impl)
+    lower_builtin(operator.add, types.Float, ty)(real_complex_add_impl)
+    lower_builtin(operator.iadd, ty, types.Float)(complex_real_add_impl)
+    lower_builtin(operator.iadd, types.Float, ty)(real_complex_add_impl)
+    lower_builtin(operator.sub, ty, types.Float)(complex_real_sub_impl)
+    lower_builtin(operator.sub, types.Float, ty)(real_complex_sub_impl)
+    lower_builtin(operator.isub, ty, types.Float)(complex_real_sub_impl)
+    lower_builtin(operator.isub, types.Float, ty)(real_complex_sub_impl)
+    lower_builtin(operator.mul, ty, types.Float)(complex_real_mul_impl)
+    lower_builtin(operator.mul, types.Float, ty)(real_complex_mul_impl)
+    lower_builtin(operator.imul, ty, types.Float)(complex_real_mul_impl)
+    lower_builtin(operator.imul, types.Float, ty)(real_complex_mul_impl)
+    lower_builtin(operator.truediv, ty, types.Float)(complex_real_div_impl)
+    lower_builtin(operator.truediv, types.Float, ty)(real_complex_div_impl)
+    lower_builtin(operator.itruediv, ty, types.Float)(complex_real_div_impl)
+    lower_builtin(operator.itruediv, types.Float, ty)(real_complex_div_impl)
 
 del ty
 

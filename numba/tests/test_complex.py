@@ -150,6 +150,62 @@ class TestComplexNaNRecovery(BaseComplexTest, TestCase):
                 cfunc(1+1j, denom)
 
 
+@skip_unless_py314_or_later
+class TestMixedRealComplex(BaseComplexTest, TestCase):
+    def check(self, pyfunc, flags=no_pyobj_flags):
+        reals = [-0.0, +0.0, 1.0, -1.0, 1e10,
+                 float('-inf'), float('+inf'), float('nan')]
+        complexes = [complex(x, y) for x, y in itertools.product(reals, reals)]
+        ints = [0, 2, -3]
+        for real_ty, complex_ty, real_values in [
+                (types.float64, types.complex128, reals),
+                (types.float32, types.complex64, reals[:5]),
+                (types.int64, types.complex128, ints)]:
+            self.run_binary(pyfunc, [(real_ty, complex_ty)],
+                            list(itertools.product(real_values, complexes)),
+                            flags=flags)
+            self.run_binary(pyfunc, [(complex_ty, real_ty)],
+                            list(itertools.product(complexes, real_values)),
+                            flags=flags)
+
+    def test_add(self):
+        self.check(add_usecase)
+
+    def test_sub(self):
+        self.check(sub_usecase)
+
+    def test_mul(self):
+        self.check(mul_usecase)
+
+    def test_div(self):
+        self.check(div_usecase)
+
+    def test_iadd(self):
+        self.check(iadd_usecase)
+
+    def test_isub(self):
+        self.check(isub_usecase)
+
+    def test_imul(self):
+        self.check(imul_usecase)
+
+    def test_idiv(self):
+        self.check(idiv_usecase)
+
+    def test_div_zero(self):
+        cases = [((types.complex128, types.float64), (1+1j, 0.0)),
+                 ((types.complex128, types.float64), (1+1j, -0.0)),
+                 ((types.float64, types.complex128), (1.0, 0j))]
+        for pyfunc in (div_usecase, idiv_usecase):
+            for argtys, args in cases:
+                cfunc = jit(argtys, **no_pyobj_flags)(pyfunc)
+                with self.assertRaises(ZeroDivisionError) as raises:
+                    pyfunc(*args)
+                with self.assertRaises(ZeroDivisionError) as cm:
+                    cfunc(*args)
+                self.assertEqual(str(cm.exception), str(raises.exception))
+
+
 class TestCMath(BaseComplexTest, TestCase):
     """
     Tests for cmath module support.
