@@ -192,6 +192,21 @@ class TestMixedRealComplex(BaseComplexTest, TestCase):
     def test_idiv(self):
         self.check(idiv_usecase)
 
+    def test_result_type(self):
+        cases = [(types.float32, types.complex64),
+                 (types.int8, types.complex64),
+                 (types.boolean, types.complex64),
+                 (types.int64, types.complex128),
+                 (types.uint64, types.complex128),
+                 (types.float64, types.complex128)]
+        for pyfunc in (add_usecase, mul_usecase, div_usecase):
+            for real_ty, complex_ty in cases:
+                for argtys in ((real_ty, types.complex64),
+                               (types.complex64, real_ty)):
+                    cfunc = jit(argtys, **no_pyobj_flags)(pyfunc)
+                    [sig] = cfunc.nopython_signatures
+                    self.assertEqual(sig.return_type, complex_ty)
+
     def test_div_zero(self):
         cases = [((types.complex128, types.float64), (1+1j, 0.0)),
                  ((types.complex128, types.float64), (1+1j, -0.0)),
