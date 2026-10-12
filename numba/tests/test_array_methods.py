@@ -1380,60 +1380,33 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             with self.subTest("Test np.sum with {} input ".format(arr.dtype)):
                 self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
 
-    def test_sum_axis_kws1(self):
+    def test_sum_axis_kws(self):
         """ test sum with axis parameter over a whole range of dtypes  """
         pyfunc = array_sum_axis_kws
         cfunc = jit(nopython=True)(pyfunc)
-        signed_dtypes_no_int32 = [
-            np.float64, np.float32, np.int64, np.complex64,
+        signed_dtypes = [
+            np.float64, np.float32, np.int64, np.int32, np.complex64,
             np.complex128,
             #   TODO: Once hashing of timedelta64 is implemented,
             #   we can add it to the list of tested dtypes in this test.
             #   TIMEDELTA_M
         ]
 
-        unsigned_dtypes_no_uint32 = [np.uint64, np.bool_]
+        unsigned_dtypes = [np.uint32, np.uint64, np.bool_]
 
-        for arr in self.gen_sum_array_cases(signed_dtypes_no_int32, unsigned_dtypes_no_uint32):
+        for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
             for axis in (0, 1, 2):
-                if axis > len(arr.shape)-1:
+                if axis > len(arr.shape) - 1:
                     continue
                 with self.subTest("Testing np.sum(axis) with {} "
-                                    "input ".format(arr.dtype)):
-                    self.assertPreciseEqual(pyfunc(arr, axis=axis),
-                                            cfunc(arr, axis=axis))
-
-    def test_sum_axis_kws2(self):
-        """  testing uint32 and int32 separately
-
-        uint32 and int32 must be tested separately because Numpy's current
-        behaviour is different in 64bits Windows (accumulates as int32)
-        and 64bits Linux (accumulates as int64), while Numba has decided to always
-        accumulate as int64, when the OS is 64bits. No testing has been done
-        for behaviours in 32 bits platforms.
-        """
-        pyfunc = array_sum_axis_kws
-        cfunc = jit(nopython=True)(pyfunc)
-        signed_dtypes_only_int32 = [np.int32]
-        # expected return dtypes in Numba
-        out_dtypes = {np.dtype('int32'): np.int64, np.dtype('uint32'): np.uint64,
-                      np.dtype('int64'): np.int64,
-                      np.dtype(TIMEDELTA_M): np.dtype(TIMEDELTA_M)}
-
-        unsigned_dtypes_only_uint32 = [np.uint32]
-
-        for arr in self.gen_sum_array_cases(signed_dtypes_only_int32, unsigned_dtypes_only_uint32):
-            for axis in (0, 1, 2):
-                if axis > len(arr.shape)-1:
-                    continue
-                with self.subTest("Testing np.sum(axis) with {} "
-                                    "input ".format(arr.dtype)):
+                                  "input ".format(arr.dtype)):
                     npy_res = pyfunc(arr, axis=axis)
                     numba_res = cfunc(arr, axis=axis)
                     if isinstance(numba_res, np.ndarray):
-                        self.assertPreciseEqual(
-                            npy_res.astype(out_dtypes[arr.dtype]),
-                            numba_res.astype(out_dtypes[arr.dtype]))
+                        # See issue #10846, the accumulator dtype must
+                        # match numpy
+                        self.assertEqual(numba_res.dtype, npy_res.dtype)
+                        self.assertPreciseEqual(npy_res, numba_res)
                     else:
                         # the results are scalars
                         self.assertEqual(npy_res, numba_res)
@@ -1669,8 +1642,12 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
 
     def test_cumsum(self):
         """ test cumsum with axis and dtype parameters over a whole range of dtypes """
+        pyfunc_default = array_cumsum
+        cfunc_default = jit(nopython=True)(array_cumsum)
+
         pyfunc = array_cumsum_axis_dtype_kws
         cfunc = jit(nopython=True)(pyfunc)
+
         signed_dtypes = [np.float64, np.float32, np.int64, np.int32,
                       np.complex64, np.complex128]
 
@@ -1687,6 +1664,13 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                       np.dtype('complex128'): [np.complex128]}
 
         for arr in self.gen_sum_array_cases(signed_dtypes, unsigned_dtypes):
+            with self.subTest("Testing np.cumsum defaults with {} "
+                              "input".format(arr.dtype)):
+                nb_res_default = cfunc_default(arr)
+                py_res_default = pyfunc_default(arr)
+                self.assertEqual(py_res_default.dtype, nb_res_default.dtype)
+                self.assertPreciseEqual(py_res_default,
+                                        nb_res_default)
             for out_dtype in out_dtypes[arr.dtype]:
                 for axis in (0, 1, 2):
                     if axis > len(arr.shape) - 1:

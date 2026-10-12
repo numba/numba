@@ -20,7 +20,7 @@ import warnings
 
 from numba.misc.appdirs import AppDirs
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import numba
 from numba.core.errors import NumbaWarning, NumbaDeprecationWarning
@@ -376,7 +376,8 @@ class ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
         for i, part in enumerate(path.parts):
             if part.endswith(".zip"):
                 zip_path = str(Path(*path.parts[: i + 1]))
-                internal_path = str(Path(*path.parts[i + 1 :]))
+                # Convert a Windows-style path "mypkg\mod.py" to "mypkg/mod.py"
+                internal_path = PurePosixPath(*path.parts[i + 1 :]).as_posix()
                 return zip_path, internal_path
         raise ValueError("No zip file found in path")
 
