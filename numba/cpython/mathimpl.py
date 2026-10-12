@@ -13,6 +13,7 @@ from llvmlite.ir import Constant
 from numba.core.imputils import Registry, impl_ret_untracked
 from numba import typeof
 from numba.core import types, utils, config, cgutils
+from numba.core.errors import TypingError
 from numba.core.extending import overload
 from numba.core.typing import signature
 from numba.cpython.unsafe.numbers import trailing_zeros
@@ -244,6 +245,46 @@ def isfinite_float_impl(context, builder, sig, args):
 def isfinite_int_impl(context, builder, sig, args):
     res = cgutils.true_bit
     return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@overload(math.isclose)
+def isclose_impl(a, b, rel_tol=1e-09, abs_tol=0.0):
+    # NOTE: in CPython, rel_tol and abs_tol are keyword-only arguments, but
+    # they are accepted here as regular arguments (i.e. they may also be
+    # passed positionally) since Numba's keyword-only argument handling
+    # does not currently support omitting all of them and relying on the
+    # defaults when the caller itself is jit-compiled code.
+    if not isinstance(a, (types.Float, types.Integer, types.Boolean)):
+        raise TypingError('The first argument "a" must be a number')
+
+    if not isinstance(b, (types.Float, types.Integer, types.Boolean)):
+        raise TypingError('The second argument "b" must be a number')
+
+    if not isinstance(rel_tol, (int, float, types.Float, types.Integer)):
+        raise TypingError('The "rel_tol" argument must be a number')
+
+    if not isinstance(abs_tol, (int, float, types.Float, types.Integer)):
+        raise TypingError('The "abs_tol" argument must be a number')
+
+    def impl(a, b, rel_tol=1e-09, abs_tol=0.0):
+        if rel_tol < 0.0 or abs_tol < 0.0:
+            raise ValueError('tolerances must be non-negative')
+        # Mirrors CPython's implementation (Modules/mathmodule.c): the
+        # equality short-circuit below also handles two infinities of the
+        # same sign, and the isinf() check below it handles two infinities
+        # of opposite sign as well as one infinite and one finite operand.
+        if a == b:
+            return True
+        if math.isinf(a) or math.isinf(b):
+            return False
+        diff = abs(b - a)
+        return (
+            diff <= abs(rel_tol * b)
+            or diff <= abs(rel_tol * a)
+            or diff <= abs_tol
+        )
+
+    return impl
 
 
 @lower(math.copysign, types.Float, types.Float)
