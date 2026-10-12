@@ -247,6 +247,7 @@ class BaseContext(object):
         self._codelib_stack = []
 
         self._boundscheck = False
+        self._loc = None
 
         self.data_model_manager = datamodel.default_manager
 
@@ -364,6 +365,13 @@ class BaseContext(object):
         self._insert_setattr_defn(loader.new_registrations('setattrs'))
         self._insert_cast_defn(loader.new_registrations('casts'))
         self._insert_get_constant_defn(loader.new_registrations('constants'))
+
+    @property
+    def loc(self):
+        return self._loc
+
+    def _set_loc(self, loc):
+        self._loc = loc
 
     def insert_func_defn(self, defns):
         for impl, func, sig in defns:
