@@ -1,0 +1,7 @@
+Fix ``EOFError`` when loading a corrupt or truncated cache file
+---------------------------------------------------------------
+
+A corrupt or truncated on-disk cache file (for example from an
+interrupted write) raised ``EOFError`` on the next run. Numba now treats
+an unreadable cache file as a miss, emits a ``NumbaWarning``, and
+recompiles the function.
