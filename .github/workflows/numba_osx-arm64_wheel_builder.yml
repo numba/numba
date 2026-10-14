@@ -87,7 +87,8 @@ jobs:
       - name: Install free-threaded Python
         if: ${{ endsWith(matrix.python_version_full, 't') }}
         run: |
-          conda install -n test python-freethreading pip
+          PYTHON_VERSION="${{ matrix.python_version_full }}"
+          conda install -n test "python-freethreading=${PYTHON_VERSION%t}" pip
 
       - name: Download llvmlite wheel
         if: inputs.llvmlite_wheel_runid != ''
