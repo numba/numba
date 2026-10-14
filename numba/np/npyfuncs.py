@@ -246,9 +246,40 @@ def np_int_udivrem_impl(context, builder, sig, args):
     return context.make_tuple(builder, sig.return_type, [div, rem])
 
 
-# implementation of int_fmod is in fact the same as the unsigned remainder,
-# that is: srem with a special case returning 0 when the denominator is 0.
-np_int_fmod_impl = np_int_urem_impl
+def np_int_sfmod_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    num, den = args
+    ty = sig.args[0]  # any arg type will do, homogeneous
+
+    ZERO = context.get_constant(ty, 0)
+    den_ok = builder.icmp_unsigned('!=', ZERO, den)
+    if ty.bitwidth == 8:
+        # x % -1 is always 0, and srem(MIN_INT, -1) is undefined
+        MINUS_ONE = context.get_constant(ty, -1)
+        den_ok = builder.and_(den_ok, builder.icmp_unsigned('!=', MINUS_ONE,
+                                                            den))
+    bb_no_if = builder.basic_block
+    with cgutils.if_likely(builder, den_ok):
+        bb_if = builder.basic_block
+        if ty.bitwidth == 8:
+            mod = builder.srem(num, den)
+        else:
+            # The result has the sign of num and the magnitude |num| % |den|.
+            # Unsigned magnitudes cover MIN_INT and are faster than srem for
+            # wider types, notably for negative 64-bit operands.
+            num_neg = builder.icmp_signed('<', num, ZERO)
+            den_neg = builder.icmp_signed('<', den, ZERO)
+            abs_num = builder.select(num_neg, builder.neg(num), num)
+            abs_den = builder.select(den_neg, builder.neg(den), den)
+            abs_mod = builder.urem(abs_num, abs_den)
+            mod = builder.select(num_neg, builder.neg(abs_mod), abs_mod)
+
+    result = builder.phi(ZERO.type)
+    result.add_incoming(ZERO, bb_no_if)
+    result.add_incoming(mod, bb_if)
+
+    return result
 
 
 def np_real_div_impl(context, builder, sig, args):
