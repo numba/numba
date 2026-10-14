@@ -220,6 +220,25 @@ class InlineClosureCallPass(object):
         kernel_ir = get_ir_of_code(self.func_ir.func_id.func.__globals__,
                                    stencil_def.code)
         options = dict(expr.kws)
+        if 'standard_indexing' in options:
+            try:
+                standard_indexing = self.func_ir.infer_constant(
+                    options['standard_indexing'].name)
+            except errors.ConstantInferenceError as exc:
+                raise errors.NumbaValueError(
+                    "stencil standard_indexing option must be a compile-time "
+                    "constant string or sequence of strings") from exc
+            if isinstance(standard_indexing, str):
+                standard_indexing = (standard_indexing,)
+            if not isinstance(standard_indexing, (tuple, list)) or not all(
+                    isinstance(name, str) for name in standard_indexing):
+                raise errors.NumbaValueError(
+                    "stencil standard_indexing option must be a compile-time "
+                    "constant string or sequence of strings")
+            if isinstance(standard_indexing, list):
+                self._validate_stencil_standard_indexing_list(
+                    options['standard_indexing'])
+            options['standard_indexing'] = tuple(standard_indexing)
         if 'neighborhood' in options:
             fixed = guard(self._fix_stencil_neighborhood, options)
             if not fixed:
@@ -235,11 +254,46 @@ class InlineClosureCallPass(object):
                     " with constant structure such as (offset, )"
                 )
         sf = StencilFunc(kernel_ir, 'constant', options)
-        sf.kws = expr.kws # hack to keep variables live
+        sf.kws = [(name, value) for name, value in expr.kws
+                  if name != 'standard_indexing']
         sf_global = ir.Global('stencil', sf, expr.loc)
         self.func_ir._definitions[lhs.name] = [sf_global]
         instr.value = sf_global
         return True
+
+    def _validate_stencil_standard_indexing_list(self, option):
+        aliases = {option.name}
+        statements = [stmt for block in self.func_ir.blocks.values()
+                      for stmt in block.body]
+        changed = True
+        while changed:
+            changed = False
+            for stmt in statements:
+                if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Var):
+                    pair = {stmt.target.name, stmt.value.name}
+                    if aliases & pair and not pair <= aliases:
+                        aliases.update(pair)
+                        changed = True
+        for stmt in statements:
+            uses = {var.name for var in stmt.list_vars()} & aliases
+            if not uses or isinstance(stmt, ir.Del):
+                continue
+            if isinstance(stmt, ir.Assign):
+                value = stmt.value
+                if stmt.target.name in aliases and (
+                        isinstance(value, (ir.Var, ir.Const, ir.Global, ir.FreeVar))
+                        or isinstance(value, ir.Expr) and value.op == 'build_list'):
+                    continue
+                if isinstance(value, ir.Expr) and value.op == 'call':
+                    call_name = guard(find_callname, self.func_ir, value)
+                    option_uses = {var.name for name, var in value.kws
+                                   if name == 'standard_indexing'}
+                    if call_name in (('stencil', 'numba.stencils.stencil'),
+                                     ('stencil', 'numba')) and uses <= option_uses:
+                        continue
+            raise errors.NumbaValueError(
+                "stencil standard_indexing list must be used only as a "
+                "compile-time option; use a tuple for other uses")
 
     def _fix_stencil_neighborhood(self, options):
         """
