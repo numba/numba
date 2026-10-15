@@ -5,7 +5,8 @@ import warnings
 import numpy as np
 
 import unittest
-from numba import jit
+from numba import jit, njit, types
+from numba.typed import List
 from numba.core.errors import (
     NumbaWarning,
     deprecated,
@@ -101,6 +102,59 @@ class TestBuiltins(unittest.TestCase):
             self.assertEqual(w[1].category, NumbaWarning)
             self.assertIn('same', str(w[0].message))
             self.assertIn('same', str(w[1].message))
+
+    def test_warnings_fixer_extend(self):
+        src = errors.WarningsFixer(errors.NumbaWarning)
+        with src.catch_warnings('foo', 10):
+            warnings.warn(errors.NumbaWarning('kept'))
+        with src.catch_warnings('foo', 20):
+            warnings.warn(errors.NumbaWarning('dropped'))
+
+        dst = errors.WarningsFixer(errors.NumbaWarning)
+        dst.extend(src, keep=lambda filename, lineno: lineno == 10)
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            ignore_internal_warnings()
+            dst.flush()
+
+        self.assertEqual([str(x.message) for x in w], ['kept'])
+        self.assertEqual((w[0].filename, w[0].lineno), ('foo', 10))
+
+    def _type_safety_warnings(self, func, *args):
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always')
+            func(*args)
+        return [str(x.message) for x in w
+                if issubclass(x.category, errors.NumbaTypeSafetyWarning)]
+
+    def test_no_warning_from_pruned_isinstance_branch(self):
+        # See #10368. Partial type inference runs before dead branch pruning
+        # and used to emit warnings for branches that are never compiled.
+        # The casts here are distinct from other tests since typing of the
+        # cast is cached.
+        @njit
+        def foo(x):
+            lst = List.empty_list(types.uint8)
+            if isinstance(x, float):
+                lst.append(np.uint32(x))
+            return len(lst)
+
+        self.assertEqual(self._type_safety_warnings(foo, 1), [])
+
+    def test_warning_kept_for_taken_isinstance_branch(self):
+        # The same unsafe cast on a branch that survives pruning must still
+        # warn, even though its typing was cached by partial type inference.
+        @njit
+        def foo(x):
+            lst = List.empty_list(types.int16)
+            if isinstance(x, int):
+                lst.append(np.int64(x))
+            return len(lst)
+
+        self.assertEqual(self._type_safety_warnings(foo, 1),
+                         ['unsafe cast from int64 to int16. '
+                          'Precision may be lost.'])
 
     def test_disable_performance_warnings(self):
 
