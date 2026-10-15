@@ -295,7 +295,7 @@ class BaseContext(object):
         """
         return fndesc.env_name
 
-    def declare_env_global(self, module, envname):
+    def declare_env_global(self, module, envname, referencer_name=None):
         """Declare the Environment pointer as a global of the module.
 
         The pointer is initialized to NULL.  It must be filled by the runtime
@@ -308,11 +308,26 @@ class BaseContext(object):
             The LLVM Module
         envname : str
             The name of the global variable.
+        referencer_name : str, optional
+            Mangled name of the function this env serves. When given, the
+            GV is tagged with `!numba.env_for !{!"<referencer>"}` so the
+            JIT engine renames the env in lockstep with the function's own
+            content hash. Two compilations of the same function produce the
+            same env name (legitimate cross-module sharing); two compilations
+            of different functions produce different env names (no JITDylib
+            collision). When not given (e.g. the AOT pycc path), the env GV
+            is hashed by its own body — fine for AOT where the engine's
+            rename pass is not in play.
         """
         if envname not in module.globals:
             gv = llvmir.GlobalVariable(module, cgutils.voidptr_t, name=envname)
             gv.linkage = 'common'
             gv.initializer = cgutils.get_null_value(gv.type.pointee)
+            if referencer_name is not None:
+                gv.set_metadata(
+                    "numba.env_for",
+                    module.add_metadata([referencer_name]),
+                )
 
         return module.globals[envname]
 
@@ -451,7 +466,12 @@ class BaseContext(object):
         Insert constant *byte* (a `bytes` object) into module *mod*.
         """
         stringtype = GENERIC_POINTER
-        name = ".bytes.%s" % (name or hash(bytes))
+        # SHA1 of the payload (was `hash(bytes)`). Python's builtin hash
+        # is PYTHONHASHSEED-randomized, so two processes compiling the
+        # same constant produced different GV names → different post-rename
+        # hashes → cache-miss on an otherwise-identical module. Q2 fix.
+        from hashlib import sha1
+        name = ".bytes.%s" % (name or sha1(bytes).hexdigest())
         text = cgutils.make_bytearray(bytes)
         gv = self.insert_unique_const(mod, name, text)
         return Constant.bitcast(gv, stringtype)

@@ -171,8 +171,9 @@ class CPUContext(BaseContext):
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def get_env_manager(self, builder, return_pyobject=False):
-        envgv = self.declare_env_global(builder.module,
-                                        self.get_env_name(self.fndesc))
+        envgv = self.declare_env_global(
+            builder.module, self.get_env_name(self.fndesc),
+            referencer_name=self.fndesc.mangled_name)
         envarg = builder.load(envgv)
         pyapi = self.get_python_api(builder)
         pyapi.emit_environment_sentry(
@@ -292,7 +293,7 @@ class CPUContext(BaseContext):
                                        # objects to keepalive with the function
                                        (library,)
                                        )
-        library.codegen.set_env(self.get_env_name(fndesc), env)
+        library.set_env(self.get_env_name(fndesc), env)
         return cfunc
 
     def calc_array_sizeof(self, ndim):

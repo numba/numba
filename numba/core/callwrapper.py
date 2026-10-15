@@ -199,7 +199,9 @@ class PyCallWrapper(object):
         in the module of the wrapped function.
         """
         envname = self.context.get_env_name(self.fndesc)
-        gvptr = self.context.declare_env_global(builder.module, envname)
+        gvptr = self.context.declare_env_global(
+            builder.module, envname,
+            referencer_name=self.fndesc.mangled_name)
         envptr = builder.load(gvptr)
 
         env_body = self.context.get_env_body(builder, envptr)
