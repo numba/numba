@@ -2738,6 +2738,8 @@ class TestBasics(TestLinalgSystems):  # TestLinalgSystems for 1d test
             (np.array([-1, 2], np.int8), np.array([200], np.uint8)),
             (np.array([1.5], np.float32), np.array([[2]], np.int16)),
             (np.array([[1j]]), np.array([2.5])),
+            (np.array([[2]], np.int16), np.array([1.5], np.float32)),
+            (np.array([2.5]), np.array([[1j]])),
             (np.array([1, 2]), 3.5),
             (2, np.array([1.5, 2.5])),
         ]
