@@ -262,18 +262,25 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
             else:
                 return self.ufunc(*args, **kwargs)
         elif "out" in kwargs:
-            # If "out" argument is supplied
-            args += (kwargs.pop("out"),)
+            out = kwargs.pop("out")
+            if isinstance(out, tuple):
+                args += out
+            else:
+                args += (out,)
 
-        if self._num_args_match(*args) is False:
-            # It is not allowed to call a dynamic gufunc without
-            # providing all the arguments
-            # see: https://github.com/numba/numba/pull/5938#discussion_r506429392  # noqa: E501
+        parsed_sig = parse_signature(self.gufunc_builder.signature)
+        expected_num_args = len(parsed_sig[0]) + len(parsed_sig[1])
+        if len(args) < expected_num_args:
             msg = (
                 f"Too few arguments for function '{self.__name__}'. "
                 "Note that the pattern `out = gufunc(Arg1, Arg2, ..., ArgN)` "
                 "is not allowed. Use `gufunc(Arg1, Arg2, ..., ArgN, out) "
                 "instead.")
+            raise TypeError(msg)
+        elif len(args) > expected_num_args:
+            msg = (
+                f"Too many arguments for function '{self.__name__}'. "
+                f"Expected {expected_num_args}, got {len(args)}.")
             raise TypeError(msg)
 
         # at this point we know the gufunc is a dynamic one

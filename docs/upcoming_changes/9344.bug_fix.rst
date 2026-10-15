@@ -1,0 +1,7 @@
+Fix exception message when calling a gufunc with too many arguments
+------------------------------------------------------------------
+
+Calling a dynamic gufunc with more arguments than expected now raises
+a ``TypeError`` stating "Too many arguments for function ..." with the
+expected and received argument counts, rather than "Too few arguments".
+Calling with multiple outputs via ``out=(...)`` is also supported.

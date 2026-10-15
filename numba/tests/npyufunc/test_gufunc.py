@@ -161,9 +161,25 @@ class TestMultipleOutputs(MemoryLeakMixin, TestCase):
         self.assertIn(msg, str(te.exception))
 
         # Inputs and outputs, too many
+        msg = "Too many arguments for function 'f'"
         with self.assertRaises(TypeError) as te:
             f(arr, arr, arr, arr, arr)
         self.assertIn(msg, str(te.exception))
+        self.assertIn("Expected 4, got 5.", str(te.exception))
+
+    def test_multiple_outputs_out_keyword(self):
+        @guvectorize('(x)->(x),(x)', target=self.target)
+        def copy_and_double(A, B, C):
+            for i in range(B.size):
+                B[i] = A[i]
+                C[i] = A[i] * 2
+
+        A = np.arange(10, dtype=np.float32) + 1
+        B = np.zeros_like(A)
+        C = np.zeros_like(A)
+        copy_and_double(A, out=(B, C))
+        np.testing.assert_allclose(A, B)
+        np.testing.assert_allclose(A * 2, C)
 
 
 class TestGUFuncParallel(TestGUFunc):
@@ -246,6 +262,10 @@ class TestDynamicGUFunc(MemoryLeakMixin, TestCase):
         msg = "Too few arguments for function 'sum_row'."
         with self.assertRaisesRegex(TypeError, msg):
             sum_row(inp)
+
+        msg_too_many = "Too many arguments for function 'sum_row'. Expected 2, got 3."
+        with self.assertRaisesRegex(TypeError, msg_too_many):
+            sum_row(inp, out, out)
 
     def test_axis(self):
         # issue https://github.com/numba/numba/issues/6773
