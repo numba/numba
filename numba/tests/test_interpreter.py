@@ -626,6 +626,20 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         b = cfunc(False)
         self.assertEqual(a, b)
 
+    def test_generator_expression_args(self):
+        # See Issue #10281:
+        # https://github.com/numba/numba/issues/10281
+
+        @njit
+        def f(a, b, sep=2):
+            pass
+
+        msg = "Generator expression for arguments is unsupported"
+        with self.assertRaisesRegex(UnsupportedBytecodeError, msg):
+            @njit('void()')
+            def genexp_args():
+                x(*(s for s in ["a", "b"]), sep=2)
+
 
 class TestLargeConstDict(TestCase, MemoryLeakMixin):
     """
