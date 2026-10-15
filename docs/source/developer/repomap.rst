@@ -406,6 +406,8 @@ typing and implementation to be specified together.
   list and array objects
 - :ghfile:`numba/misc/mergesort.py` - Mergesort implementation used with
   array objects
+- :ghfile:`numba/misc/heapsort.py` - Heapsort implementation used with array
+  objects
 - :ghfile:`numba/np/arraymath.py` - Math operations on arrays (both
   Python and NumPy)
 - :ghfile:`numba/np/arrayobj.py` - Array operations (both NumPy and
