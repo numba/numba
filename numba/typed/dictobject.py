@@ -1365,3 +1365,109 @@ def cast_LiteralStrKeyDict_LiteralStrKeyDict(context, builder, fromty, toty,
 def cast_DictType_DictType(context, builder, fromty, toty, val):
     # should have been picked up by typing
     return val
+
+
+def _dict_builtin_field_type(typ):
+    """Tuple components for which fieldwise NRT ownership is well-defined."""
+    if type(typ) in (types.Tuple, types.UniTuple):
+        return all(_dict_builtin_field_type(t) for t in typ.types)
+    return (type(typ) in (types.Integer, types.Boolean, types.Float,
+                          types.Complex, types.Array) or
+            typ == types.unicode_type)
+
+
+# A typed-dictionary tuple projection can avoid incref/decref operations on
+# unused fields. The ordinary dictionary lookup still copies the whole value,
+# so the existing dictionary implementation and exception handling are kept.
+@intrinsic
+def _dict_lookup_tuple_field(typingctx, d, key, hashval, field_index):
+    """Lookup a dictionary tuple field, without owning the unused fields.
+
+    The field index must be a compile-time literal. As in `_dict_lookup`,
+    returns `(entry_index, Optional[field_type])`. The selected field is
+    increfed as a new reference; other fields are never materialised as
+    live Numba values.
+    """
+    if not isinstance(d, types.DictType):
+        return
+    valty = d.value_type
+    if type(valty) not in (types.Tuple, types.UniTuple):
+        return
+    if not all(_dict_builtin_field_type(t) for t in valty.types):
+        return
+    if not isinstance(field_index, types.IntegerLiteral):
+        return
+    index = field_index.literal_value
+    n = len(valty.types)
+    if type(index) is not int or not -n <= index < n:
+        return
+    index %= n
+    fieldty = valty.types[index]
+    ret = types.Tuple([types.intp, types.Optional(fieldty)])
+    sig = ret(d, key, hashval, field_index)
+
+    def codegen(context, builder, sig, args):
+        td, tkey, _, _ = sig.args
+        dval, keyval, hashed, _ = args
+        cfunc_type = ir.FunctionType(
+            ll_ssize_t, [ll_dict_type, ll_bytes, ll_hash, ll_bytes])
+        cfunc = cgutils.get_or_insert_function(builder.module, cfunc_type,
+                                               'numba_dict_lookup')
+        dm_key = context.data_model_manager[tkey]
+        dm_value = context.data_model_manager[td.value_type]
+        dm_field = context.data_model_manager[fieldty]
+        data_key = dm_key.as_data(builder, keyval)
+        key_ptr = cgutils.alloca_once_value(builder, data_key)
+        cgutils.memset_padding(builder, key_ptr)
+        value_buf = cgutils.alloca_once(builder, dm_value.get_data_type())
+        data_dict = _container_get_data(context, builder, td, dval)
+        ix = builder.call(cfunc,
+                          [data_dict, _as_bytes(builder, key_ptr), hashed,
+                           _as_bytes(builder, value_buf)])
+        present = builder.icmp_signed('>=', ix, ix.type(0))
+        initial = context.make_optional_none(builder, fieldty)
+        out = cgutils.alloca_once_value(builder, initial)
+        with builder.if_then(present):
+            ptr = cgutils.gep_inbounds(builder, value_buf, 0, index)
+            value = dm_field.load_from_data_pointer(builder, ptr)
+            context.nrt.incref(builder, fieldty, value)
+            builder.store(context.make_optional_value(builder, fieldty,
+                                                       value), out)
+        return context.make_tuple(builder, ret, [ix, builder.load(out)])
+
+    return sig, codegen
+
+
+def _getitem_tuple_field(d, key, index):
+    """Internal function used for directly projected dictionary lookups."""
+    raise NotImplementedError
+
+
+@overload(_getitem_tuple_field, prefer_literal=True)
+def _overload_getitem_tuple_field(d, key, index):
+    if not isinstance(d, types.DictType):
+        return
+    if type(d.value_type) not in (types.Tuple, types.UniTuple):
+        return
+    if not all(_dict_builtin_field_type(t) for t in d.value_type.types):
+        return
+    if not isinstance(index, types.IntegerLiteral):
+        return
+    j = index.literal_value
+    n = len(d.value_type.types)
+    if type(j) is not int or not -n <= j < n:
+        return
+
+    key_type = d.key_type
+
+    def impl(d, key, index):
+        castedkey = _cast(key, key_type)
+        ix, selected = _dict_lookup_tuple_field(d, castedkey,
+                                                 hash(castedkey), index)
+        if ix == DKIX.EMPTY:
+            raise KeyError(key)
+        elif ix < DKIX.EMPTY:
+            raise AssertionError('internal dict error during lookup')
+        return _nonoptional(selected)
+
+    return impl
