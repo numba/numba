@@ -742,9 +742,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         self.check_reduction_basic(array_nanprod)
 
     def test_nanstd_basic(self):
+        self.check_scalar_basic(array_nanstd)
         self.check_reduction_basic(array_nanstd)
 
     def test_nanstd_ddof(self):
+        for pyfunc in (array_nanstd_ddof0, array_nanstd_ddof1):
+            self.check_scalar_basic(pyfunc)
         self.check_reduction_basic(array_nanstd_ddof0)
         self.check_reduction_basic(array_nanstd_ddof1)
         # test complex branch
@@ -759,6 +762,8 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
 
     def test_nanvar_ddof(self):
+        for pyfunc in (array_nanvar_ddof0, array_nanvar_ddof1):
+            self.check_scalar_basic(pyfunc, prec='double')
         self.check_reduction_basic(array_nanvar_ddof0, prec='double')
         self.check_reduction_basic(array_nanvar_ddof1, prec='double')
         # test complex branch
@@ -773,7 +778,15 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
 
     def test_nanvar_basic(self):
+        self.check_scalar_basic(array_nanvar, prec='double')
         self.check_reduction_basic(array_nanvar, prec='double')
+
+    def test_nanvar_nanstd_scalar_complex(self):
+        for pyfunc in (array_nanvar, array_nanstd, array_nanvar_ddof0, array_nanstd_ddof0):
+            cfunc = jit(pyfunc)
+            for val in (np.complex64(1 + 2j), np.complex64(np.nan + 1j),
+                        np.complex128(3 - 4j), np.complex128(np.nan + 2j)):
+                self.assertPreciseEqual(pyfunc(val), cfunc(val))
 
     def check_median_basic(self, pyfunc, array_variations):
         cfunc = jit(nopython=True)(pyfunc)
