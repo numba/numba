@@ -189,7 +189,7 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         fname = cres.fndesc.llvm_func_name
 
         info = build_ufunc_wrapper(library, ctx, fname, signature, cres)
-        ptr = info.library.get_pointer_to_function(info.name)
+        ptr = ufuncbuilder._pointer_to_wrapper(info)
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
         dtypenums.append(np.dtype(signature.return_type.name).num)
@@ -236,7 +236,7 @@ class ParallelGUFuncBuilder(ufuncbuilder.GUFuncBuilder):
             self.py_func, cres, self.sin, self.sout, cache=self.cache,
             is_parfors=False,
         )
-        ptr = info.library.get_pointer_to_function(info.name)
+        ptr = ufuncbuilder._pointer_to_wrapper(info)
         env = info.env
 
         # Get dtypes

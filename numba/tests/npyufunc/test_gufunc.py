@@ -1,12 +1,23 @@
+import glob
+import multiprocessing as mp
+import os
+import time
+import traceback
 import unittest
 import pickle
 
 import numpy as np
 
-from numba import void, float32, float64, int32, int64, jit, guvectorize
+from numba import void, float32, float64, int32, int64, jit, guvectorize, \
+    types
+from numba.core import caching
 from numba.core.errors import TypingError
 from numba.np.ufunc import GUVectorize
-from numba.tests.support import TestCase, MemoryLeakMixin
+from numba.np.ufunc.wrappers import GufWrapperCache
+from numba.tests.support import (
+    TestCase, MemoryLeakMixin, SerialMixin, temp_directory, override_config,
+    run_in_new_process_in_cache_dir,
+)
 
 
 def matmulcore(A, B, C):
@@ -880,6 +891,331 @@ class TestGUVectorizeJit(MemoryLeakMixin, TestCase):
             x = rng.random(65)
             y = np.repeat(x[None], 130, axis=0)
             njit_guve(y, 5)
+
+
+class _StubCodegen:
+    def magic_tuple(self):
+        return ('stub-target',)
+
+
+def _plain_kernel(x):
+    return x + 1
+
+
+class TestGufWrapperCacheKey(TestCase):
+
+    def _key_for(self, symbol):
+        cache = GufWrapperCache(_plain_kernel, symbol)
+        return cache._index_key('float64(float64)', _StubCodegen())
+
+    def test_same_symbol_same_key(self):
+        """Two wrappers built against the same kernel symbol get the same
+        cache key."""
+        self.assertEqual(self._key_for('_ZN1fB2v1E'),
+                         self._key_for('_ZN1fB2v1E'))
+
+    def test_different_symbol_different_key(self):
+        """Wrappers built against kernels with different ABI tags must not
+        share a cache key, or either could be reused for the other."""
+        self.assertNotEqual(self._key_for('_ZN1fB2v1E'),
+                            self._key_for('_ZN1fB2v2E'))
+
+
+def _read_wrapper_index(path):
+    with open(path, 'rb') as f:
+        pickle.load(f)
+        _stamp, overloads = pickle.loads(f.read())
+    return overloads
+
+
+def _wrapper_symbols_on_disk(cache_dir):
+    symbols = set()
+    pattern = os.path.join(cache_dir, '**', 'guf-*.nbi')
+    for path in glob.glob(pattern, recursive=True):
+        for key in _read_wrapper_index(path):
+            symbols.add(key[-1])
+    return symbols
+
+
+class TestGufWrapperCacheOnDisk(SerialMixin, TestCase):
+
+    def setUp(self):
+        self.cache_dir = temp_directory('test_guf_wrapper_cache_key')
+
+    def test_wrapper_index_keys_carry_kernel_symbol(self):
+        """The kernel symbol added to the wrapper's cache key must actually
+        reach the on-disk index, not just the in-memory key."""
+        with override_config('CACHE_DIR', self.cache_dir):
+            @guvectorize(['void(float64[:], float64[:])'], '(n)->(n)',
+                         cache=True, nopython=True)
+            def double_it(x, out):
+                for i in range(x.shape[0]):
+                    out[i] = x[i] * 2
+
+            arr = np.arange(4, dtype=np.float64)
+            np.testing.assert_allclose(double_it(arr), arr * 2)
+
+        indices = glob.glob(os.path.join(self.cache_dir, '**', 'guf-*.nbi'),
+                            recursive=True)
+        self.assertTrue(indices, 'no guf-*.nbi index was written')
+
+        for path in indices:
+            overloads = _read_wrapper_index(path)
+            self.assertTrue(overloads, 'empty wrapper index in %s' % path)
+            for key in overloads:
+                symbol = key[-1]
+                self.assertIsInstance(symbol, str)
+                self.assertTrue(symbol.startswith('_Z'),
+                                'wrapper key does not end in a mangled '
+                                'kernel symbol: %r' % (key,))
+
+
+def _guf_kernel_symbol_probe():
+    @guvectorize(['void(float64[:], float64[:])'], '(n)->(n)',
+                 cache=True, nopython=True)
+    def gf(x, out):
+        for i in range(x.shape[0]):
+            out[i] = x[i] + 5.0
+
+    arr = np.arange(4, dtype=np.float64)
+    np.testing.assert_allclose(gf(arr), arr + 5.0)
+    cres, = gf.gufunc_builder.nb_func.overloads.values()
+    print(cres.fndesc.mangled_name)
+
+
+def _guf_kernel_symbol_probe_with_history():
+    from numba import njit
+
+    def bump(v):
+        return v + 1
+
+    njit(bump)(1.0)
+    _guf_kernel_symbol_probe()
+
+
+class TestRecompiledKernel(SerialMixin, TestCase):
+
+    def setUp(self):
+        self.cache_dir = temp_directory('test_guf_unstable_identity')
+
+    def _run(self, func):
+        res = run_in_new_process_in_cache_dir(func, self.cache_dir)
+        self.assertEqual(res['exitcode'], 0, res['stderr'])
+        line, = [ln for ln in res['stdout'].splitlines() if ln.strip()]
+        return line.strip()
+
+    def test_recompiled_kernel_does_not_reuse_stale_wrapper(self):
+        """A kernel recompiled under a new ABI tag (the counter is
+        process-global, so this happens whenever a process compiles
+        something else first) must not reuse a wrapper cached against the
+        old tag, since that wrapper calls a symbol the new kernel lacks."""
+        first = self._run(_guf_kernel_symbol_probe)
+
+        removed = 0
+        for path in glob.glob(os.path.join(self.cache_dir, '**', '*.nbi'),
+                              recursive=True):
+            if not os.path.basename(path).startswith('guf-'):
+                os.unlink(path)
+                removed += 1
+        self.assertTrue(removed, 'no kernel index was written')
+
+        second = self._run(_guf_kernel_symbol_probe_with_history)
+
+        self.assertNotEqual(first, second,
+                            'the two runs agreed on an ABI tag, so this test '
+                            'no longer exercises a mismatched pair')
+        self.assertEqual(_wrapper_symbols_on_disk(self.cache_dir),
+                         {first, second})
+
+
+def _install_save_barrier(events):
+    orig_save = caching.IndexDataCacheFile._save_data
+    count = [0]
+
+    def barrier_save(self, name, data):
+        i = count[0]
+        count[0] += 1
+        if i < len(events):
+            ready, go = events[i]
+            ready.set()
+            if not go.wait(120):
+                raise TimeoutError(
+                    'save #%d for %s timed out waiting for release'
+                    % (i, name))
+        return orig_save(self, name, data)
+
+    caching.IndexDataCacheFile._save_data = barrier_save
+
+
+def _two_gufunc_first_second():
+    @guvectorize([(types.float64[:], types.float64[:])], '(n)->(n)',
+                 cache=True)
+    def first(x, result):
+        for i in range(x.shape[0]):
+            result[i] = x[i] * 2.0
+
+    @guvectorize([(types.float64[:], types.float64[:])], '(n)->(n)',
+                 cache=True)
+    def second(x, result):
+        for i in range(x.shape[0]):
+            result[i] = x[i] + 1.0
+
+    return first, second
+
+
+def _two_gufunc_worker(cache_dir, events, done_evt, outq):
+    import numba
+    numba.config.CACHE_DIR = cache_dir
+    _install_save_barrier(events)
+    try:
+        first, second = _two_gufunc_first_second()
+        first(np.ones(3))
+        second(np.ones(3))
+        outq.put(('ok', None))
+    except Exception:
+        outq.put(('error', traceback.format_exc()))
+    finally:
+        done_evt.set()
+
+
+def _verify_two_gufunc_cache():
+    first, second = _two_gufunc_first_second()
+    x = np.arange(3, dtype=np.float64)
+    np.testing.assert_allclose(second(x), x + 1.0)
+
+
+def _multisig_gufunc():
+    @guvectorize([(types.float32[:], types.float32[:]),
+                  (types.float64[:], types.float64[:])],
+                 '(n)->(n)', cache=True)
+    def gu(x, result):
+        for i in range(x.shape[0]):
+            result[i] = x[i] + 1.0
+
+    return gu
+
+
+def _multisig_worker(cache_dir, events, done_evt, outq):
+    import numba
+    numba.config.CACHE_DIR = cache_dir
+    _install_save_barrier(events)
+    try:
+        gu = _multisig_gufunc()
+        gu(np.ones(3, dtype=np.float32))
+        gu(np.ones(3, dtype=np.float64))
+        outq.put(('ok', None))
+    except Exception:
+        outq.put(('error', traceback.format_exc()))
+    finally:
+        done_evt.set()
+
+
+def _verify_multisig_cache():
+    gu = _multisig_gufunc()
+    x64 = np.arange(3, dtype=np.float64)
+    np.testing.assert_allclose(gu(x64), x64 + 1.0)
+    x32 = np.arange(3, dtype=np.float32)
+    np.testing.assert_allclose(gu(x32), x32 + 1.0)
+
+
+class _GufuncCacheRaceTestBase(SerialMixin, TestCase):
+    _numba_parallel_test_ = False
+
+    def setUp(self):
+        self.cache_dir = temp_directory(self.__class__.__name__)
+
+    def _new_worker(self, target, n_events=4):
+        ctx = mp.get_context('spawn')
+        events = [(ctx.Event(), ctx.Event()) for _ in range(n_events)]
+        done_evt = ctx.Event()
+        outq = ctx.Queue()
+        proc = ctx.Process(target=target,
+                           args=(self.cache_dir, events, done_evt, outq))
+        proc.start()
+        return proc, events, done_evt, outq
+
+    def _release(self, evt_pair, timeout=120):
+        ready, go = evt_pair
+        self.assertTrue(ready.wait(timeout), 'save was not reached in time')
+        go.set()
+
+    def _drain(self, events, next_index, done_evt, timeout=120):
+        deadline = time.monotonic() + timeout
+        while not done_evt.is_set():
+            if next_index < len(events) and events[next_index][0].is_set():
+                events[next_index][1].set()
+                next_index += 1
+            if time.monotonic() > deadline:
+                self.fail('timed out draining remaining saves')
+
+    def _assert_ok(self, proc, outq):
+        proc.join(60)
+        self.assertEqual(proc.exitcode, 0)
+        status, payload = outq.get()
+        self.assertEqual(status, 'ok', payload)
+
+
+class TestGUFuncCacheRace(_GufuncCacheRaceTestBase):
+
+    def test_concurrent_gufunc_caching_no_segfault(self):
+        """Two processes compiling the same pair of gufuncs, interleaved so
+        that one process's wrapper for ``second`` is written against a
+        kernel symbol the other process's kernel write later replaces, must
+        not leave behind a wrapper/kernel pair that segfaults on load."""
+        proc_a, events_a, done_a, outq_a = self._new_worker(
+            _two_gufunc_worker)
+
+        self._release(events_a[0])
+        self._release(events_a[1])
+        self.assertTrue(events_a[2][0].wait(120))
+
+        proc_b, events_b, done_b, outq_b = self._new_worker(
+            _two_gufunc_worker)
+        self.assertTrue(events_b[0][0].wait(120))
+
+        self._release(events_a[2])
+        self._release(events_a[3])
+        self._assert_ok(proc_a, outq_a)
+
+        events_b[0][1].set()
+        self._drain(events_b, 1, done_b)
+        self._assert_ok(proc_b, outq_b)
+
+        res = run_in_new_process_in_cache_dir(_verify_two_gufunc_cache,
+                                              self.cache_dir)
+        self.assertEqual(res['exitcode'], 0, res['stderr'])
+
+
+class TestGUFuncMultiSigCacheRace(_GufuncCacheRaceTestBase):
+
+    def test_multi_signature_partial_cache_no_segfault(self):
+        """Same race as above, but for one gufunc with two signatures that
+        share a single kernel/wrapper cache file: a process that finds one
+        signature already cached labels the other with a different ABI tag
+        than a process that compiled both, so the two processes contend over
+        the same cache entries."""
+        proc_a, events_a, done_a, outq_a = self._new_worker(
+            _multisig_worker)
+
+        self._release(events_a[0])
+        self.assertTrue(events_a[1][0].wait(120))
+
+        proc_b, events_b, done_b, outq_b = self._new_worker(
+            _multisig_worker)
+        self.assertTrue(events_b[0][0].wait(120))
+
+        self._release(events_a[1])
+        self._release(events_a[2])
+        self._release(events_a[3])
+        self._assert_ok(proc_a, outq_a)
+
+        events_b[0][1].set()
+        self._drain(events_b, 1, done_b)
+        self._assert_ok(proc_b, outq_b)
+
+        res = run_in_new_process_in_cache_dir(_verify_multisig_cache,
+                                              self.cache_dir)
+        self.assertEqual(res['exitcode'], 0, res['stderr'])
 
 
 if __name__ == '__main__':
