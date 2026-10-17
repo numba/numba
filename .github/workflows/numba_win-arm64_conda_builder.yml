@@ -47,6 +47,7 @@ jobs:
         uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
           architecture: arm64
+          installation-dir: C:\Miniconda
           auto-update-conda: true
           auto-activate-base: true
           activate-environment: ""
@@ -127,9 +128,11 @@ jobs:
         uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
           architecture: arm64
+          installation-dir: C:\Miniconda
           auto-update-conda: true
           auto-activate-base: true
           activate-environment: ""
+
 
       - name: Install conda-build
         run: conda install conda-build
