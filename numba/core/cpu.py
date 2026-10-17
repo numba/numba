@@ -142,6 +142,10 @@ class CPUContext(BaseContext):
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
 
+        # Register NumPy-specific boxing/unboxing implementations, which live
+        # in the NumPy module.
+        from numba.np import boxing # noqa F401
+
         # fix for #8940
         from numba.np.unsafe import ndarray # noqa F401
 
