@@ -32,7 +32,7 @@ requirements:
   host:
     - python
     - numpy
-    - setuptools >=69.0.0
+    - setuptools >=77.0.3
     # On channel https://anaconda.org/numba/
     - llvmlite >=0.51.0dev0,<0.51
     # TBB devel version is to match TBB libs.
@@ -70,7 +70,7 @@ test:
     - scipy                    # [py<315]
     - ipython                  # [py<315 and not aarch64]
     # for pycc
-    - setuptools >=69.0.0
+    - setuptools >=77.0.3
     - pyyaml                   # [py<315]
     - pygments                 # [py<315]
     - intel-cmplr-lib-rt       # [linux and x86_64]
