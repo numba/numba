@@ -25,15 +25,16 @@ from numba.core.untyped_passes import (ExtractByteCode, TranslateByteCode,
                                        )
 
 from numba.core.typed_passes import (NopythonTypeInference, AnnotateTypes,
-                                     NopythonRewrites, PreParforPass,
-                                     ParforPass, DumpParforDiagnostics,
+                                     NopythonRewrites,
                                      IRLegalization, NoPythonBackend,
                                      InlineOverloads, PreLowerStripPhis,
-                                     NativeLowering, NativeParforLowering,
+                                     NativeLowering,
                                      NoPythonSupportedFeatureValidation,
-                                     ParforFusionPass, ParforPreLoweringPass
                                      )
-
+from numba.parfors.parfor_passes import (
+    ParforPass, ParforFusionPass, PreParforPass, ParforPreLoweringPass,
+    NativeParforLowering, DumpParforDiagnostics
+)
 from numba.core.object_mode_passes import (ObjectModeFrontEnd,
                                            ObjectModeBackEnd)
 from numba.core.targetconfig import TargetConfig, Option, ConfigStack
