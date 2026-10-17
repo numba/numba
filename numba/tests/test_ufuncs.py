@@ -546,6 +546,23 @@ class TestUFuncs(BasicUFuncTest, TestCase):
     def test_bitwise_not_ufunc(self):
         self.basic_int_ufunc_test(np.bitwise_not)
 
+    @unittest.skipUnless(numpy_support.numpy_version >= (2, 0),
+                         "np.bitwise_count requires NumPy 2.0")
+    def test_bitwise_count_ufunc(self):
+        additional_inputs = [
+            (np.uint8(0xff), types.uint8),
+            (np.int8(-128), types.int8),
+            (np.int64(-1), types.int64),
+            (np.uint64(0xffffffffffffffff), types.uint64),
+            (np.array([0, 1, 7, 255, 1023], dtype=np.uint16),
+             types.Array(types.uint16, 1, 'C')),
+            (np.array([-1, -128, -2, 100], dtype=np.int8),
+             types.Array(types.int8, 1, 'C')),
+        ]
+        self.basic_ufunc_test(np.bitwise_count, kinds='iu',
+                              int_output_type=types.uint8,
+                              additional_inputs=additional_inputs)
+
     # Note: there is no entry for left_shift and right_shift as this harness
     #       is not valid for them. This is so because left_shift and right
     #       shift implementation in NumPy has undefined behavior (in C-parlance)
