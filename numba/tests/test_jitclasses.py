@@ -1999,6 +1999,35 @@ def f(x, y):
                         tuple(eval(f"jit_ops_not_defined {op} jit_ops_defined"))
                     )
 
+    def test_arithmetic_logical_reflection_non_jitclass_left(self):
+        @jitclass([("value", float64)])
+        class Number:
+            def __init__(self, value):
+                self.value = value
+
+            def __radd__(self, other):
+                return Number(other + self.value)
+
+            def __rsub__(self, other):
+                return Number(other - self.value)
+
+        @njit
+        def add(x):
+            return (2.0 + x).value
+
+        @njit
+        def sub(x):
+            return (10.0 - x).value
+
+        @njit
+        def mul(x):
+            return 2.0 * x
+
+        self.assertEqual(add(Number(3.0)), 5.0)
+        self.assertEqual(sub(Number(3.0)), 7.0)
+        with self.assertRaises(TypingError):
+            mul(Number(3.0))
+
     def test_implicit_hash_compiles(self):
         # Ensure that classes with __hash__ implicitly defined as None due to
         # the presence of __eq__ are correctly handled by ignoring the __hash__

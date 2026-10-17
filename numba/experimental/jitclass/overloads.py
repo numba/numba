@@ -189,6 +189,25 @@ def register_reflected_overload(func, meth_forward, meth_reflected):
     class_instance_overload(func)(class_lt)
 
 
+def register_right_operand_overload(func, meth):
+    """
+    Register an overload for func that calls __r<meth>__ on the right operand
+    when only the right operand is a ClassInstanceType.
+    """
+    def right_operand(x, y):
+        if isinstance(x, ClassInstanceType):
+            return
+        if not isinstance(y, ClassInstanceType):
+            return
+        if f"__r{meth}__" in y.jit_methods:
+            return extract_template(f"""
+def func(x, y):
+    return y.__r{meth}__(x)
+""", "func")
+
+    overload(func)(right_operand)
+
+
 register_simple_overload(abs, "abs")
 register_simple_overload(len, "len")
 register_simple_overload(hash, "hash")
@@ -237,3 +256,20 @@ register_simple_overload(operator.xor, "xor", n_args=2)
 register_simple_overload(operator.iand, "iand", "and", n_args=2)
 register_simple_overload(operator.ior, "ior", "or", n_args=2)
 register_simple_overload(operator.ixor, "ixor", "xor", n_args=2)
+
+# Reflected arithmetic operators, for a jitclass right operand only.
+for _func, _meth in [
+    (operator.add, "add"),
+    (operator.floordiv, "floordiv"),
+    (operator.lshift, "lshift"),
+    (operator.mul, "mul"),
+    (operator.mod, "mod"),
+    (operator.pow, "pow"),
+    (operator.rshift, "rshift"),
+    (operator.sub, "sub"),
+    (operator.truediv, "truediv"),
+    (operator.and_, "and"),
+    (operator.or_, "or"),
+    (operator.xor, "xor"),
+]:
+    register_right_operand_overload(_func, _meth)
