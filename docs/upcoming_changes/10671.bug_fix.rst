@@ -1,0 +1,8 @@
+Fix shape mismatch ignored by in-place array operators
+------------------------------------------------------
+
+An in-place array operator (for example ``a &= b``) whose operands did not
+broadcast was lowered without a shape check, so it silently produced a wrong
+result instead of raising. Numba now validates the inputs against the output
+shape on the caller-provided-output path and raises ``ValueError``, matching
+NumPy.
