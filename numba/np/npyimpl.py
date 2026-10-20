@@ -30,6 +30,20 @@ from numba.np import types as npy_types
 registry = Registry('npyimpl')
 
 
+def init():
+    """Install the ``npyimpl`` registry on the live target context.
+
+    Registered under the ``numba_extensions`` entry point group so that
+    ``numba.core`` does not need to import ``numba.np.npyimpl`` itself.
+    """
+    from numba.core.target_extension import (current_target,
+                                             resolve_dispatcher_from_str)
+    td = resolve_dispatcher_from_str(current_target()).targetdescr
+    ctx = td.target_context
+    ctx.refresh()
+    ctx.install_registry(registry)
+
+
 ########################################################################
 
 # In the way we generate code, ufuncs work with scalar as well as
