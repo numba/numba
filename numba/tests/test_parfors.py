@@ -2871,6 +2871,40 @@ class TestParforsBitMask(TestParforsBase):
             self.check(test_impl, a, b, c)
         self.assertIn("\'@do_scheduling\' not found", str(raises.exception))
 
+    def test_parfor_bitmask_wrong_length(self):
+        # See https://github.com/numba/numba/issues/10374
+        def test_impl1(a, b):
+            a[b] = 0
+            return a
+
+        def test_impl2(a, b, c):
+            a[b] = c[b]
+            return a
+
+        a = np.arange(4)
+        b = np.ones(3, dtype=np.bool_)
+        msg = "boolean index did not match indexed array"
+        pcfunc = self.compile_parallel(test_impl1, (types.int64[:],
+                                                    types.bool_[:]))
+        with self.assertRaises(IndexError) as e:
+            pcfunc.entry_point(a, b)
+        self.assertIn(msg, str(e.exception))
+        # an empty mask is allowed and assigns nothing
+        np.testing.assert_equal(pcfunc.entry_point(a.copy(), b[:0]), a)
+        # but its other axes still have to match
+        pcfunc = self.compile_parallel(test_impl1, (types.int64[:, :],
+                                                    types.bool_[:, :]))
+        with self.assertRaises(IndexError) as e:
+            pcfunc.entry_point(np.arange(6).reshape(2, 3),
+                               np.zeros((0, 4), dtype=np.bool_))
+        self.assertIn(msg, str(e.exception))
+        pcfunc = self.compile_parallel(test_impl2, (types.int64[:],
+                                                    types.bool_[:],
+                                                    types.int64[:]))
+        with self.assertRaises(IndexError) as e:
+            pcfunc.entry_point(a, a > 1, b.astype(np.int64))
+        self.assertIn(msg, str(e.exception))
+
 
 @skip_parfors_unsupported
 class TestParforsMisc(TestParforsBase):

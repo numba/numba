@@ -916,11 +916,12 @@ class BooleanArrayIndexer(Indexer):
     Compute indices from an array of boolean predicates.
     """
 
-    def __init__(self, context, builder, idxty, idxary):
+    def __init__(self, context, builder, idxty, idxary, axis_size):
         self.context = context
         self.builder = builder
         self.idxty = idxty
         self.idxary = idxary
+        self.axis_size = axis_size
         assert idxty.ndim == 1
         self.ll_intp = self.context.get_value_type(types.intp)
         self.zero = Constant(self.ll_intp, 0)
@@ -928,6 +929,14 @@ class BooleanArrayIndexer(Indexer):
     def prepare(self):
         builder = self.builder
         self.size = cgutils.unpack_tuple(builder, self.idxary.shape)[0]
+        # NumPy allows an empty mask whatever the axis length
+        mismatch = builder.and_(
+            builder.icmp_signed('!=', self.size, self.axis_size),
+            builder.icmp_signed('!=', self.size, self.zero))
+        with builder.if_then(mismatch, likely=False):
+            msg = "boolean index did not match indexed array"
+            self.context.call_conv.return_user_exc(builder, IndexError,
+                                                   (msg,))
         self.idx_index = cgutils.alloca_once(builder, self.ll_intp)
         self.src_idx = cgutils.alloca_once(builder, self.ll_intp)
 
@@ -1208,7 +1217,8 @@ class FancyIndexer(object):
                                                   self.global_ary_idx_list)
                 elif isinstance(idxty.dtype, types.Boolean):
                     indexer = BooleanArrayIndexer(context, builder,
-                                                  idxty, idxary)
+                                                  idxty, idxary,
+                                                  self.shapes[ax])
                 else:
                     assert 0
                 indexers.append(indexer)
