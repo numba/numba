@@ -2881,7 +2881,7 @@ class TestParforsBitMask(TestParforsBase):
             a[b] = c[b]
             return a
 
-        a = np.arange(4)
+        a = np.arange(4, dtype=np.int64)
         b = np.ones(3, dtype=np.bool_)
         msg = "boolean index did not match indexed array"
         pcfunc = self.compile_parallel(test_impl1, (types.int64[:],
@@ -2895,7 +2895,7 @@ class TestParforsBitMask(TestParforsBase):
         pcfunc = self.compile_parallel(test_impl1, (types.int64[:, :],
                                                     types.bool_[:, :]))
         with self.assertRaises(IndexError) as e:
-            pcfunc.entry_point(np.arange(6).reshape(2, 3),
+            pcfunc.entry_point(np.arange(6, dtype=np.int64).reshape(2, 3),
                                np.zeros((0, 4), dtype=np.bool_))
         self.assertIn(msg, str(e.exception))
         pcfunc = self.compile_parallel(test_impl2, (types.int64[:],
