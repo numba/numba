@@ -460,6 +460,11 @@ metadata = dict(
     install_requires=install_requires,
     python_requires=">={}".format(min_python_version),
     license="BSD",
+    entry_points={
+        "numba_extensions": [
+            "init = numba.np.npyimpl:init",
+        ],
+    },
     cmdclass=cmdclass,
 )
 

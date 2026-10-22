@@ -126,7 +126,6 @@ class CPUContext(BaseContext):
         from numba.np import npdatetime # noqa F401
 
         # Add target specific implementations
-        from numba.np import npyimpl
         from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
         from numba.misc import cffiimpl
         from numba.experimental.jitclass.base import ClassBuilder as \
@@ -134,7 +133,6 @@ class CPUContext(BaseContext):
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
-        self.install_registry(npyimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
         self.install_registry(jitclassimpl.class_impl_registry)
