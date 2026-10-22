@@ -1,0 +1,9 @@
+Speed up sums along contiguous array axes
+-----------------------------------------
+
+For a C-contiguous array summed over its last axis, or a Fortran-contiguous
+array summed over its first axis, the inputs for each result are consecutive
+in memory. Use a local accumulator for those cases and write each result
+once. Other axes, tuple axes, and strided arrays retain the existing iterator
+path. The new loop keeps the existing addition order, dtype conversions, and
+C-contiguous output layout; it does not enable fastmath.
