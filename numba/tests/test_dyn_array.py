@@ -7,7 +7,7 @@ import threading
 import gc
 
 from numba.core.errors import TypingError
-from numba import njit
+from numba import jit, njit
 from numba.core import types, utils, config
 from numba.tests.support import MemoryLeakMixin, TestCase, tag, skip_if_32bit
 from numba.core.utils import PYVERSION
@@ -1017,6 +1017,122 @@ class TestNdEmptyLike(ConstructorLikeBaseTest, TestCase):
 
         excstr = str(raises.exception)
         self.assertIn("Invalid NumPy dtype specified: 'ABCDEF'", excstr)
+
+
+
+class TestNdEmptyLikeShape(ConstructorLikeBaseTest, TestCase):
+    # Tests for the shape kwarg of np.empty_like (zeros_like and ones_like
+    # do not support it, so these are kept out of TestNdEmptyLike, which
+    # they inherit from)
+
+    def check_shape_kwarg(self, func, arr, shape, layout, *args):
+        cfunc = jit(func)
+        ret = cfunc(arr, *args)
+        expected = np.empty_like(arr, shape=shape)
+        self.assertEqual(ret.shape, expected.shape)
+        self.assertEqual(ret.dtype, expected.dtype)
+        self.assertEqual(ret.flags.c_contiguous, expected.flags.c_contiguous)
+        self.assertEqual(ret.flags.f_contiguous, expected.flags.f_contiguous)
+        # pin the type-level layout, not just the runtime flags
+        retty = cfunc.nopython_signatures[0].return_type
+        self.assertEqual(retty.layout, layout)
+        # test writability
+        self.mutate_array(ret)
+        return ret
+
+    def test_shape_kwarg(self):
+        def func(arr):
+            return np.empty_like(arr, shape=(4, 2, 3))
+        arr = np.zeros((2, 3))
+        ret = self.check_shape_kwarg(func, arr, (4, 2, 3), 'C')
+        self.assertEqual(str(ret.dtype), str(arr.dtype))
+
+    def test_shape_kwarg_empty_tuple(self):
+        # shape=() produces a 0-d array
+        def func(arr):
+            return np.empty_like(arr, shape=())
+        cfunc = jit(func)
+        ret = cfunc(np.zeros((2, 3)))
+        self.assertEqual(ret.shape, ())
+        retty = cfunc.nopython_signatures[0].return_type
+        self.assertEqual(retty.ndim, 0)
+        self.assertEqual(retty.layout, 'C')
+
+    def test_shape_kwarg_int(self):
+        # a single int is a valid 1-d shape
+        def func(arr):
+            return np.empty_like(arr, shape=5)
+        cfunc = jit(func)
+        ret = cfunc(np.zeros((2, 3)))
+        self.assertEqual(ret.shape, (5,))
+        self.assertEqual(cfunc.nopython_signatures[0].return_type.ndim, 1)
+
+    def test_shape_kwarg_runtime_shape(self):
+        # shape tuple built at runtime
+        @jit
+        def func(arr, m, n):
+            return np.empty_like(arr, shape=(m, n))
+        ret = func(np.zeros((2, 3)), 3, 4)
+        self.assertEqual(ret.shape, (3, 4))
+        self.assertEqual(ret.flags.c_contiguous, True)
+
+    def test_shape_kwarg_fortran(self):
+        # the layout of the prototype is kept when shape is overridden;
+        # Numba approximates NumPy's 'K' with the static prototype layout,
+        # hence the non-degenerate Fortran array here (for which NumPy
+        # keeps 'F')
+        def func(arr):
+            return np.empty_like(arr, shape=(3, 4))
+        arr = np.asfortranarray(np.zeros((3, 2)))
+        self.check_shape_kwarg(func, arr, (3, 4), 'F')
+
+    def test_shape_kwarg_fortran_ndim_mismatch(self):
+        # NumPy's 'K' falls back to C when the number of dimensions changes
+        def func(arr):
+            return np.empty_like(arr, shape=(4, 2, 3))
+        arr = np.asfortranarray(np.zeros((3, 2)))
+        self.check_shape_kwarg(func, arr, (4, 2, 3), 'C')
+
+    def test_shape_kwarg_any_layout(self):
+        # an 'A' (non-contiguous) prototype gives a 'C' result
+        def func(arr):
+            return np.empty_like(arr, shape=(3, 4))
+        arr = np.zeros((4, 6))[::2, ::2]
+        self.check_shape_kwarg(func, arr, (3, 4), 'C')
+
+    def test_shape_kwarg_dtype(self):
+        # shape and dtype can be combined
+        def func(arr):
+            return np.empty_like(arr, dtype=np.int32, shape=(3, 4))
+        cfunc = jit(func)
+        ret = cfunc(np.zeros((2, 3)))
+        self.assertEqual(ret.shape, (3, 4))
+        self.assertEqual(ret.dtype, np.dtype(np.int32))
+
+    def test_shape_kwarg_scalar_prototype(self):
+        def func(n):
+            return np.empty_like(n, shape=(2, 3), dtype=np.int32)
+        cfunc = jit(func)
+        ret = cfunc(np.float64(1.5))
+        self.assertEqual(ret.shape, (2, 3))
+        self.assertEqual(ret.dtype, np.dtype(np.int32))
+
+    def test_shape_kwarg_negative(self):
+        @jit
+        def func(arr, n):
+            return np.empty_like(arr, shape=(n, 2))
+        with self.assertRaises(ValueError) as raises:
+            func(np.zeros((2, 3)), -1)
+        self.assertIn("negative dimensions not allowed", str(raises.exception))
+
+    def test_shape_kwarg_invalid(self):
+        @jit
+        def func(arr, shape):
+            return np.empty_like(arr, shape=shape)
+        with self.assertRaises(TypingError) as raises:
+            func(np.zeros((2, 3)), 'ABCDEF')
+        self.assertIn("Cannot parse input types to function np.empty_like",
+                      str(raises.exception))
 
 
 class TestNdZerosLike(TestNdEmptyLike):
