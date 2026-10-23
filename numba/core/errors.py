@@ -566,6 +566,16 @@ class WarningsFixer(object):
                 warnings.warn_explicit(msg, category, filename, lineno)
         self._warnings.clear()
 
+    def extend(self, other, keep=None):
+        """
+        Store the warnings held by *other*, another WarningsFixer, in this
+        one. If *keep* is given, only take the warnings for which
+        ``keep(filename, lineno)`` is true.
+        """
+        for (filename, lineno, category), messages in other._warnings.items():
+            if keep is None or keep(filename, lineno):
+                self._warnings[filename, lineno, category] |= messages
+
     def __enter__(self):
         return
 
