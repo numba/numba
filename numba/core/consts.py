@@ -113,6 +113,11 @@ class ConstantInference(object):
             # Allow looking up a constant on a class or module
             try:
                 return getattr(value, expr.attr)
-            except AttributeError:
-                pass
+            except AttributeError as e:
+                if isinstance(value, ModuleType):
+                    # A missing module attribute is an error in the user's
+                    # environment (e.g. an older version of a dependency), not
+                    # a limitation of constant inference, so report it as is.
+                    raise AttributeError(
+                        f"{e}\n{expr.loc.strformat()}") from None
         self._fail(expr)
