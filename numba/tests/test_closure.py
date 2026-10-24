@@ -380,17 +380,17 @@ class TestInlinedClosure(TestCase):
                 return x + np.cos(z)
             return inner(x)
 
-        def outer22():
-            """Test to ensure that unsupported *args raises correctly"""
+        def outer22(x):
+            """ closure called with a locally built *args tuple"""
             def bar(a, b):
-                pass
-            x = 1, 2
-            bar(*x)
+                return a + b
+            t = x, x + 1
+            return bar(*t)
 
         # functions to test that are expected to pass
         f = [outer1, outer2, outer5, outer6, outer7, outer8,
              outer9, outer10, outer12, outer13, outer14,
-             outer15, outer19, outer20, outer21]
+             outer15, outer19, outer20, outer21, outer22]
         for ref in f:
             cfunc = njit(ref)
             var = 10
@@ -433,11 +433,59 @@ class TestInlinedClosure(TestCase):
         msg = "The use of yield in a closure is unsupported."
         self.assertIn(msg, str(raises.exception))
 
-        with self.assertRaises(UnsupportedError) as raises:
-            cfunc = jit(nopython=True)(outer22)
-            cfunc()
+    def test_closure_vararg(self):
+        # a closure called with a locally built *args tuple is inlined by
+        # unpacking the tuple into direct arguments
+
+        def outer_single(x):
+            def bar(a):
+                return a * 2
+            t = (x,)
+            return bar(*t)
+
+        def outer_default(x):
+            def bar(a, b, c=10):
+                return a + b + c
+            t = x, x + 1
+            return bar(*t)
+
+        # more than 30 arguments: CPython emits the append window that the
+        # list_to_tuple peephole coalesces into one build_tuple (#10782)
+        n = 31
+        src = ("def outer_wide(x):\n"
+               "    def bar(%s):\n"
+               "        return %s\n"
+               "    return bar(%s)\n"
+               % (", ".join("a%d" % i for i in range(n)),
+                  " + ".join("a%d" % i for i in range(n)),
+                  ", ".join(["x"] * n)))
+        glbls = {}
+        exec(src, glbls)
+
+        for ref in (outer_single, outer_default, glbls["outer_wide"]):
+            cfunc = njit(ref)
+            self.assertEqual(cfunc(10), ref(10))
+
+    def test_closure_vararg_unsupported(self):
+        # only a locally built tuple can be unpacked; any other vararg
+        # still raises
+
+        def outer_param(t):
+            def bar(a, b):
+                return a + b
+            return bar(*t)
+
+        def outer_mixed(x):
+            def bar(a, b, c):
+                return a + b + c
+            t = x, x + 1
+            return bar(x, *t)  # append + extend window: a concatenation
+
         msg = "Calling a closure with *args is unsupported."
-        self.assertIn(msg, str(raises.exception))
+        for ref, arg in ((outer_param, (1, 2)), (outer_mixed, 1)):
+            with self.assertRaises(UnsupportedError) as raises:
+                njit(ref)(arg)
+            self.assertIn(msg, str(raises.exception))
 
     def test_closure_renaming_scheme(self):
         # See #7380, this checks that inlined (from closure) variables have a
