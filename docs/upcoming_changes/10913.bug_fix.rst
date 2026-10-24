@@ -1,0 +1,7 @@
+Resolve standard indexing options in inline stencils
+----------------------------------------------------
+
+Inline stencils now resolve constant ``standard_indexing`` argument names
+before serial or parallel compilation. Strings, tuples, and constant lists
+are supported. Runtime options and lists with other uses are rejected with
+clear errors.
