@@ -87,7 +87,7 @@ jobs:
           else
               python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
           fi
-          python -m pip install build numpy==${{ matrix.numpy_build }} "setuptools>=69.0.0" wheel tbb==2021.6 tbb-devel==2021.6
+          python -m pip install build numpy==${{ matrix.numpy_build }} "setuptools>=77.0.3" wheel tbb==2021.6 tbb-devel==2021.6
 
       - name: Setup MSVC v14.44 (v143) environment
         run: |
