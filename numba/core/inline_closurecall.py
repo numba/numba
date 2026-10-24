@@ -236,6 +236,8 @@ class InlineClosureCallPass(object):
                     "stencil standard_indexing option must be a compile-time "
                     "constant string or sequence of strings")
             if isinstance(standard_indexing, list):
+                # Unlike strings and tuples of strings, a list can be mutated
+                # after the definition used by constant inference.
                 self._validate_stencil_standard_indexing_list(
                     options['standard_indexing'])
             options['standard_indexing'] = tuple(standard_indexing)
@@ -262,38 +264,41 @@ class InlineClosureCallPass(object):
         return True
 
     def _validate_stencil_standard_indexing_list(self, option):
-        aliases = {option.name}
-        statements = [stmt for block in self.func_ir.blocks.values()
-                      for stmt in block.body]
-        changed = True
-        while changed:
-            changed = False
-            for stmt in statements:
-                if isinstance(stmt, ir.Assign) and isinstance(stmt.value, ir.Var):
-                    pair = {stmt.target.name, stmt.value.name}
-                    if aliases & pair and not pair <= aliases:
-                        aliases.update(pair)
-                        changed = True
-        for stmt in statements:
-            uses = {var.name for var in stmt.list_vars()} & aliases
-            if not uses or isinstance(stmt, ir.Del):
-                continue
-            if isinstance(stmt, ir.Assign):
-                value = stmt.value
-                if stmt.target.name in aliases and (
-                        isinstance(value, (ir.Var, ir.Const, ir.Global, ir.FreeVar))
-                        or isinstance(value, ir.Expr) and value.op == 'build_list'):
+        """Reject uses that could invalidate an inferred list constant.
+
+        Constant inference reads the list's definition without tracking later
+        mutations. Only construction, aliases, and use as a stencil option are
+        allowed; other uses could mutate the list or let an alias escape.
+        """
+        # This pass runs before typing. A missing typemap makes alias analysis
+        # conservatively treat all variables as potentially mutable.
+        alias_map, _ = ir_utils.find_potential_aliases(
+            self.func_ir.blocks, self.func_ir.arg_names, None, self.func_ir)
+        aliases = {option.name} | alias_map.get(option.name, set())
+        for block in self.func_ir.blocks.values():
+            for stmt in block.find_insts(ir.Stmt):
+                uses = {var.name for var in stmt.list_vars()} & aliases
+                if not uses or isinstance(stmt, ir.Del):
                     continue
-                if isinstance(value, ir.Expr) and value.op == 'call':
-                    call_name = guard(find_callname, self.func_ir, value)
-                    option_uses = {var.name for name, var in value.kws
-                                   if name == 'standard_indexing'}
-                    if call_name in (('stencil', 'numba.stencils.stencil'),
-                                     ('stencil', 'numba')) and uses <= option_uses:
+                if isinstance(stmt, ir.Assign):
+                    value = stmt.value
+                    if stmt.target.name in aliases and (
+                            isinstance(value, (ir.Var, ir.Const, ir.Global,
+                                               ir.FreeVar))
+                            or isinstance(value, ir.Expr)
+                            and value.op == 'build_list'):
                         continue
-            raise errors.NumbaValueError(
-                "stencil standard_indexing list must be used only as a "
-                "compile-time option; use a tuple for other uses")
+                    if isinstance(value, ir.Expr) and value.op == 'call':
+                        call_name = guard(find_callname, self.func_ir, value)
+                        option_uses = {var.name for name, var in value.kws
+                                       if name == 'standard_indexing'}
+                        if (call_name in (('stencil', 'numba.stencils.stencil'),
+                                          ('stencil', 'numba'))
+                                and uses <= option_uses):
+                            continue
+                raise errors.NumbaValueError(
+                    "stencil standard_indexing list must be used only as a "
+                    "compile-time option; use a tuple for other uses")
 
     def _fix_stencil_neighborhood(self, options):
         """

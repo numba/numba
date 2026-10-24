@@ -450,7 +450,8 @@ class TestStencil(TestStencilBase):
                 return x[0] + weights[0]
             names = ['weights']
             alias = names
-            return stencil(kernel, standard_indexing=alias)(a, b)
+            another_alias = alias
+            return stencil(kernel, standard_indexing=another_alias)(a, b)
 
         a = np.arange(10, dtype=np.int64)
         b = np.array([3], dtype=np.int64)
@@ -458,6 +459,26 @@ class TestStencil(TestStencilBase):
             with self.subTest(parallel=parallel):
                 compiled = jit(parallel=parallel)(impl)
                 np.testing.assert_array_equal(compiled(a, b), a + b[0])
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_immutable_uses(self):
+        def make_impl(names):
+            def impl(a, b):
+                def kernel(x, weights):
+                    return x[0] + weights[0]
+                result = stencil(kernel, standard_indexing=names)(a, b)
+                return result, len(names)
+            return impl
+
+        a = np.arange(10, dtype=np.int64)
+        b = np.array([3], dtype=np.int64)
+        for names in ('weights', ('weights',)):
+            for parallel in (False, True):
+                with self.subTest(names=names, parallel=parallel):
+                    compiled = jit(parallel=parallel)(make_impl(names))
+                    result, count = compiled(a, b)
+                    np.testing.assert_array_equal(result, a + b[0])
+                    self.assertEqual(count, len(names))
 
     @skip_unsupported
     def test_inline_stencil_standard_indexing_2d(self):
@@ -492,6 +513,16 @@ class TestStencil(TestStencilBase):
             names.append('x')
             return stencil(kernel, standard_indexing=names)(a, b)
 
+        def conditional_setitem(a, b):
+            def kernel(x, weights):
+                return x[0] + weights[0]
+            names = ['weights']
+            alias = names
+            another_alias = alias
+            if a[0] == 0:
+                another_alias[0] = 'x'
+            return stencil(kernel, standard_indexing=names)(a, b)
+
         @jit
         def mutate(names):
             names[0] = 'x'
@@ -505,7 +536,7 @@ class TestStencil(TestStencilBase):
 
         a = np.arange(10, dtype=np.int64)
         b = np.array([3], dtype=np.int64)
-        for impl in (setitem, append, escape):
+        for impl in (setitem, append, conditional_setitem, escape):
             for parallel in (False, True):
                 with self.subTest(impl=impl.__name__, parallel=parallel):
                     compiled = jit(parallel=parallel)(impl)
