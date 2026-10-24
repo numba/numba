@@ -130,11 +130,12 @@ class TestFastMathOption(CUDATestCase):
             prec_unexpected=['tanh.approx.f32 ']
         ))
 
-        tanh_common_test(cc=(7, 0),
-                         criterion=FastMathCriterion(
-            fast_expected=['ex2.approx.ftz.f32 ',
-                           'rcp.approx.ftz.f32 '],
-            prec_unexpected=['tanh.approx.f32 ']))
+        if cuda.runtime.get_version() < (13, 0):
+            tanh_common_test(cc=(7, 0),
+                             criterion=FastMathCriterion(
+                fast_expected=['ex2.approx.ftz.f32 ',
+                               'rcp.approx.ftz.f32 '],
+                prec_unexpected=['tanh.approx.f32 ']))
 
     def test_expf(self):
         self._test_fast_math_unary(

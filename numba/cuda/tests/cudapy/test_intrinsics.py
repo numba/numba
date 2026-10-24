@@ -597,7 +597,7 @@ class TestCudaIntrinsic(CUDATestCase):
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hadd_ptx(self):
         args = (f2[:], f2, f2)
-        ptx, _ = compile_ptx(simple_hadd_scalar, args, cc=(5, 3))
+        ptx, _ = compile_ptx(simple_hadd_scalar, args, cc=(7, 5))
         self.assertIn('add.f16', ptx)
 
     @skip_unless_cc_53
@@ -624,7 +624,7 @@ class TestCudaIntrinsic(CUDATestCase):
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hfma_ptx(self):
         args = (f2[:], f2, f2, f2)
-        ptx, _ = compile_ptx(simple_hfma_scalar, args, cc=(5, 3))
+        ptx, _ = compile_ptx(simple_hfma_scalar, args, cc=(7, 5))
         self.assertIn('fma.rn.f16', ptx)
 
     @skip_unless_cc_53
@@ -649,7 +649,7 @@ class TestCudaIntrinsic(CUDATestCase):
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hsub_ptx(self):
         args = (f2[:], f2, f2)
-        ptx, _ = compile_ptx(simple_hsub_scalar, args, cc=(5, 3))
+        ptx, _ = compile_ptx(simple_hsub_scalar, args, cc=(7, 5))
         self.assertIn('sub.f16', ptx)
 
     @skip_unless_cc_53
@@ -674,7 +674,7 @@ class TestCudaIntrinsic(CUDATestCase):
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hmul_ptx(self):
         args = (f2[:], f2, f2)
-        ptx, _ = compile_ptx(simple_hmul_scalar, args, cc=(5, 3))
+        ptx, _ = compile_ptx(simple_hmul_scalar, args, cc=(7, 5))
         self.assertIn('mul.f16', ptx)
 
     @skip_unless_cc_53
@@ -719,7 +719,7 @@ class TestCudaIntrinsic(CUDATestCase):
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_hneg_ptx(self):
         args = (f2[:], f2)
-        ptx, _ = compile_ptx(simple_hneg_scalar, args, cc=(5, 3))
+        ptx, _ = compile_ptx(simple_hneg_scalar, args, cc=(7, 5))
         self.assertIn('neg.f16', ptx)
 
     @skip_unless_cc_53
@@ -742,7 +742,7 @@ class TestCudaIntrinsic(CUDATestCase):
     @skip_on_cudasim('Compilation unsupported in the simulator')
     def test_habs_ptx(self):
         args = (f2[:], f2)
-        ptx, _ = compile_ptx(simple_habs_scalar, args, cc=(5, 3))
+        ptx, _ = compile_ptx(simple_habs_scalar, args, cc=(7, 5))
         self.assertIn('abs.f16', ptx)
 
     @skip_unless_cc_53
