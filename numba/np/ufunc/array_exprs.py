@@ -337,6 +337,11 @@ class _EraseInvalidLineRanges(ast.NodeTransformer):
                 if node.lineno > node.end_lineno:
                     del node.lineno
                     del node.end_lineno
+        if(hasattr(node, "col_offset")):
+            if getattr(node, "end_col_offset", None) is not None:
+                if(node.col_offset > node.end_col_offset):
+                    del node.col_offset
+                    del node.end_col_offset
         return node
 
 
