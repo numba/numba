@@ -1,0 +1,8 @@
+Fix boolean mask indexing with a mismatched length
+--------------------------------------------------
+
+Indexing or assigning to an array with a boolean mask whose length differs
+from the indexed axis now raises ``IndexError``, matching NumPy. Previously
+the mask was used unchecked, reading or writing past the end of the array.
+This also applies to masked assignment under ``parallel=True``. Empty masks
+are still allowed.
