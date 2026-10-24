@@ -2,6 +2,6 @@ Resolve standard indexing options in inline stencils
 ----------------------------------------------------
 
 Inline stencils now resolve constant ``standard_indexing`` argument names
-before serial or parallel compilation. Strings, tuples, and constant lists
-are supported. Runtime options and lists with other uses are rejected with
-clear errors.
+before serial or parallel compilation. Built-in strings and tuples or constant
+lists of built-in strings are supported. Other containers, subclasses, runtime
+options, and lists with other uses are rejected with clear errors.

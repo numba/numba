@@ -192,6 +192,17 @@ class InlineClosureCallPass(object):
         return True
 
     def _inline_stencil(self, instr, call_name, func_def):
+        """Prepare inline kernels and options for stencil lowering.
+
+        Array analysis and lowering need argument names, rather than IR
+        variables, to decide which accesses receive relative offsets. Resolve
+        standard_indexing before constructing StencilFunc so both serial and
+        parallel compilation see the same names.
+
+        Retain unresolved option variables as call keywords to keep them live
+        for lowering. Exclude the resolved standard_indexing option: forwarding
+        it would pass an unexpected keyword to the generated serial wrapper.
+        """
         from numba.stencils.stencil import StencilFunc
         lhs = instr.target
         expr = instr.value
@@ -221,26 +232,9 @@ class InlineClosureCallPass(object):
                                    stencil_def.code)
         options = dict(expr.kws)
         if 'standard_indexing' in options:
-            try:
-                standard_indexing = self.func_ir.infer_constant(
-                    options['standard_indexing'].name)
-            except errors.ConstantInferenceError as exc:
-                raise errors.NumbaValueError(
-                    "stencil standard_indexing option must be a compile-time "
-                    "constant string or sequence of strings") from exc
-            if isinstance(standard_indexing, str):
-                standard_indexing = (standard_indexing,)
-            if not isinstance(standard_indexing, (tuple, list)) or not all(
-                    isinstance(name, str) for name in standard_indexing):
-                raise errors.NumbaValueError(
-                    "stencil standard_indexing option must be a compile-time "
-                    "constant string or sequence of strings")
-            if isinstance(standard_indexing, list):
-                # Unlike strings and tuples of strings, a list can be mutated
-                # after the definition used by constant inference.
-                self._validate_stencil_standard_indexing_list(
-                    options['standard_indexing'])
-            options['standard_indexing'] = tuple(standard_indexing)
+            options['standard_indexing'] = (
+                self._resolve_stencil_standard_indexing(
+                    options['standard_indexing']))
         if 'neighborhood' in options:
             fixed = guard(self._fix_stencil_neighborhood, options)
             if not fixed:
@@ -263,12 +257,45 @@ class InlineClosureCallPass(object):
         instr.value = sf_global
         return True
 
+    def _resolve_stencil_standard_indexing(self, option):
+        """Freeze argument names so indexing modes cannot change at runtime.
+
+        Accept only built-in str, tuple, and list, with built-in str elements.
+        Other containers are outside this contract; accepting arbitrary
+        iterables could consume iterators or execute user-defined behavior.
+        Exact types also exclude subclasses that override iteration, equality,
+        or hashing during validation and lowering.
+
+        Lists additionally need use validation because constant inference does
+        not track mutation. Normalize every accepted form to an immutable tuple
+        for downstream consumers, treating a string as one whole argument name
+        rather than a sequence of characters.
+        """
+        message = (
+            "stencil standard_indexing option must be a compile-time constant "
+            "str or a tuple/list of str, using only built-in types")
+        try:
+            names = self.func_ir.infer_constant(option.name)
+        except errors.ConstantInferenceError as exc:
+            raise errors.NumbaValueError(message) from exc
+        if type(names) is str:
+            return (names,)
+        if type(names) not in (tuple, list) or any(
+                type(name) is not str for name in names):
+            raise errors.NumbaValueError(message)
+        if type(names) is list:
+            self._validate_stencil_standard_indexing_list(option)
+        return tuple(names)
+
     def _validate_stencil_standard_indexing_list(self, option):
         """Reject uses that could invalidate an inferred list constant.
 
         Constant inference reads the list's definition without tracking later
         mutations. Only construction, aliases, and use as a stencil option are
         allowed; other uses could mutate the list or let an alias escape.
+        Scan all blocks and aliases conservatively instead of assuming a
+        particular execution order. Strings and tuples of strings need no such
+        restriction because their contents cannot change after inference.
         """
         # This pass runs before typing. A missing typemap makes alias analysis
         # conservatively treat all variables as potentially mutable.
@@ -301,9 +328,11 @@ class InlineClosureCallPass(object):
                     "compile-time option; use a tuple for other uses")
 
     def _fix_stencil_neighborhood(self, options):
-        """
-        Extract the two-level tuple representing the stencil neighborhood
-        from the program IR to provide a tuple to StencilFunc.
+        """Expose neighborhood structure without freezing runtime bounds.
+
+        Lowering needs the per-dimension bounds to build loop ranges, but their
+        values may depend on runtime array sizes. Unpack the tuple structure
+        while retaining the bound variables for parfor lowering to evaluate.
         """
         # build_tuple node with neighborhood for each dimension
         dims_build_tuple = get_definition(self.func_ir, options['neighborhood'])
@@ -317,9 +346,11 @@ class InlineClosureCallPass(object):
         return True
 
     def _fix_stencil_index_offsets(self, options):
-        """
-        Extract the tuple representing the stencil index offsets
-        from the program IR to provide to StencilFunc.
+        """Expose per-dimension offsets without requiring constant values.
+
+        Parfor lowering generates an index adjustment for each dimension.
+        Keeping the tuple's elements as IR variables lets those adjustments use
+        runtime offsets while their number is known during compilation.
         """
         offset_tuple = get_definition(self.func_ir, options['index_offsets'])
         require(hasattr(offset_tuple, 'items'))
