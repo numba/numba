@@ -1,0 +1,5 @@
+Support multiple ``axis`` arguments in ``np.expand_dims``
+---------------------------------------------------------
+
+Users can now specify multiple axes in the form of a
+tuple of integers in a single call to ``np.expand_dims``.
