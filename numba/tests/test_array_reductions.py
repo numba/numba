@@ -833,6 +833,33 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
+    def test_np_median_scalar(self):
+        self.check_scalar_basic(array_median_global)
+
+        cfunc = jit(nopython=True)(array_median_global)
+
+        def check(arg):
+            self.assertPreciseEqual(cfunc(arg), array_median_global(arg))
+
+        check(np.int64(-3))
+        check(np.uint32(5))
+
+        check(np.complex64(2 + 3j))
+        check(np.complex128(-1 - 1j))
+        check(np.complex64(complex('nan')))
+
+        check(5)
+        check(True)
+        check(3.5)
+
+        check(np.timedelta64())
+        check(np.timedelta64(5, 'ms'))
+        check(np.timedelta64(-3, 'D'))
+        check(np.timedelta64('NaT', 's'))
+
+        with self.assertTypingError():
+            cfunc(np.datetime64('2020-01-01'))
+
     def check_percentile_and_quantile(self, pyfunc, q_upper_bound):
         cfunc = jit(nopython=True)(pyfunc)
 
