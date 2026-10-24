@@ -191,6 +191,8 @@ class MinimalCallConv(BaseCallConv):
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None,
                         func_name=None):
+        if (loc is None):
+            loc = self.context.loc
         if exc is not None and not issubclass(exc, BaseException):
             raise TypeError("exc should be None or exception class, got %r"
                             % (exc,))
@@ -453,6 +455,8 @@ class CPUCallConv(BaseCallConv):
 
     def return_user_exc(self, builder, exc, exc_args=None, loc=None,
                         func_name=None):
+        if (loc is None):
+            loc = self.context.loc
         try_info = getattr(builder, '_in_try_block', False)
         self.set_static_user_exc(builder, exc, exc_args=exc_args,
                                  loc=loc, func_name=func_name)

@@ -2,6 +2,7 @@ import itertools
 
 import numpy as np
 
+import traceback
 import unittest
 from numba import jit, njit
 from numba.core import types
@@ -152,8 +153,13 @@ class TestOptional(TestCase):
             return y[0]
 
         cfunc = njit("(optional(int32[:]),)")(pyfunc)
+        offset = cfunc.__code__.co_firstlineno + 1
         with self.assertRaises(TypeError) as raised:
-            cfunc(None)
+            try:
+                cfunc(None)
+            except TypeError as e:
+                self.assertIn(f'line {offset}', "\n".join(traceback.format_exception(e)))
+                raise e
         self.assertIn('expected array(int32, 1d, A), got None',
                       str(raised.exception))
 
