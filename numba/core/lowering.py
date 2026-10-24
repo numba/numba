@@ -183,7 +183,8 @@ class BaseLower(object):
         """
         # Define global for the environment and initialize it to NULL
         envname = self.context.get_env_name(self.fndesc)
-        self.context.declare_env_global(self.module, envname)
+        self.context.declare_env_global(self.module, envname,
+                                        referencer_name=self.fndesc.mangled_name)
 
     def lower(self):
         # Emit the Env into the module
