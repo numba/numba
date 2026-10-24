@@ -135,6 +135,39 @@ class TestConfig(TestCase):
         self.assertIn(ex_expected, out_msg, msg=err_msg)
 
 
+class TestEnvVarParsing(TestCase):
+
+    # Disable parallel testing due to envvars modification
+    _numba_parallel_test_ = False
+
+    def test_unparseable_value_falls_back_to_callable_default(self):
+        # Config entries whose default is a callable, e.g. NUMBA_ENABLE_AVX,
+        # must fall back to the result of calling it, not to the callable
+        # itself. NUMBA_CPU_NAME is set to a CPU that pins that default to
+        # False on every platform.
+        new_env = os.environ.copy()
+        new_env['NUMBA_ENABLE_AVX'] = 'not_an_int'
+        new_env['NUMBA_CPU_NAME'] = 'nocona'
+        code = ("from numba.core import config\n"
+                "print('---->', repr(config.ENABLE_AVX))")
+        out, err = run_in_subprocess(dedent(code), env=new_env)
+        out_msg = out.decode('utf-8')
+        err_msg = err.decode('utf-8')
+        self.assertIn("----> False", out_msg, msg=err_msg)
+        self.assertIn("NUMBA_ENABLE_AVX", err_msg)
+
+    def test_parseable_value_is_still_used(self):
+        new_env = os.environ.copy()
+        new_env['NUMBA_ENABLE_AVX'] = '0'
+        new_env.pop('NUMBA_CPU_NAME', None)
+        code = ("from numba.core import config\n"
+                "print('---->', repr(config.ENABLE_AVX))")
+        out, err = run_in_subprocess(dedent(code), env=new_env)
+        out_msg = out.decode('utf-8')
+        err_msg = err.decode('utf-8')
+        self.assertIn("----> 0", out_msg, msg=err_msg)
+
+
 class TestNumbaOptLevel(TestCase):
     # Tests that the setting of NUMBA_OPT influences the "cheap" module pass.
     # Spot checks NUMBA_OPT={'max', '3', '0'}
