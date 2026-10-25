@@ -15,6 +15,7 @@ import numpy as np
 
 from numba import pndindex, literal_unroll
 from numba.core import types, typing, errors, cgutils, extending
+from numba.core.errors import NumbaNotImplementedError
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
                                     check_is_integer, type_is_scalar,
@@ -4611,6 +4612,49 @@ def iternext_numpy_nditer2(context, builder, sig, args, result):
 def dtype_eq_impl(context, builder, sig, args):
     arg1, arg2 = sig.args
     res = ir.Constant(ir.IntType(1), int(arg1 == arg2))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_builtin(operator.ne, types.DType, types.DType)
+def dtype_ne_impl(context, builder, sig, args):
+    arg1, arg2 = sig.args
+    res = ir.Constant(ir.IntType(1), int(arg1 != arg2))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_builtin(operator.eq, types.DType, types.StringLiteral)
+@lower_builtin(operator.eq, types.StringLiteral, types.DType)
+def dtype_string_eq_impl(context, builder, sig, args):
+    # Follows NumPy: a dtype compares equal to the string naming it
+    # (issue #5255).
+    dt, st = sig.args
+    if isinstance(dt, types.DType):
+        dtype, literal = dt, st
+    else:
+        dtype, literal = st, dt
+    try:
+        dtype_str = as_dtype(dtype.dtype).name
+    except NumbaNotImplementedError:
+        dtype_str = str(dtype)
+    res = ir.Constant(ir.IntType(1),
+                      int(dtype_str == literal.literal_value))
+    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+
+@lower_builtin(operator.ne, types.DType, types.StringLiteral)
+@lower_builtin(operator.ne, types.StringLiteral, types.DType)
+def dtype_string_ne_impl(context, builder, sig, args):
+    dt, st = sig.args
+    if isinstance(dt, types.DType):
+        dtype, literal = dt, st
+    else:
+        dtype, literal = st, dt
+    try:
+        dtype_str = as_dtype(dtype.dtype).name
+    except NumbaNotImplementedError:
+        dtype_str = str(dtype)
+    res = ir.Constant(ir.IntType(1),
+                      int(dtype_str != literal.literal_value))
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 

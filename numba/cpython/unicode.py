@@ -490,6 +490,10 @@ def unicode_eq(a, b):
         check_b = b.type
     else:
         check_b = b
+    # numpy dtypes have their own comparison semantics (a dtype compares
+    # equal to the string naming it), they are not handled here.
+    if isinstance(check_a, types.DType) or isinstance(check_b, types.DType):
+        return
     accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
     a_unicode = isinstance(check_a, accept)
     b_unicode = isinstance(check_b, accept)
@@ -520,6 +524,17 @@ def unicode_eq(a, b):
 @overload(operator.ne)
 def unicode_ne(a, b):
     if not (a.is_internal and b.is_internal):
+        return
+    if isinstance(a, types.Optional):
+        check_a = a.type
+    else:
+        check_a = a
+    if isinstance(b, types.Optional):
+        check_b = b.type
+    else:
+        check_b = b
+    # numpy dtypes have their own comparison semantics, see unicode_eq.
+    if isinstance(check_a, types.DType) or isinstance(check_b, types.DType):
         return
     accept = (types.UnicodeType, types.StringLiteral, types.UnicodeCharSeq)
     a_unicode = isinstance(a, accept)

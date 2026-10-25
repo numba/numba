@@ -671,3 +671,23 @@ class DtypeEq(AbstractTemplate):
         [lhs, rhs] = args
         if isinstance(lhs, types.DType) and isinstance(rhs, types.DType):
             return signature(types.boolean, lhs, rhs)
+        # A dtype compares equal to the string naming it, following NumPy.
+        # Only literal strings can be resolved at compile time; comparing a
+        # dtype to a runtime string is not supported and fails typing (see
+        # issue #5255).
+        for dt, st in ((lhs, rhs), (rhs, lhs)):
+            if (isinstance(dt, types.DType)
+                    and isinstance(st, types.StringLiteral)):
+                return signature(types.boolean, lhs, rhs)
+
+
+@infer_global(operator.ne)
+class DtypeNe(AbstractTemplate):
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        if isinstance(lhs, types.DType) and isinstance(rhs, types.DType):
+            return signature(types.boolean, lhs, rhs)
+        for dt, st in ((lhs, rhs), (rhs, lhs)):
+            if (isinstance(dt, types.DType)
+                    and isinstance(st, types.StringLiteral)):
+                return signature(types.boolean, lhs, rhs)

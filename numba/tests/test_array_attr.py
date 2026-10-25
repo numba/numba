@@ -175,6 +175,50 @@ class TestArrayAttr(MemoryLeakMixin, TestCase):
         self.check_unary(pyfunc, np.empty(1, dtype=np.int16))
         self.check_unary(pyfunc, np.empty(1, dtype=np.int64))
 
+    def test_dtype_equal_string(self):
+        # issue #5255: a dtype compares equal to the string naming it,
+        # following NumPy.
+        def eq(a):
+            return a.dtype == 'float64'
+
+        def ne(a):
+            return a.dtype != 'float64'
+
+        for func in (eq, ne):
+            # matching and non-matching dtypes
+            self.check_unary(func, np.empty(1, dtype=np.float64))
+            self.check_unary(func, np.empty(1, dtype=np.int64))
+
+        # both orders of the operands
+        def eq_rev():
+            dt = np.dtype('float64')
+            return 'float64' == dt
+
+        self.assertEqual(njit(eq_rev)(), eq_rev())
+
+        def ne_rev():
+            dt = np.dtype('float64')
+            return 'float64' != dt
+
+        self.assertEqual(njit(ne_rev)(), ne_rev())
+
+        # the global dtype case from issue #5255
+        def global_dtype():
+            dt = np.dtype('bool')
+            return dt == 'bool'
+
+        self.assertEqual(njit(global_dtype)(), True)
+
+    def test_dtype_equal_string_non_literal(self):
+        # comparing a dtype against a runtime string is unsupported; it must
+        # fail typing rather than silently evaluate to False (issue #5255)
+        def eq(a, s):
+            return a.dtype == s
+
+        cfunc = njit(eq)
+        with self.assertRaises(TypingError):
+            cfunc(np.empty(1, dtype=np.float64), 'float64')
+
     def test_flags_contiguous(self):
         self.check_unary_with_arrays(array_flags_contiguous)
 
