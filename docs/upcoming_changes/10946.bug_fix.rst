@@ -1,0 +1,9 @@
+Make ``int()`` of a float raise for non-integer values
+-------------------------------------------------------
+
+``int()`` of a float value that does not represent an integer now
+raises the same exceptions as CPython: ``OverflowError`` for infinity
+and values outside the range of the integer type, ``ValueError`` for
+NaN. Previously a C-style cast silently produced garbage for such
+values (e.g. ``int(float('inf'))`` returned ``INT64_MIN``). Implicit
+float to integer casts are unchanged.
