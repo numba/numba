@@ -4,6 +4,8 @@ from collections import namedtuple
 import contextlib
 import itertools
 import random
+import subprocess
+import sys
 from numba.core.errors import TypingError
 
 import numpy as np
@@ -593,6 +595,218 @@ class TestSets(BaseTest):
 
     def test_ixor(self):
         self._test_set_operator(self.make_inplace_operator_usecase('^='))
+
+
+class TestSetChurn(BaseTest):
+    """
+    Test sets under heavy add / remove churn, which leaves many deleted
+    ("tombstone") slots in the hash table (issue #6543).
+    """
+
+    def test_churn_lookups_terminate(self):
+        # The exact reproducer of issue #6543: adding and removing the same
+        # keys used to fill the table with tombstones without triggering a
+        # resize; lookups would then never terminate.  Run in a subprocess
+        # so that a regression shows up as a timeout rather than a hang.
+        code = """if 1:
+            from numba import njit
+
+            @njit
+            def churn():
+                state = set()
+                for i in range(16):
+                    state.add(i)
+                    state.remove(i)
+                return 9 in state
+
+            print(churn())
+        """
+        popen = subprocess.Popen([sys.executable, "-c", code],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE)
+        try:
+            out, err = popen.communicate(timeout=120)
+        except subprocess.TimeoutExpired:
+            popen.kill()
+            popen.communicate()
+            self.fail("lookup on a churned set did not terminate "
+                      "(issue #6543)")
+        msg = f"stdout:\n{out.decode()}\n\nstderr:\n{err.decode()}"
+        self.assertEqual(popen.returncode, 0, msg=msg)
+        self.assertEqual(out.decode().strip(), "False")
+
+    def test_churn_semantics_match_python(self):
+        # After heavy churn the set must still behave like a Python set.
+        def py_impl(n):
+            s = set()
+            for i in range(n):
+                s.add(i)
+                s.add(i + 10)
+                s.remove(i)
+                s.discard(i + 20)
+            return len(s), (n + 5) in s, (n + 10) in s
+
+        @njit
+        def nopython_impl(n):
+            s = set()
+            for i in range(n):
+                s.add(i)
+                s.add(i + 10)
+                s.remove(i)
+                s.discard(i + 20)
+            return len(s), (n + 5) in s, (n + 10) in s
+
+        n = 500
+        self.assertEqual(nopython_impl(n), py_impl(n))
+
+    def test_churn_then_mutation(self):
+        # add / remove / len / copy / iteration must keep working after the
+        # table has been through churn and resizes.
+        def py_impl(n):
+            s = set()
+            for i in range(n):
+                s.add((i % 7, i))
+                s.add((i % 7, i + 1))
+                s.remove((i % 7, i))
+                s.discard((i % 7, i + 1))
+            s.add((42, 42))
+            copied = s.copy()
+            total = 0
+            for e in copied:
+                total += e[0] + e[1]
+            s.remove((42, 42))
+            return len(s), len(copied), (42, 42) in s, total
+
+        @njit
+        def nopython_impl(n):
+            s = set()
+            for i in range(n):
+                s.add((i % 7, i))
+                s.add((i % 7, i + 1))
+                s.remove((i % 7, i))
+                s.discard((i % 7, i + 1))
+            s.add((42, 42))
+            copied = s.copy()
+            total = 0
+            for e in copied:
+                total += e[0] + e[1]
+            s.remove((42, 42))
+            return len(s), len(copied), (42, 42) in s, total
+
+        n = 500
+        self.assertEqual(nopython_impl(n), py_impl(n))
+
+    def test_issue_6543_original_reproducers(self):
+        # The original reproducer (tuple keys) and the integer-hashed
+        # variant from the issue must terminate and match Python.
+        def py_tuple_variant():
+            s = set()
+            s.add((0, 0))
+            s.add((1, 0))
+            s.add((2, 0))
+            s.add((3, 0))
+            s.add((4, 0))
+            s.add((5, 0))
+            s.add((6, 0))
+            s.add((7, 0))
+            s.add((8, 0))
+            s.remove((2, 0))
+            s.add((2, 1))
+            s.remove((2, 1))
+            s.remove((4, 0))
+            s.add((5, 1))
+            s.add((4, 1))
+            s.remove((7, 0))
+            s.add((8, 1))
+            s.add((7, 1))
+            s.add((6, 1))
+            s.remove((8, 0))
+            s.remove((1, 0))
+            s.remove((0, 0))
+            s.remove((5, 0))
+            s.remove((6, 0))
+            s.remove((3, 0))
+            s.remove((7, 1))
+            s.add((8, 2))
+            s.add((7, 2))
+            s.add((6, 2))
+            s.remove((8, 1))
+            s.remove((6, 1))
+            s.add((5, 2))
+            s.remove((4, 1))
+            s.add((4, 2))
+            s.remove((5, 1))
+            s.remove((6, 2))
+            s.add((7, 3))
+            s.add((6, 3))
+            s.add((5, 3))
+            s.remove((7, 2))
+            s.add((8, 3))
+            s.remove((8, 2))
+            s.remove((4, 2))
+            s.add((4, 3))
+            s.add((3, 3))
+            s.remove((5, 2))
+            s.remove((7, 3))
+            s.add((8, 4))
+            s.add((7, 4))
+            return (6, 4) in s
+
+        @njit
+        def tuple_variant():
+            s = set()
+            s.add((0, 0))
+            s.add((1, 0))
+            s.add((2, 0))
+            s.add((3, 0))
+            s.add((4, 0))
+            s.add((5, 0))
+            s.add((6, 0))
+            s.add((7, 0))
+            s.add((8, 0))
+            s.remove((2, 0))
+            s.add((2, 1))
+            s.remove((2, 1))
+            s.remove((4, 0))
+            s.add((5, 1))
+            s.add((4, 1))
+            s.remove((7, 0))
+            s.add((8, 1))
+            s.add((7, 1))
+            s.add((6, 1))
+            s.remove((8, 0))
+            s.remove((1, 0))
+            s.remove((0, 0))
+            s.remove((5, 0))
+            s.remove((6, 0))
+            s.remove((3, 0))
+            s.remove((7, 1))
+            s.add((8, 2))
+            s.add((7, 2))
+            s.add((6, 2))
+            s.remove((8, 1))
+            s.remove((6, 1))
+            s.add((5, 2))
+            s.remove((4, 1))
+            s.add((4, 2))
+            s.remove((5, 1))
+            s.remove((6, 2))
+            s.add((7, 3))
+            s.add((6, 3))
+            s.add((5, 3))
+            s.remove((7, 2))
+            s.add((8, 3))
+            s.remove((8, 2))
+            s.remove((4, 2))
+            s.add((4, 3))
+            s.add((3, 3))
+            s.remove((5, 2))
+            s.remove((7, 3))
+            s.add((8, 4))
+            s.add((7, 4))
+            return (6, 4) in s
+
+        self.assertEqual(tuple_variant(), py_tuple_variant())
 
 
 class TestFloatSets(TestSets):

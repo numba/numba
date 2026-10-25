@@ -436,9 +436,12 @@ class SetInstance(object):
         with builder.if_then(is_hash_empty(context, builder, old_hash),
                              likely=True):
             payload.fill = builder.add(payload.fill, one)
-        # Grow table if necessary
+        # Grow table if necessary.  The number of occupied slots (i.e. live
+        # entries plus tombstones) is what matters here: probing stops at an
+        # empty entry, so empty slots must be kept available even when the
+        # set is dominated by tombstones (issue #6543).
         if do_resize:
-            self.upsize(used)
+            self.upsize(payload.fill)
         self.set_dirty(True)
 
     def _add_key(self, payload, item, h, do_resize=True, do_incref=True):
@@ -464,9 +467,11 @@ class SetInstance(object):
             with builder.if_then(is_hash_empty(context, builder, old_hash),
                                  likely=True):
                 payload.fill = builder.add(payload.fill, one)
-            # Grow table if necessary
+            # Grow table if necessary.  See _add_entry for why the number of
+            # occupied slots (live entries plus tombstones) is used here
+            # (issue #6543).
             if do_resize:
-                self.upsize(used)
+                self.upsize(payload.fill)
             self.set_dirty(True)
 
     def _remove_entry(self, payload, entry, do_resize=True, do_decref=True):
@@ -834,8 +839,8 @@ class SetInstance(object):
 
     def upsize(self, nitems):
         """
-        When adding to the set, ensure it is properly sized for the given
-        number of used entries.
+        After adding to the set, ensure it is properly sized for the given
+        number of occupied slots (*nitems*: live entries plus tombstones).
         """
         context = self._context
         builder = self._builder
