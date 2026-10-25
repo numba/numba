@@ -1,0 +1,10 @@
+Fix #6543: set lookups could hang after add/remove churn
+--------------------------------------------------------
+
+Removing entries from a set leaves "tombstone" (deleted) slots in the
+hash table; probing terminates on an empty slot. The grow decision of
+the set only counted live entries, so a set dominated by tombstones
+never grew and could end up with no empty slots at all - lookups then
+looped forever at 100% CPU. The grow decision now counts all occupied
+slots (live entries plus tombstones), keeping empty slots available as
+CPython's set implementation does.
