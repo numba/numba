@@ -35,6 +35,45 @@ Int_or_Slice = pt.Union["pt.SupportsIndex", slice]
 T_co = pt.TypeVar('T_co', covariant=True)
 
 
+def _check_not_reflected(item_type):
+    """
+    Refuse reflected item types (e.g. plain Python lists) for typed lists
+    created on the Python side.
+
+    Unboxing such an item produces a native value that aliases the Python
+    object it was unboxed from (see ``boxing.unbox_list``, the native list
+    keeps a borrowed pointer to the Python object as its "parent"). A typed
+    list owns the values it stores, so the alias outlives the Python object:
+    once the latter is garbage collected, boxing the stored item back (e.g.
+    during iteration) dereferences freed memory and eventually crashes the
+    interpreter (see issue #9546).
+
+    Note that storing natively created (i.e. from within jitted code)
+    reflected lists is safe, their parent pointer is NULL, hence this check
+    is only applied to the Python side API of ``numba.typed.List``.
+    """
+    if getattr(item_type, 'reflected', False):
+        raise TypingError(
+            f"Storing an object of type '{item_type}' in a typed List is "
+            "not supported, the native representation would alias the "
+            "Python object it originates from. Garbage collecting the "
+            "Python object can then crash the interpreter (see issue "
+            "#9546). Store a typed container or a tuple instead, e.g. "
+            "List([List(x) for x in items]) or "
+            "List([tuple(x) for x in items]).")
+
+
+def _check_item(item):
+    """
+    Check the item about to be stored in a typed list for reflected types,
+    see ``_check_not_reflected`` for why this is necessary. The cheap
+    instance check avoids the cost of ``typeof`` for the common case of
+    scalar items.
+    """
+    if isinstance(item, (list, set)):
+        _check_not_reflected(typeof(item))
+
+
 class _Sequence(pt.Protocol[T_co]):
     def __getitem__(self, i: int) -> T_co:
         ...
@@ -220,6 +259,7 @@ class List(MutableSequence, pt.Generic[T]):
         allocated: int
             number of items to pre-allocate
         """
+        _check_not_reflected(item_type)
         if config.DISABLE_JIT:
             return list()
         else:
@@ -296,7 +336,9 @@ class List(MutableSequence, pt.Generic[T]):
         return self._list_type.dtype
 
     def _initialise_list(self, item):
-        lsttype = types.ListType(typeof(item))
+        item_type = typeof(item)
+        _check_not_reflected(item_type)
+        lsttype = types.ListType(item_type)
         self._list_type, self._opaque = self._parse_arg(lsttype)
 
     def __len__(self) -> int:
@@ -341,6 +383,7 @@ class List(MutableSequence, pt.Generic[T]):
     def append(self, item: T) -> None:
         if not self._typed:
             self._initialise_list(item)
+        _check_item(item)
         _append(self, item)
 
     # noqa F811 comments required due to github.com/PyCQA/pyflakes/issues/592
@@ -353,6 +396,7 @@ class List(MutableSequence, pt.Generic[T]):
     def __setitem__(self, i: Int_or_Slice, item: T_or_ListT) -> None:  # noqa: F811, E501
         if not self._typed:
             self._initialise_list(item)
+        _check_item(item)
         _setitem(self, i, item)
 
     # noqa F811 comments required due to github.com/PyCQA/pyflakes/issues/592
@@ -381,6 +425,7 @@ class List(MutableSequence, pt.Generic[T]):
     def insert(self, i: int, item: T) -> None:
         if not self._typed:
             self._initialise_list(item)
+        _check_item(item)
         _insert(self, i, item)
 
     def count(self, item: T) -> int:
@@ -398,6 +443,8 @@ class List(MutableSequence, pt.Generic[T]):
             # type of the list. FIXME: this may be a problem if the iterable
             # can not be sliced.
             self._initialise_list(iterable[0])
+        for item in iterable:
+            _check_item(item)
         return _extend(self, iterable)
 
     def remove(self, item: T) -> None:

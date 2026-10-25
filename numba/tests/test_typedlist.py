@@ -1687,3 +1687,92 @@ class TestListFromIter(MemoryLeakMixin, TestCase):
             "List() takes no keyword arguments",
             str(raises.exception),
         )
+
+
+class TestReflectedItemsForbidden(TestCase):
+    """
+    Tests that reflected containers cannot be stored in a typed List that
+    is created on the Python side. Unboxing them aliases the Python object,
+    storing them in a typed list outlives the alias and results in memory
+    corruption once the Python object is garbage collected (see issue
+    #9546, the interpreter used to segfault in ``list_dealloc``).
+    """
+
+    def test_constructor_with_list_of_lists(self):
+        # the exact scenario of issue #9546
+        data = [[1, 2, 3, 4] for _ in range(10)]
+        with self.assertRaises(TypingError) as raises:
+            List(data)
+        self.assertIn("not supported", str(raises.exception))
+        self.assertIn("#9546", str(raises.exception))
+
+    def test_constructor_with_list_of_numpy_scalar_lists(self):
+        data = [[np.int64(1), np.int64(2)] for _ in range(10)]
+        with self.assertRaises(TypingError) as raises:
+            List(data)
+        self.assertIn("not supported", str(raises.exception))
+
+    def test_append_reflected_list(self):
+        tl = List()
+        with self.assertRaises(TypingError) as raises:
+            tl.append([1, 2])
+        self.assertIn("not supported", str(raises.exception))
+
+    def test_append_reflected_list_after_typed_init(self):
+        # the list is already typed (int64), the appended Python list is
+        # rejected by the guard on the item type
+        tl = List()
+        tl.append(1)
+        with self.assertRaises(TypingError) as raises:
+            tl.append([2, 3])
+        self.assertIn("not supported", str(raises.exception))
+
+    def test_insert_reflected_list(self):
+        tl = List()
+        tl.append(1)
+        with self.assertRaises(TypingError) as raises:
+            tl.insert(0, [2, 3])
+        self.assertIn("not supported", str(raises.exception))
+
+    def test_setitem_reflected_list(self):
+        tl = List()
+        tl.append(1)
+        with self.assertRaises(TypingError) as raises:
+            tl[0] = [2, 3]
+        self.assertIn("not supported", str(raises.exception))
+
+    def test_extend_reflected_lists(self):
+        tl = List()
+        with self.assertRaises(TypingError) as raises:
+            tl.extend([[1], [2]])
+        self.assertIn("not supported", str(raises.exception))
+
+    def test_empty_list_of_reflected_type(self):
+        with self.assertRaises(TypingError) as raises:
+            List.empty_list(typeof([1]))
+        self.assertIn("not supported", str(raises.exception))
+
+    def test_nested_typed_lists_are_allowed(self):
+        # typed containers are not reflected, nesting them is supported
+        tl = List([List([1, 2]), List([3])])
+        self.assertEqual([list(x) for x in tl], [[1, 2], [3]])
+        tl = List()
+        tl.append(List([1]))
+        self.assertEqual(len(tl), 1)
+
+    def test_tuples_are_allowed(self):
+        tl = List([(1, 2), (3, 4)])
+        self.assertEqual([tuple(x) for x in tl], [(1, 2), (3, 4)])
+
+    def test_reflected_lists_created_in_jit_are_allowed(self):
+        # lists created inside jitted code are natively allocated and do
+        # not alias a Python object, storing them in a typed list is safe
+        @njit
+        def make():
+            tl = List()
+            inner = [1, 2, 3]
+            tl.append(inner)
+            return tl
+
+        tl = make()
+        self.assertEqual([list(x) for x in tl], [[1, 2, 3]])
