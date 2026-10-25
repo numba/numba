@@ -1,0 +1,10 @@
+Fix #9546: forbid reflected items in Python-side typed lists
+------------------------------------------------------------
+
+Storing a plain Python list (or set) in a ``numba.typed.List`` silently
+created a native value that aliases the Python object; garbage
+collecting the Python object left the typed list with dangling
+references and crashed the interpreter (segfault in ``list_dealloc``).
+The Python side API of ``numba.typed.List`` now rejects reflected item
+types with a ``TypingError`` explaining the problem and the workaround.
+Natively created (jitted code) reflected lists remain accepted.
