@@ -166,6 +166,51 @@ integer_binop_cases = tuple(
     )
 
 
+def _unsigned_with_fitting_literal(args):
+    """
+    Implement NumPy's value-based casting for the case of an unsigned
+    integer operand combined with an integer literal whose value fits into
+    it: the operation stays on the unsigned type instead of unifying to
+    float (issue #6900). Returns True if the case matched, else False.
+    """
+    [lhs, rhs] = args
+    for a, b in ((lhs, rhs), (rhs, lhs)):
+        if (isinstance(a, types.Integer)
+                and not a.signed
+                and isinstance(b, types.IntegerLiteral)
+                and 0 <= b.literal_value <= a.maxval):
+            return True
+    return False
+
+
+def _apply_with_unsigned_literal(self, args, kws):
+    """
+    apply() helper for the integer templates above: intercepts the
+    unsigned-operand-with-literal case and binds both operands to the
+    unsigned type (see _unsigned_with_fitting_literal), otherwise falls
+    back to the template's regular cases.
+    """
+    if _unsigned_with_fitting_literal(args):
+        # Unliteral the args so that the integer case can match: the
+        # literal's value is known to fit into the unsigned type.
+        args = [types.unliteral(a) for a in args]
+        cases = [signature(types.UniTuple(args[0], 2), args[0], args[0])]
+        return self._select(cases, args, kws)
+    return self._select(self.cases, args, kws)
+
+
+def _apply_with_unsigned_literal_scalar(self, args, kws):
+    """
+    apply() helper like _apply_with_unsigned_literal, but for the scalar
+    (non-tuple) result templates ``//`` and ``%``.
+    """
+    if _unsigned_with_fitting_literal(args):
+        args = [types.unliteral(a) for a in args]
+        cases = [signature(args[0], args[0], args[0])]
+        return self._select(cases, args, kws)
+    return self._select(self.cases, args, kws)
+
+
 class BinOp(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
@@ -207,11 +252,21 @@ class BinOpMod(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
+    prefer_literal = True
+
+    def apply(self, args, kws):
+        return _apply_with_unsigned_literal_scalar(self, args, kws)
+
 
 @infer_global(operator.imod)
 class BinOpMod(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+
+    prefer_literal = True
+
+    def apply(self, args, kws):
+        return _apply_with_unsigned_literal_scalar(self, args, kws)
 
 
 @infer_global(operator.truediv)
@@ -235,17 +290,32 @@ class BinOpFloorDiv(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
+    prefer_literal = True
+
+    def apply(self, args, kws):
+        return _apply_with_unsigned_literal_scalar(self, args, kws)
+
 
 @infer_global(operator.ifloordiv)
 class BinOpFloorDiv(ConcreteTemplate):
     cases = list(integer_binop_cases)
     cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
+    prefer_literal = True
+
+    def apply(self, args, kws):
+        return _apply_with_unsigned_literal_scalar(self, args, kws)
+
 
 @infer_global(divmod)
 class DivMod(ConcreteTemplate):
     _tys = machine_ints + sorted(types.real_domain)
     cases = [signature(types.UniTuple(ty, 2), ty, ty) for ty in _tys]
+
+    prefer_literal = True
+
+    def apply(self, args, kws):
+        return _apply_with_unsigned_literal(self, args, kws)
 
 
 @infer_global(operator.pow)

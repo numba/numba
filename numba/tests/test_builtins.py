@@ -500,6 +500,49 @@ class TestBuiltins(TestCase):
     def test_divmod_floats_npm(self):
         self.test_divmod_floats(flags=no_pyobj_flags)
 
+    def test_divmod_unsigned_literal(self):
+        # issue #6900: an unsigned operand with a positive literal that
+        # fits into it stays unsigned instead of unifying to float
+        def divmod_u64(x):
+            return divmod(x, 3)
+
+        cfunc = jit((types.uint64,))(divmod_u64)
+        self.assertEqual(cfunc(np.uint64(10)), (3, 1))
+        self.assertEqual(cfunc.nopython_signatures[0].return_type,
+                         types.UniTuple(types.uint64, 2))
+
+        def floordiv_u64(x):
+            return x // 3
+
+        cfunc = jit((types.uint64,))(floordiv_u64)
+        self.assertEqual(cfunc(np.uint64(10)), 3)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type,
+                         types.uint64)
+
+        def mod_u16(x):
+            return x % 3
+
+        cfunc = jit((types.uint16,))(mod_u16)
+        self.assertEqual(cfunc(np.uint16(10)), 1)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type,
+                         types.uint16)
+
+    def test_divmod_unsigned_literal_edge_cases(self):
+        # issue #6900: cases that must keep their previous typing
+        def divmod_vars(x, y):
+            return divmod(x, y)
+
+        cfunc = jit((types.uint64, types.int64))(divmod_vars)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type,
+                         types.UniTuple(types.float64, 2))
+
+        def divmod_negative(x):
+            return divmod(x, -1)
+
+        cfunc = jit((types.uint64,))(divmod_negative)
+        self.assertEqual(cfunc.nopython_signatures[0].return_type,
+                         types.UniTuple(types.float64, 2))
+
     def test_enumerate(self, flags=forceobj_flags):
         self.run_nullary_func(enumerate_usecase, flags)
 
