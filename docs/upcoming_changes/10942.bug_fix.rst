@@ -1,0 +1,15 @@
+Fix cache corruption for functions taking jit function arguments
+----------------------------------------------------------------
+
+A function compiled with ``cache=True`` that receives a jit function as
+an argument keyed its cache index entries with the ``types.Dispatcher``
+object of that argument. Such keys are unstable across processes and
+embed a weak reference to a mortal object in the index file; once the
+index holds more entries than ``NUMBA_FUNCTION_CACHE_SIZE`` (default
+128), re-pickling the index on save fails with
+``ReferenceError: underlying object has vanished``, leaving the cache
+unusable until the ``.nbi`` files are removed by hand. Dispatcher
+arguments are now described by a stable, picklable summary of the
+underlying function, unstable entries written by earlier versions are
+dropped when the index is loaded, and a compile result loaded from the
+cache is additionally registered under the requested signature.
