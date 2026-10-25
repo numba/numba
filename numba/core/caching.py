@@ -23,6 +23,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 import numba
+from numba.core import types
 from numba.core.errors import NumbaWarning, NumbaDeprecationWarning
 from numba.core.base import BaseContext
 from numba.core.codegen import CodeLibrary
@@ -560,6 +561,14 @@ class CodeLibraryCacheImpl(CacheImpl):
         return '-'.join([self._filename_prefix, res])
 
 
+def _sig_has_dispatcher(sig):
+    """
+    Whether the signature tuple *sig* contains any ``types.Dispatcher``
+    entry, i.e. a jit-compiled function passed as an argument.
+    """
+    return any(isinstance(ty, types.Dispatcher) for ty in sig)
+
+
 class IndexDataCacheFile(object):
     """
     Implements the logic for the index file and data file used by a cache.
@@ -650,7 +659,19 @@ class IndexDataCacheFile(object):
             # overwritten, since they are numbered in incrementing order.
             return {}
         else:
-            return overloads
+            # Drop entries whose keys are not stable, i.e. keys written by
+            # previous versions of Numba that embedded the ``types.Dispatcher``
+            # objects passed as arguments into the key.  Such keys can no
+            # longer be looked up, and they refer to mortal objects through
+            # weak references; re-pickling them, as ``save`` does when it
+            # adds a new entry, may fail with ``ReferenceError``
+            # (see issue #9348).
+            stable = {k: v for k, v in overloads.items()
+                      if not _sig_has_dispatcher(k[0])}
+            if len(stable) != len(overloads):
+                _cache_log("[cache] dropped %d unstable entries from %r",
+                           len(overloads) - len(stable), self._index_path)
+            return stable
 
     def _save_index(self, overloads):
         data = self._source_stamp, overloads
@@ -816,6 +837,9 @@ class Cache(_Cache):
         It includes a description of the OS, target architecture and hashes of
         the bytecode for the function and, if the function has a __closure__,
         a hash of the cell_contents.
+
+        The signature is first normalized into a form that is stable across
+        processes, see ``_stable_sig``.
         """
         codebytes = self._py_func.__code__.co_code
         if self._py_func.__closure__ is not None:
@@ -827,8 +851,70 @@ class Cache(_Cache):
             cvarbytes = b''
 
         hasher = lambda x: hashlib.sha256(x).hexdigest()
-        return (sig, codegen.magic_tuple(), (hasher(codebytes),
-                                             hasher(cvarbytes),))
+        return (self._stable_sig(sig, hasher), codegen.magic_tuple(),
+                (hasher(codebytes), hasher(cvarbytes),))
+
+    @staticmethod
+    def _stable_sig(sig, hasher):
+        """
+        Normalize the signature *sig* into a form that is stable across
+        processes and free of weak references, so that it can be used as
+        part of a persistent index key.
+
+        A signature may contain ``types.Dispatcher`` instances, i.e. a
+        jit-compiled function passed as an argument to the cached function.
+        Such a type only holds a weak reference to the underlying dispatcher
+        object, whose identity changes from one process to the next.  Using
+        it as-is makes the index key unstable (the cache could never be hit
+        by a later process) and embeds the weak reference in the index file;
+        re-pickling the index then fails with ``ReferenceError`` once the
+        referenced dispatcher has been garbage collected (see issue #9348).
+        Dispatcher entries are therefore replaced with a stable description
+        of the underlying function: its module and qualified name together
+        with the hashes of its bytecode, closure variables and compilation
+        options - the same kind of information this class already uses to
+        identify the cached function itself.
+
+        Signatures without any dispatcher entry are returned unchanged so
+        that index entries written by earlier versions of Numba remain
+        valid.
+        """
+        if not isinstance(sig, tuple):
+            # The cfunc cache passes a ``Signature`` rather than a tuple of
+            # types; a Signature cannot hold a dispatcher argument.
+            return sig
+        if not any(isinstance(ty, types.Dispatcher) for ty in sig):
+            return sig
+        stable = []
+        for ty in sig:
+            if isinstance(ty, types.Dispatcher):
+                dispatcher = ty.dispatcher
+                py_func = dispatcher.py_func
+                codebytes = py_func.__code__.co_code
+                if py_func.__closure__ is not None:
+                    cvars = tuple([x.cell_contents
+                                   for x in py_func.__closure__])
+                    cvarbytes = dumps(cvars)
+                else:
+                    cvarbytes = b''
+                qualname = getattr(py_func, '__qualname__', py_func.__name__)
+                # The compilation options affect the code the dispatcher
+                # compiles to and therefore the code the cached function
+                # links against.  They are plain dictionaries of simple
+                # values; fall back to an empty description if they turn out
+                # to be unserializable.
+                options = (getattr(dispatcher, 'targetoptions', {}),
+                           getattr(dispatcher, 'locals', {}))
+                try:
+                    optionsbytes = dumps(options)
+                except Exception:
+                    optionsbytes = b''
+                stable.append(('Dispatcher', py_func.__module__, qualname,
+                               hasher(codebytes), hasher(cvarbytes),
+                               hasher(optionsbytes)))
+            else:
+                stable.append(ty)
+        return tuple(stable)
 
 
 class FunctionCache(Cache):

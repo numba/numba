@@ -1,3 +1,6 @@
+import collections
+import functools
+import gc
 import importlib
 import inspect
 import hashlib
@@ -18,13 +21,14 @@ import llvmlite.binding as ll
 import numpy as np
 
 from numba import njit
-from numba.core import codegen
+from numba.core import codegen, types
 from numba.core.caching import (
     UserWideCacheLocator,
     ZipCacheLocator,
     FunctionCache,
     InTreeCacheLocator,
     InTreeCacheLocatorFsAgnostic,
+    _sig_has_dispatcher,
 )
 from numba.core.errors import NumbaWarning, NumbaDeprecationWarning
 from numba.parfors import parfor
@@ -39,6 +43,7 @@ from numba.tests.support import (
     skip_parfors_unsupported,
     temp_directory,
     override_env_config,
+    run_in_new_process_in_cache_dir,
 )
 
 from numba.core.registry import cpu_target
@@ -124,6 +129,42 @@ def check_generator_cache():
     assert exp == got
 
 
+def higher_order_callee_usecase(x):
+    return x + 1
+
+
+def higher_order_callee2_usecase(x):
+    return x + 2
+
+
+def higher_order_caller_usecase(f, x):
+    return f(x) + 10
+
+
+def make_higher_order_callee(inc):
+    def callee(x):
+        return x + inc
+    return callee
+
+
+def higher_order_cache_check(expect_cache_hit):
+    callee = njit(cache=True)(higher_order_callee_usecase)
+    caller = njit(cache=True)(higher_order_caller_usecase)
+    res = caller(callee, 3)
+    assert res == 14, res
+    # The signature stored in a cached compile result refers to a dispatcher
+    # object of the process that saved the entry, so the hit/miss counters
+    # are checked by value rather than by signature.
+    hits = sum(caller._cache_hits.values())
+    misses = sum(caller._cache_misses.values())
+    if expect_cache_hit:
+        assert hits == 1, caller._cache_hits
+        assert misses == 0, caller._cache_misses
+    else:
+        assert misses == 1, caller._cache_misses
+        assert hits == 0, caller._cache_hits
+
+
 class TestCaching(SerialMixin, TestCase):
     def run_test(self, func):
         func()
@@ -138,6 +179,91 @@ class TestCaching(SerialMixin, TestCase):
 
     def test_generator_cache(self):
         self.run_test(check_generator_cache)
+
+    def test_higher_order_cache(self):
+        # issue #9348: a cached function receiving a jit function as an
+        # argument must hit the cache in a later process instead of
+        # corrupting the cache index with references to the dispatcher.
+        cache_dir = temp_directory('test_higher_order_cache')
+        for expect_cache_hit in (False, True):
+            res = run_in_new_process_in_cache_dir(
+                functools.partial(higher_order_cache_check, expect_cache_hit),
+                cache_dir,
+            )
+            self.assertEqual(res['exitcode'], 0, msg=res['stderr'])
+
+    def test_higher_order_cache_index_growth(self):
+        # issue #9348: the index accumulates one entry per distinct callee;
+        # re-saving it must not fail with ReferenceError once the dispatchers
+        # referenced by old entries have been garbage collected.
+        cache_dir = temp_directory(self.__class__.__name__)
+        with override_config("CACHE_DIR", cache_dir):
+            # _MemoMixin._recent holds strong references to the most
+            # recently deserialized dispatchers; shrink it so that old index
+            # entries lose their referents quickly, reproducing the failure
+            # cheaply.
+            from numba.core.dispatcher import _MemoMixin
+            recent = _MemoMixin._recent
+            _MemoMixin._recent = collections.deque(maxlen=2)
+            try:
+                caller = njit(cache=True)(higher_order_caller_usecase)
+                for i in range(1, 6):
+                    callee = njit(cache=True)(make_higher_order_callee(i))
+                    self.assertEqual(caller(callee, 3), 13 + i)
+                    del callee
+                    gc.collect()
+            finally:
+                _MemoMixin._recent = recent
+
+    def test_dispatcher_index_key_stability(self):
+        # issue #9348: the index key of a signature containing a dispatcher
+        # argument must not depend on the identity of the dispatcher object.
+        cache_dir = temp_directory(self.__class__.__name__)
+        with override_config("CACHE_DIR", cache_dir):
+            caller = njit(cache=True)(higher_order_caller_usecase)
+            # Two dispatchers over the same Python function are described by
+            # the same index key...
+            callee_a1 = njit(cache=True)(higher_order_callee_usecase)
+            callee_a2 = njit(cache=True)(higher_order_callee_usecase)
+            # ... whereas a dispatcher over a different function is not.
+            callee_b = njit(cache=True)(higher_order_callee2_usecase)
+            self.assertEqual(caller(callee_a1, 3), 14)
+            self.assertEqual(caller(callee_a2, 3), 14)
+            self.assertEqual(caller(callee_b, 3), 15)
+            index = caller._cache._cache_file._load_index()
+            self.assertEqual(len(index), 2)
+            for key in index:
+                self.assertFalse(_sig_has_dispatcher(key[0]))
+
+    def test_unstable_index_entries_are_dropped(self):
+        # issue #9348: an index written by an older Numba keys its entries
+        # with the types.Dispatcher objects themselves. Loading such an
+        # index must drop those entries, else re-pickling the index (which
+        # happens whenever a new entry is saved) fails with ReferenceError
+        # once the dispatchers they refer to have been garbage collected.
+        cache_dir = temp_directory(self.__class__.__name__)
+        with override_config("CACHE_DIR", cache_dir):
+            caller = njit(cache=True)(higher_order_caller_usecase)
+            callee = njit(cache=True)(higher_order_callee_usecase)
+            self.assertEqual(caller(callee, 3), 14)
+            cache_file = caller._cache._cache_file
+            index = cache_file._load_index()
+            stable_key = next(iter(index))
+            # Rewrite the index the way Numba used to: key the entry with
+            # the live types.Dispatcher object.
+            legacy_key = ((types.Dispatcher(callee), types.int64),
+                          stable_key[1], stable_key[2])
+            cache_file._save_index({legacy_key: index[stable_key]})
+            del callee
+            gc.collect()
+            # The unstable entry is dropped on load...
+            self.assertEqual(cache_file._load_index(), {})
+            # ... and saving a new entry does not raise ReferenceError.
+            callee2 = njit(cache=True)(higher_order_callee_usecase)
+            self.assertEqual(caller(callee2, 3), 14)
+            index = cache_file._load_index()
+            self.assertEqual(len(index), 1)
+            self.assertFalse(_sig_has_dispatcher(next(iter(index))[0]))
 
     def test_omitted(self):
 

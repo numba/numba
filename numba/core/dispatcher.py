@@ -906,6 +906,17 @@ class Dispatcher(serialize.ReduceMixin, _MemoMixin, _DispatcherBase):
                                                             cres.fndesc,
                                                             [cres.library])
                     self.add_overload(cres)
+                    # add_overload() keys the overload by the signature
+                    # stored in the cached compile result.  If the signature
+                    # contains a dispatcher argument, that stored type refers
+                    # to a dispatcher object of the process that saved the
+                    # entry and will therefore never compare equal to the
+                    # dispatcher of this process (types.Dispatcher holds
+                    # only a weak reference).  Register the compile result
+                    # under the requested signature too, so that subsequent
+                    # calls are served from memory instead of re-loading the
+                    # cache on every call (see issue #9348).
+                    self.overloads[tuple(args)] = cres
                     return cres.entry_point
 
                 self._cache_misses[sig] += 1
