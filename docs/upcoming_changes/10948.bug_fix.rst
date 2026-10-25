@@ -1,0 +1,14 @@
+Keep unsigned integers unsigned with fitting literals
+-----------------------------------------------------
+
+Typing ``divmod``, ``//`` or ``%`` between an unsigned integer
+variable and a positive integer literal unified the literal with the
+unsigned type first, which promotes to float, and the templates then
+selected the float case. NumPy applies value-based casting here: as
+long as the literal's value fits into the unsigned type the operation
+stays on that type, e.g. ``np.uint64(10) // 3`` is ``np.uint64(3)``.
+The floordiv, mod (incl. in-place variants) and divmod templates now
+prefer literal arguments and intercept that case, binding both
+operands to the unsigned type. All other cases keep their typing:
+mixed signedness of two variables still unifies to float, negative
+literals do not fit and keep the old behaviour.
