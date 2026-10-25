@@ -1444,6 +1444,21 @@ class TestCFuncCache(BaseCacheTest):
 
         self.run_in_separate_process()
 
+    def test_signature_keyed_index_entries_are_kept(self):
+        # The cfunc cache keys its index entries with a Signature object
+        # rather than a tuple of types. Reloading the module loads such an
+        # index; this must neither fail nor drop the entries (the entries
+        # are not affected by the unstable-key filter, which only applies
+        # to tuple keyed entries containing Dispatcher types).
+        self.check_pycache(0)
+        self.import_module()
+        # Reload module: the cfuncs load the index written by the first
+        # import.
+        mod = self.import_module()
+        self.assertEqual(mod.add_usecase.cache_hits, 1)
+        self.assertEqual(mod.div_usecase.cache_hits, 1)
+        self.check_pycache(6)  # 3 index, 3 data
+
 
 class TestLocator(InTreeCacheLocator):
     pass

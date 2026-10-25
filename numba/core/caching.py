@@ -566,6 +566,11 @@ def _sig_has_dispatcher(sig):
     Whether the signature tuple *sig* contains any ``types.Dispatcher``
     entry, i.e. a jit-compiled function passed as an argument.
     """
+    if not isinstance(sig, tuple):
+        # Some caches key their index entries with a ``Signature`` object
+        # instead of a tuple of types (e.g. the cfunc cache). A Signature
+        # cannot hold a dispatcher argument.
+        return False
     return any(isinstance(ty, types.Dispatcher) for ty in sig)
 
 
