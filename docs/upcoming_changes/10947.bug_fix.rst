@@ -1,0 +1,12 @@
+Fix dtype vs string comparisons
+-------------------------------
+
+Comparing a numpy dtype against a string in jitted code always
+evaluated to ``False``: the unicode comparison overloads claimed the
+mismatch case before any dtype-specific typing could apply, and no
+dtype-vs-string comparison existed. Following NumPy, a dtype now
+compares equal to the string naming it (e.g.
+``np.dtype('bool') == 'bool'`` is ``True``), resolved at compile time
+for literal strings; comparisons against non-literal runtime strings
+fail typing with a clear error instead of silently returning
+``False``.
