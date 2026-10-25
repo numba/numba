@@ -704,6 +704,50 @@ class TestBuiltins(TestCase):
             # i.e. that int(x) does not widen the type of x.
             self.assertIs(ov.signature.return_type, ov.signature.args[0])
 
+    def test_int_float_conversion_errors(self):
+        # issue #6044: int() of a float that does not represent an integer
+        # must raise like CPython.
+        def pyfunc(x):
+            return int(x)
+
+        cfunc = njit(pyfunc)
+
+        # values that convert fine, and their expected results
+        ok_cases = [
+            (3.7, 3),
+            (-3.7, -3),
+            (0.0, 0),
+            (2.0 ** 62, 2 ** 62),
+            (9223372036854774784.0, 9223372036854774784),
+            (-9223372036854775808.0, -2 ** 63),
+            (np.float32(3.5), 3),
+        ]
+        for x, expected in ok_cases:
+            self.assertEqual(cfunc(x), expected)
+
+        # values that must raise OverflowError
+        overflow_cases = [2.0 ** 63, -2.0 ** 64, 1e30, -1e30,
+                          float('inf'), float('-inf')]
+        for x in overflow_cases:
+            with self.assertRaises(OverflowError) as raises:
+                cfunc(x)
+            self.assertIn("convert", str(raises.exception))
+
+        # NaN raises ValueError
+        with self.assertRaises(ValueError) as raises:
+            cfunc(float('nan'))
+        self.assertIn("NaN", str(raises.exception))
+
+        # the messages match CPython's for the non-finite cases
+        with self.assertRaises(OverflowError) as raises:
+            cfunc(float('inf'))
+        self.assertEqual(str(raises.exception),
+                         "cannot convert float infinity to integer")
+        with self.assertRaises(ValueError) as raises:
+            cfunc(float('nan'))
+        self.assertEqual(str(raises.exception),
+                         "cannot convert float NaN to integer")
+
     def test_iter_next(self, flags=forceobj_flags):
         pyfunc = iter_next_usecase
         cfunc = jit((types.UniTuple(types.int32, 3),), **flags)(pyfunc)

@@ -314,8 +314,27 @@ def cast_int(typingctx, x):
 
 @overload(int)
 def ol_int(x):
-    if isinstance(x, (types.Integer, types.Boolean, types.Float)):
+    if isinstance(x, (types.Integer, types.Boolean)):
         def impl(x):
+            return cast_int(x)
+
+        return impl
+
+    if isinstance(x, types.Float):
+        # int() of a float follows CPython semantics and raises for values
+        # that do not represent an integer.
+        def impl(x):
+            if x != x:
+                raise ValueError("cannot convert float NaN to integer")
+            if x == float('inf') or x == float('-inf'):
+                raise OverflowError("cannot convert float infinity to integer")
+            # Reject finite values outside the range of the integer type.
+            # The boundaries are exactly representable as floats, so the
+            # comparison is exact. Note the upper bound is exclusive: the
+            # smallest integer that must be rejected rounds to it.
+            if not (-9223372036854775808.0 <= x < 9223372036854775808.0):
+                raise OverflowError("cannot convert float to integer, "
+                                    "value out of range")
             return cast_int(x)
 
         return impl
