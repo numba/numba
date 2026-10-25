@@ -1178,6 +1178,62 @@ class TestHighLevelExtending(TestCase):
             foo(obj, 1, 2, (3, (4, 5))), (1, 2, ((3, (4, 5)),)),
         )
 
+    def test_overload_star_args_keyonly(self):
+        # Issue #5291: an overload with *args and several keyword-only
+        # arguments must bind the positional arguments to *args and apply
+        # the defaults of the keyword-only arguments.
+        def foo(*args, **kwargs):
+            # stub for overload
+            pass
+
+        @overload(foo)
+        def foo_ovl(*args, bar1=None, bar2=None):
+            def foo_impl(*args, bar1=None, bar2=None):
+                return args, bar1, bar2
+
+            return foo_impl
+
+        @njit
+        def test(a, b):
+            return foo(a, b)
+
+        @njit
+        def test_kw(a, b):
+            return foo(a, b, bar2=4)
+
+        self.assertEqual(test(1, 2), ((1, 2), None, None))
+        self.assertEqual(test_kw(1, 2), ((1, 2), None, 4))
+
+    def test_overload_star_args_empty_check(self):
+        # Issue #7933: the typer of an overload receives the types of the
+        # call arguments, so the emptiness of *args can be checked
+        # consistently with len() in the typer.
+        def foo(*args, **kwargs):
+            # stub for overload
+            pass
+
+        @overload(foo)
+        def foo_ovl(*args):
+            if len(args) == 0:
+                def impl(*args):
+                    return "empty"
+                return impl
+            else:
+                def impl(*args):
+                    return "nonempty"
+                return impl
+
+        @njit
+        def test_empty():
+            return foo()
+
+        @njit
+        def test_nonempty(a, b):
+            return foo(a, b)
+
+        self.assertEqual(test_empty(), "empty")
+        self.assertEqual(test_nonempty(1, 2), "nonempty")
+
     def test_overload_classmethod(self):
         # Add classmethod to a subclass of Array
         class MyArray(types.Array):

@@ -200,30 +200,14 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
         # Normalize dict kws
         kws = dict(kws)
 
-    # deal with kwonly args that might appear as the last positional arguments
-    params = pysig.parameters
-    kwonly = []
-    for name, p in params.items():
-        if p.kind == p.KEYWORD_ONLY:
-            kwonly.append(name)
-
-    if kwonly:
-        bind_args = args[:-len(kwonly)]
-    else:
-        bind_args = args
-    bind_kws = kws.copy()
-    if kwonly:
-        for idx, n in enumerate(kwonly):
-            bind_kws[n] = args[-len(kwonly) + idx]
-
     # now bind
     try:
-        ba = pysig.bind(*bind_args, **bind_kws)
+        ba = pysig.bind(*args, **kws)
     except TypeError as e:
         # The binding attempt can raise if the args don't match up, this needs
         # to be converted to a TypingError so that e.g. partial type inference
         # doesn't just halt.
-        msg = (f"Cannot bind 'args={bind_args} kws={bind_kws}' to "
+        msg = (f"Cannot bind 'args={args} kws={kws}' to "
                f"signature '{pysig}' due to \"{type(e).__name__}: {e}\".")
         raise TypingError(msg)
     for i, param in enumerate(pysig.parameters.values()):

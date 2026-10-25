@@ -55,6 +55,10 @@ def star_defaults(x, y=2, *z):
     return x, y, z
 
 
+def star_args_keyonly(x, *args, y=2):
+    return x, args, y
+
+
 def generated_usecase(x, y=5):
     if isinstance(x, types.Complex):
         def impl(x, y):
@@ -645,6 +649,60 @@ class TestSignatureHandling(BaseTest):
         with self.assertRaises(TypeError) as cm:
             f(4, x=6)
         self.assertIn("some keyword arguments unexpected", str(cm.exception))
+
+    def test_star_args_keyonly(self):
+        """
+        Test calls between jitted functions for a signature with *args and
+        keyword-only arguments: the positional arguments must be consumed by
+        *args, keyword-only arguments only by keyword (issue #8108).
+        """
+        callee = njit(star_args_keyonly)
+
+        @njit
+        def call_0():
+            return callee(1)
+
+        @njit
+        def call_1():
+            return callee(1, 2)
+
+        @njit
+        def call_2():
+            return callee(1, 2, 3)
+
+        @njit
+        def call_kw():
+            return callee(1, 2, y=5)
+
+        self.assertEqual(call_0(), star_args_keyonly(1))
+        self.assertEqual(call_1(), star_args_keyonly(1, 2))
+        self.assertEqual(call_2(), star_args_keyonly(1, 2, 3))
+        self.assertEqual(call_kw(), star_args_keyonly(1, 2, y=5))
+
+    def test_star_args_keyonly_multiple(self):
+        """
+        Test several keyword-only arguments after *args.
+        """
+        def py_impl(*args, a=1, b=2):
+            return args, a, b
+
+        callee = njit(py_impl)
+
+        @njit
+        def call_0():
+            return callee()
+
+        @njit
+        def call_2():
+            return callee(4, 5)
+
+        @njit
+        def call_kw():
+            return callee(4, b=7)
+
+        self.assertEqual(call_0(), py_impl())
+        self.assertEqual(call_2(), py_impl(4, 5))
+        self.assertEqual(call_kw(), py_impl(4, b=7))
 
 
 class TestSignatureHandlingObjectMode(TestSignatureHandling):

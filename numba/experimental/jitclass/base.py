@@ -59,7 +59,7 @@ def _mangle_attr(name):
 
 _ctor_template = """
 def ctor({args}):
-    return __numba_cls_({args})
+    return __numba_cls_({call_args})
 """
 
 
@@ -104,8 +104,15 @@ class JitClassType(type):
         # get postitional and keyword arguments
         # offset by one to exclude the `self` arg
         args = _getargs(init_sig)[1:]
+        # Keyword-only arguments must be passed as keywords to the class
+        # call, they cannot be bound positionally.
+        kwonly = [name for name, param in init_sig.parameters.items()
+                  if name != 'self' and param.kind == param.KEYWORD_ONLY]
+        call_args = ', '.join(f'{name}={name}' if name in kwonly else name
+                              for name in args)
         cls._ctor_sig = init_sig
-        ctor_source = _ctor_template.format(args=', '.join(args))
+        ctor_source = _ctor_template.format(args=', '.join(args),
+                                            call_args=call_args)
         glbls = {"__numba_cls_": cls}
         exec(ctor_source, glbls)
         ctor = glbls['ctor']
@@ -274,6 +281,11 @@ class ConstructorTemplate(templates.AbstractTemplate):
 
         # Actual constructor returns an instance value (not None)
         out = templates.signature(instance_type, *sig.args[1:])
+        # Preserve the signature of __init__ (minus the self argument) so
+        # that lowering can bind the call arguments and inject defaults.
+        if sig.pysig is not None:
+            params = list(sig.pysig.parameters.values())[1:]
+            out = out.replace(pysig=utils.pySignature(params))
         return out
 
 
@@ -427,7 +439,15 @@ class ClassAttribute(templates.AttributeTemplate):
                 def generic(self, args, kws):
                     args = (instance,) + tuple(args)
                     sig = disp_type.get_call_type(self.context, args, kws)
-                    return sig.as_method()
+                    out = sig.as_method()
+                    # Preserve the method's signature, without the self
+                    # argument (the receiver is carried in the signature's
+                    # recvr), so that lowering can bind the call arguments
+                    # and inject defaults.
+                    if sig.pysig is not None:
+                        params = list(sig.pysig.parameters.values())[1:]
+                        out = out.replace(pysig=utils.pySignature(params))
+                    return out
 
             return types.BoundFunction(MethodTemplate, instance)
 

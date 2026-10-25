@@ -746,6 +746,49 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(tc.z, 1)
         self.assertEqual(tc.a, 5)
 
+    def test_keyonly_args_from_jit(self):
+        # Issue #8108: keyword-only arguments of jitclass constructors and
+        # methods are supported in jitted code, with their defaults applied
+        # and explicit keyword passing.
+        spec = [("x", int32)]
+
+        @jitclass(spec)
+        class Bag(object):
+            def __init__(self, x, *, scale=2):
+                self.x = x * scale
+
+            def get(self, y, *, a=10):
+                return self.x + y + a
+
+        @njit
+        def ctor_default():
+            b = Bag(3)
+            return b.x
+
+        @njit
+        def ctor_kw():
+            b = Bag(3, scale=5)
+            return b.x
+
+        @njit
+        def method_default():
+            b = Bag(3)
+            return b.get(1)
+
+        @njit
+        def method_kw():
+            b = Bag(3)
+            return b.get(1, a=100)
+
+        self.assertEqual(ctor_default(), 6)
+        self.assertEqual(ctor_kw(), 15)
+        self.assertEqual(method_default(), 17)
+        self.assertEqual(method_kw(), 107)
+        # Same calls from the Python interpreter
+        self.assertEqual(Bag(3).x, 6)
+        self.assertEqual(Bag(3, scale=4).x, 12)
+        self.assertEqual(Bag(3).get(1), 17)
+
     def test_default_args_starargs_and_keyonly(self):
         spec = [("x", int32),
                 ("y", int32),
