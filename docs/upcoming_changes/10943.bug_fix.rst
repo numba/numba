@@ -1,0 +1,12 @@
+Fix argument binding for ``*args`` and keyword-only parameters
+--------------------------------------------------------------
+
+Calls between jitted functions, ``@overload`` implementations and
+jitclass constructors and methods did not follow Python's argument
+binding rules when the callee had ``*args`` together with
+keyword-only parameters: positional arguments were silently bound to
+the keyword-only parameters instead of ``*args``, and explicitly
+passed keywords could be overwritten. Argument binding now follows
+Python semantics; keyword-only arguments of jitclass constructors and
+methods are also supported in jitted code, where they previously
+failed to compile.
