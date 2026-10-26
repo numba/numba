@@ -5,6 +5,7 @@ import re
 import shutil
 import warnings
 import traceback
+from importlib.util import find_spec
 
 # YAML needed to use file based Numba config
 try:
@@ -26,6 +27,9 @@ PYVERSION = sys.version_info[:2]
 
 # this is the name of the user supplied configuration file
 _config_fname = '.numba_config.yaml'
+
+# Whether NumPy is available in the current environment.
+NUMPY_AVAILABLE = find_spec("numpy") is not None
 
 
 def _parse_cc(text):
