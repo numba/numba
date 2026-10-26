@@ -1,0 +1,11 @@
+Accept an array argument in np.array
+------------------------------------
+
+``np.array`` of a numpy array failed typing: the overload only
+handled nested sequences and rejected array types, even though NumPy
+accepts an array and returns a copy of it. The overload now detects an
+array argument and implements the call as a copy of the input, or as
+an astype cast when a dtype is given. The result is a C-ordered copy
+following numba's copy semantics, so a Fortran-ordered input is
+compacted where NumPy's ``order='K'`` default would preserve the
+layout; the values are identical.
