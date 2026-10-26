@@ -3013,12 +3013,18 @@ def np_unique(ar):
             # instead of np.isnan because it can't handle non-numeric type
             return not (x == x)
         b = np.sort(ar.ravel())
-        head = list(b[:1])
-        tail = [
-            x for i, x in enumerate(b[1:])
-            if b[i] != x and not (isnan(b[i]) and isnan(x))
-        ]
-        return np.array(head + tail)
+        if b.size == 0:
+            return b
+        # `b` is a fresh sorted copy, so compact the unique values into its
+        # front instead of building intermediate lists.
+        n_unique = 1
+        for i in range(1, b.size):
+            last = b[n_unique - 1]
+            if b[i] != last and not (isnan(b[i]) and isnan(last)):
+                b[n_unique] = b[i]
+                n_unique += 1
+        # Copy so the result does not keep the whole sorted buffer alive.
+        return b[:n_unique].copy()
     return np_unique_impl
 
 
