@@ -1,0 +1,15 @@
+Fix memory extent computation for mixed indexers in fancy setitem
+-----------------------------------------------------------------
+
+Assigning between overlapping memory regions through a mixed integer
+and slice index silently corrupted data, e.g.
+``x[1, 3:6] = x[1, 2:5]`` wrote partially stale values because the
+overlap detection in the fancy setitem lowering failed to see the
+overlap and skipped buffering the source. The cause is
+``FancyIndexer.get_offset_bounds`` zipping the indexers with the
+flattened result shape: indexers that span no dimension (a single
+integer index) or several (a subspace) make that list a different
+length than the indexer list, so indexers and strides got mispaired
+and parts of the destination extent were not accounted for. Each
+indexer is now paired with its own shape, restoring the correct
+destination extents and with them the source buffering.
