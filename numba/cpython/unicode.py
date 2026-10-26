@@ -478,6 +478,12 @@ def unicode_len(s):
         return len_impl
 
 
+def _is_unicode_array(ty):
+    return (isinstance(ty, types.Array)
+            and isinstance(ty.dtype,
+                           (types.UnicodeType, types.UnicodeCharSeq)))
+
+
 @overload(operator.eq)
 def unicode_eq(a, b):
     if not (a.is_internal and b.is_internal):
@@ -511,6 +517,23 @@ def unicode_eq(a, b):
             return _cmp_region(a, 0, b, 0, len(a)) == 0
         return eq_impl
     elif a_unicode ^ b_unicode:
+        # one of the operands is a unicode array, the other a unicode
+        # scalar: NumPy compares elementwise (issue #6312)
+        if _is_unicode_array(check_a):
+            def array_eq_impl(a, b):
+                res = np.zeros(a.shape, dtype=np.bool_)
+                for idx in np.ndindex(*a.shape):
+                    res[idx] = a[idx] == b
+                return res
+            return array_eq_impl
+        if _is_unicode_array(check_b):
+            def array_eq_impl(a, b):
+                res = np.zeros(b.shape, dtype=np.bool_)
+                for idx in np.ndindex(*b.shape):
+                    res[idx] = a == b[idx]
+                return res
+            return array_eq_impl
+
         # one of the things is unicode, everything compares False
         def eq_impl(a, b):
             return False
@@ -529,6 +552,23 @@ def unicode_ne(a, b):
             return not (a == b)
         return ne_impl
     elif a_unicode ^ b_unicode:
+        # one of the operands is a unicode array, the other a unicode
+        # scalar: NumPy compares elementwise (issue #6312)
+        if _is_unicode_array(a):
+            def array_ne_impl(a, b):
+                res = np.zeros(a.shape, dtype=np.bool_)
+                for idx in np.ndindex(*a.shape):
+                    res[idx] = a[idx] != b
+                return res
+            return array_ne_impl
+        if _is_unicode_array(b):
+            def array_ne_impl(a, b):
+                res = np.zeros(b.shape, dtype=np.bool_)
+                for idx in np.ndindex(*b.shape):
+                    res[idx] = a != b[idx]
+                return res
+            return array_ne_impl
+
         # one of the things is unicode, everything compares True
         def eq_impl(a, b):
             return True

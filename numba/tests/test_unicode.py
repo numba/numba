@@ -2,6 +2,8 @@
 from itertools import product
 from itertools import permutations
 
+import numpy as np
+
 from numba import njit, typeof
 from numba.core import types
 import unittest
@@ -453,6 +455,45 @@ class TestUnicode(BaseTest):
                                  cfunc(a, 1), '%s, %s' % (a, 1))
                 self.assertEqual(pyfunc(1, b),
                                  cfunc(1, b), '%s, %s' % (1, b))
+
+    def test_unicode_array_eq(self):
+        # See issue #6312, an array of unicode compares elementwise
+        # against a unicode scalar.
+        a = np.array(['hello', 'world'])
+
+        @njit
+        def eq(arr):
+            return arr == 'world'
+
+        @njit
+        def ne(arr):
+            return arr != 'world'
+
+        @njit
+        def eq_rev(arr):
+            return 'world' == arr
+
+        @njit
+        def ne_rev(arr):
+            return 'world' != arr
+
+        expected_eq = a == 'world'
+        expected_ne = a != 'world'
+        self.assertPreciseEqual(eq(a), expected_eq)
+        self.assertPreciseEqual(ne(a), expected_ne)
+        self.assertPreciseEqual(eq_rev(a), expected_eq)
+        self.assertPreciseEqual(ne_rev(a), expected_ne)
+
+    def test_unicode_array_eq_2d(self):
+        # See issue #6312, elementwise comparison works for n-dimensional
+        # arrays too.
+        a = np.array([['a', 'b'], ['c', 'b']])
+
+        @njit
+        def eq(arr):
+            return arr == 'b'
+
+        self.assertPreciseEqual(eq(a), a == 'b')
 
     def test_eq_optional(self):
         # See issue #7474
