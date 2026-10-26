@@ -18,7 +18,7 @@ import unittest
 from numba import njit
 from numba.core.codegen import JITCPUCodegen
 from numba.core.compiler_lock import global_compiler_lock
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, override_config
 
 
 asm_sum = r"""
@@ -110,6 +110,23 @@ class JITCPUCodegenTestCase(TestCase):
         pickle.dumps(tup)
         cg2 = JITCPUCodegen('xxx')
         self.assertEqual(cg2.magic_tuple(), tup)
+
+    def test_magic_tuple_includes_codegen_config(self):
+        # See issue #10821, the cache key must distinguish artifacts
+        # compiled under different codegen-affecting configurations.
+        with override_config('OPT', 0):
+            tup_opt0 = self.codegen.magic_tuple()
+        with override_config('OPT', 3):
+            tup_opt3 = self.codegen.magic_tuple()
+        self.assertNotEqual(tup_opt0, tup_opt3)
+        with override_config('LOOP_VECTORIZE', 0):
+            tup_lv0 = self.codegen.magic_tuple()
+        with override_config('LOOP_VECTORIZE', 1):
+            tup_lv1 = self.codegen.magic_tuple()
+        self.assertNotEqual(tup_lv0, tup_lv1)
+        with override_config('SLP_VECTORIZE', 1):
+            tup_slp1 = self.codegen.magic_tuple()
+        self.assertNotEqual(tup_lv1, tup_slp1)
 
     # Serialization tests.
 

@@ -1299,8 +1299,15 @@ class CPUCodegen(Codegen):
         """
         Return a tuple unambiguously describing the codegen behaviour.
         """
+        # Include the configuration options that drive code generation in
+        # the key: without them, artifacts cached under one setting are
+        # silently reused by a process running with another (issue
+        # #10821).
+        codegen_config = (config.OPT,
+                          config.LOOP_VECTORIZE,
+                          config.SLP_VECTORIZE)
         return (self._llvm_module.triple, self._get_host_cpu_name(),
-                self._tm_features)
+                self._tm_features, codegen_config)
 
     def _scan_and_fix_unresolved_refs(self, module):
         self._rtlinker.scan_unresolved_symbols(module, self._engine)
