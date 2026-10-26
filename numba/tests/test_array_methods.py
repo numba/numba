@@ -2086,6 +2086,65 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             np.frombuffer(buffer, dtype=buffer.dtype, count=count)
 
 
+class TestOverlappingSetItem(MemoryLeakMixin, TestCase):
+    # See issue #230, assignment between overlapping memory regions has
+    # to follow NumPy's element-wise forward-copy semantics.
+
+    def check(self, setfunc, arr):
+        cfunc = njit(setfunc)
+        expected = setfunc(arr.copy())
+        got = cfunc(arr.copy())
+        np.testing.assert_array_equal(got, expected)
+
+    def test_2d_row_overlap(self):
+        def f(x):
+            x[1, 3:6] = x[1, 2:5]
+            return x
+
+        x = np.array([[3, 7, 1, 0, 0, 0, 0, 0],
+                      [4, 3, 4, 6, 5, 0, 0, 0]])
+        self.check(f, x)
+
+    def test_1d_forward_overlap(self):
+        def f(x):
+            x[1:] = x[0:-1]
+            return x
+
+        self.check(f, np.arange(10))
+
+    def test_1d_backward_overlap(self):
+        def f(x):
+            x[0:8] = x[2:10]
+            return x
+
+        self.check(f, np.arange(10))
+
+    def test_2d_strided_overlap(self):
+        def f(x):
+            x[1, 2:7:2] = x[1, 1:6:2]
+            return x
+
+        x = np.array([[3, 7, 1, 0, 0, 0, 0, 0],
+                      [4, 3, 4, 6, 5, 0, 0, 0]])
+        self.check(f, x)
+
+    def test_2d_integer_and_slice_overlap(self):
+        def f(x):
+            x[0, 3:8] = x[0, 2:7]
+            return x
+
+        x = np.arange(16).reshape(2, 8)
+        self.check(f, x)
+
+    def test_3d_row_overlap(self):
+        def f(x):
+            x[1, 1, 1:4] = x[1, 1, 0:3]
+            return x
+
+        x = np.arange(24).reshape(2, 3, 4)
+        self.check(f, x)
+
+
 class TestArrayComparisons(TestCase):
 
     def test_identity(self):

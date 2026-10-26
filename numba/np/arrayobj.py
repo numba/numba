@@ -1302,10 +1302,14 @@ class FancyIndexer(object):
         one = self.ll_intp(1)
         lower = zero
         upper = zero
-        for indexer, shape, stride in zip(self.indexers, self.indexers_shape,
-                                          strides):
-            is_empty = builder.or_(is_empty,
-                                   builder.icmp_unsigned('==', shape, zero))
+        for indexer, stride in zip(self.indexers, strides):
+            # Each indexer is paired with its own shape, which may span
+            # several dimensions (e.g. a subspace) or none (e.g. a single
+            # integer index); the flattened result shape must not be used
+            # here as the pairing with the strides would be misaligned.
+            for dim in indexer.get_shape():
+                is_empty = builder.or_(
+                    is_empty, builder.icmp_unsigned('==', dim, zero))
             # Compute [lower, upper) indices on this dimension
             lower_index, upper_index = indexer.get_index_bounds()
             lower_offset = builder.mul(stride, lower_index)
