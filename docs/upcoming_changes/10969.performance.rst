@@ -1,0 +1,6 @@
+Faster ``np.unique`` with many unique values
+--------------------------------------------
+
+``np.unique`` now writes the unique values into the sorted copy of its input
+instead of building intermediate lists, which lowers its time and peak memory
+when the input has many unique values. The result is unchanged.

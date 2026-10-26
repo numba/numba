@@ -1994,9 +1994,18 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         cfunc = jit(nopython=True)(pyfunc)
 
         def check(a):
-            np.testing.assert_equal(pyfunc(a), cfunc(a))
+            original = a.copy()
+            expected, got = pyfunc(a), cfunc(a)
+            np.testing.assert_equal(expected, got)
+            self.assertEqual(expected.dtype, got.dtype)
+            # the result is built from a sorted copy, never from the input
+            np.testing.assert_equal(a, original)
 
         check(np.array([[1, 1, 3], [3, 4, 5]]))
+        check(np.array([], dtype=np.int64))
+        check(np.asfortranarray(np.array([[3, 1, 3], [2, 1, 2]])))
+        check(np.arange(20)[::-3])
+        check(np.array([np.nan, 1.0, np.nan, 1.0, 2.0]))
         check(np.array(np.zeros(5)))
         check(np.array([[3.1, 3.1], [1.7, 2.29], [3.3, 1.7]]))
         check(np.array([]))
