@@ -1171,6 +1171,7 @@ def _inline_arraycall(func_ir, cfg, visited, loop, swapped, enable_prange=False,
         else:
             stmts.append(stmt)
     debug_print("removed variables: ", removed)
+    require(removed)
 
     # Define an index_var to index the array.
     # If the range happens to be single step ranges like range(n), or
