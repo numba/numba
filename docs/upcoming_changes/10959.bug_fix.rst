@@ -1,0 +1,13 @@
+Serialize cache index updates with an advisory lock
+---------------------------------------------------
+
+Concurrent processes saving different overloads of the same cached
+function could corrupt the cache: both read the same index, both
+picked the same free data file name, and the last index write won,
+leaving index entries pointing at data files holding a different
+key's compiled code, which crashes on load (segfaults were observed
+with cached gufuncs). The index load-modify-write cycle in
+``IndexDataCacheFile.save`` (and ``flush``) is now serialized with an
+advisory file lock (``flock`` on POSIX, ``msvcrt.locking`` on
+Windows), and the data file is written before the index entry refers
+to it, so a concurrent reader never sees a dangling index entry.
