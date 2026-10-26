@@ -1,0 +1,11 @@
+Propagate NaN in np.median
+--------------------------
+
+``np.median`` of data containing NaN returned the median of the
+non-NaN ordering instead of NaN: ``[nan, 1.0, 2.0]`` produced 2.0
+where NumPy returns nan, because the selection only looked at the
+middle elements and NaN sorts to the end of the temporary array. The
+median implementation now scans the (float dtype) input for NaN before
+the selection and returns NaN if any is present, following NumPy.
+Integer and datetime dtypes are unaffected, and ``np.nanmedian``
+keeps its own implementation.
