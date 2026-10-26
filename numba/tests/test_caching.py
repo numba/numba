@@ -262,7 +262,7 @@ class BaseCacheTest(TestCase):
     def cache_contents(self):
         try:
             return [fn for fn in os.listdir(self.cache_dir)
-                    if not fn.endswith(('.pyc', ".pyo"))]
+                    if not fn.endswith(('.pyc', ".pyo", '.lock'))]
         except FileNotFoundError:
             return []
 
@@ -350,6 +350,55 @@ class TestCache(DispatcherCacheUsecasesTest):
 
         # Check the code runs ok from another process
         self.run_in_separate_process()
+
+    def test_concurrent_save(self):
+        # See issue #10128: several processes saving different overloads
+        # of the same cached function at the same time must not corrupt
+        # the cache index (they could pick the same data file name and
+        # overwrite each other's index entries).
+        self.check_pycache(0)
+
+        sigs = [(2, 3), (2.5, 3.5), (np.complex64(2), np.complex64(3))]
+        env = os.environ.copy()
+        procs = []
+        for args in sigs:
+            this_code = ("if 1:\n"
+                         "    import sys\n"
+                         "    sys.path.insert(0, %r)\n"
+                         "    import numpy as np\n"
+                         "    mod = __import__(%r)\n"
+                         "    x, y = %r\n"
+                         "    res = mod.add_usecase(x, y)\n"
+                         "    assert res == x + y + mod.Z, (res, x, y)\n"
+                         % (self.tempdir, self.modname, args))
+            procs.append(subprocess.Popen([sys.executable, "-c", this_code],
+                                          stdout=subprocess.PIPE,
+                                          stderr=subprocess.PIPE, env=env))
+        for p in procs:
+            out, err = p.communicate()
+            self.assertEqual(p.returncode, 0,
+                             "subprocess failed: %s\n%s" % (out, err))
+
+        # All three signatures must now be cached and correct when
+        # loaded from a fresh process
+        for args in sigs:
+            this_code = ("if 1:\n"
+                         "    import sys\n"
+                         "    sys.path.insert(0, %r)\n"
+                         "    import numpy as np\n"
+                         "    mod = __import__(%r)\n"
+                         "    x, y = %r\n"
+                         "    f = mod.add_usecase\n"
+                         "    res = f(x, y)\n"
+                         "    assert res == x + y + mod.Z, (res, x, y)\n"
+                         "    assert f.stats.cache_hits, f.stats\n"
+                         % (self.tempdir, self.modname, args))
+            p = subprocess.Popen([sys.executable, "-c", this_code],
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.PIPE, env=env)
+            out, err = p.communicate()
+            self.assertEqual(p.returncode, 0,
+                             "subprocess failed: %s\n%s" % (out, err))
 
     def test_caching_nrt_pruned(self):
         self.check_pycache(0)

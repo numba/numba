@@ -573,26 +573,31 @@ class IndexDataCacheFile(object):
         self._version = numba.__version__
 
     def flush(self):
-        self._save_index({})
+        with self._lock_index():
+            self._save_index({})
 
     def save(self, key, data):
         """
         Save a new cache entry with *key* and *data*.
         """
-        overloads = self._load_index()
-        try:
-            # If key already exists, we will overwrite the file
-            data_name = overloads[key]
-        except KeyError:
-            # Find an available name for the data file
-            existing = set(overloads.values())
-            for i in itertools.count(1):
-                data_name = self._data_name(i)
-                if data_name not in existing:
-                    break
-            overloads[key] = data_name
-            self._save_index(overloads)
-        self._save_data(data_name, data)
+        with self._lock_index():
+            overloads = self._load_index()
+            data_name = overloads.get(key)
+            if data_name is None:
+                # Find an available name for the data file
+                existing = set(overloads.values())
+                for i in itertools.count(1):
+                    data_name = self._data_name(i)
+                    if data_name not in existing:
+                        break
+                overloads[key] = data_name
+                # Save the data before the index refers to it, so that a
+                # concurrent reader never sees a dangling entry.
+                self._save_data(data_name, data)
+                self._save_index(overloads)
+            else:
+                # If key already exists, we will overwrite the file
+                self._save_data(data_name, data)
 
     def load(self, key):
         """
@@ -683,6 +688,35 @@ class IndexDataCacheFile(object):
 
     def _dump(self, obj):
         return dumps(obj)
+
+    @contextlib.contextmanager
+    def _lock_index(self):
+        """
+        Acquire an advisory lock serializing the load-modify-write cycles
+        on the index file of concurrent processes. Without it, two
+        processes saving different overloads concurrently could pick the
+        same data file name and overwrite each other's index entries,
+        leaving the index pointing at data for a different key, which
+        crashes on load (issue #10128).
+        """
+        lock_path = self._index_path + '.lock'
+        with open(lock_path, 'a+b') as f:
+            if sys.platform == 'win32':
+                import msvcrt
+                f.seek(0)
+                msvcrt.locking(f.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if sys.platform == 'win32':
+                    f.seek(0)
+                    msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+        _cache_log("[cache] index lock released for %r", self._index_path)
 
     @contextlib.contextmanager
     def _open_for_write(self, filepath):
