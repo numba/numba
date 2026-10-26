@@ -1,0 +1,13 @@
+Support assignment to .real and .imag of numpy arrays
+-----------------------------------------------------
+
+Assigning an array to the ``.real`` or ``.imag`` part of an array in
+nopython mode failed at lowering because only the getters were
+implemented. The view construction of the getters is now reused by new
+setattr lowerings: the source is assigned into the strided
+real/imaginary view through a full-slice setitem, which handles
+strided writes and broadcasting. Following NumPy, ``.real`` assignment
+on a real (non-complex) array is an identity write, while ``.imag``
+assignment on a real array is refused because that view is readonly.
+The typing of ``.real`` on a real array now yields an ``'A'`` layout
+view, the view aliases the array.
