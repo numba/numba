@@ -916,18 +916,32 @@ class BooleanArrayIndexer(Indexer):
     Compute indices from an array of boolean predicates.
     """
 
-    def __init__(self, context, builder, idxty, idxary):
+    def __init__(self, context, builder, idxty, idxary, dim_size, dim_index):
         self.context = context
         self.builder = builder
         self.idxty = idxty
         self.idxary = idxary
         assert idxty.ndim == 1
+        self.dim_size = dim_size
+        self.dim_index = dim_index
         self.ll_intp = self.context.get_value_type(types.intp)
         self.zero = Constant(self.ll_intp, 0)
 
     def prepare(self):
         builder = self.builder
         self.size = cgutils.unpack_tuple(builder, self.idxary.shape)[0]
+        # NumPy raises an IndexError if the boolean index does not match
+        # the indexed dimension (issue #10374)
+        fnty = self.context.typing_context.resolve_value_type(
+            raise_boolean_index_mismatch)
+        sig = fnty.get_call_type(self.context.typing_context,
+                                 (types.intp, types.intp, types.intp), {})
+        func = self.context.get_function(fnty, sig)
+        with builder.if_then(builder.icmp_signed('!=', self.size,
+                                                 self.dim_size),
+                             likely=False):
+            dim_const = self.context.get_constant(types.intp, self.dim_index)
+            func(builder, (dim_const, self.dim_size, self.size))
         self.idx_index = cgutils.alloca_once(builder, self.ll_intp)
         self.src_idx = cgutils.alloca_once(builder, self.ll_intp)
 
@@ -1208,7 +1222,8 @@ class FancyIndexer(object):
                                                   self.global_ary_idx_list)
                 elif isinstance(idxty.dtype, types.Boolean):
                     indexer = BooleanArrayIndexer(context, builder,
-                                                  idxty, idxary)
+                                                  idxty, idxary,
+                                                  self.shapes[ax], ax)
                 else:
                     assert 0
                 indexers.append(indexer)
@@ -1938,6 +1953,21 @@ def raise_with_shape_context(src_shapes, index_shape):
     handling/messages. The overload implementation takes two tuples as arguments
     and should raise a ValueError."""
     raise NotImplementedError
+
+
+def raise_boolean_index_mismatch(dim, dim_size, mask_size):
+    """Targets should implement this if they wish to specialize the error
+    handling/messages. The overload implementation takes the dimension
+    index, the indexed dimension size and the boolean mask size as
+    arguments and should raise an IndexError."""
+    raise NotImplementedError
+
+
+@overload(raise_boolean_index_mismatch, target="generic")
+def ol_raise_boolean_index_mismatch_generic(dim, dim_size, mask_size):
+    def impl(dim, dim_size, mask_size):
+        raise IndexError("boolean index did not match indexed array")
+    return impl
 
 
 @overload(raise_with_shape_context, target="generic")

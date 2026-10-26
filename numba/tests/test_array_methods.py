@@ -2086,6 +2086,63 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
             np.frombuffer(buffer, dtype=buffer.dtype, count=count)
 
 
+class TestBooleanMaskShape(TestCase):
+    # See issue #10374, a boolean index must match the indexed dimension
+    # like in NumPy, otherwise an IndexError is raised.
+    # Note: not a MemoryLeakMixin test, the exception paths here leak NRT
+    # allocations the same way the existing fancy setitem shape-mismatch
+    # error path does (pre-existing behaviour, not specific to this fix).
+
+    def test_getitem_mismatch(self):
+        def f(a, mask):
+            return a[mask]
+
+        cfunc = njit(f)
+        a = np.arange(5)
+        for n in [3, 6]:
+            mask = np.ones(n, dtype=np.bool_)
+            with self.assertRaises(IndexError) as raises:
+                cfunc(a, mask)
+            self.assertIn('boolean index did not match',
+                          str(raises.exception))
+
+    def test_setitem_mismatch(self):
+        def f(a, mask):
+            a[mask] = 1
+            return a
+
+        cfunc = njit(f)
+        a = np.arange(5)
+        for n in [3, 6]:
+            mask = np.ones(n, dtype=np.bool_)
+            with self.assertRaises(IndexError) as raises:
+                cfunc(a.copy(), mask)
+            self.assertIn('boolean index did not match',
+                          str(raises.exception))
+
+    def test_matching_mask_unchanged(self):
+        def f(a, mask):
+            return a[mask]
+
+        cfunc = njit(f)
+        a = np.arange(5)
+        mask = np.array([True, False, True, False, True])
+        self.assertPreciseEqual(cfunc(a, mask), f(a, mask))
+
+    def test_mismatch_on_slice_indexed_dim(self):
+        # the mask is validated against the dimension it indexes
+        def f(a, mask):
+            return a[1:, mask]
+
+        cfunc = njit(f)
+        a = np.arange(12).reshape(3, 4)
+        good = np.array([True, False, True, False])
+        np.testing.assert_array_equal(cfunc(a, good), f(a, good))
+        with self.assertRaises(IndexError) as raises:
+            cfunc(a, np.array([True, False]))
+        self.assertIn('boolean index did not match', str(raises.exception))
+
+
 class TestArrayComparisons(TestCase):
 
     def test_identity(self):
