@@ -288,19 +288,14 @@ class TestSlices(MemoryLeakMixin, TestCase):
         def getitem(a, x):
             return a[x:3]
 
-        sig = types.Array(types.int64, 1, "C")(
-            types.Array(types.int64, 1, "C"),
-            types.Optional(types.int64),
-        )
+        arrty = types.Array(types.int64, 1, "C")
+        sig = arrty(arrty, types.Optional(types.int64))
         cfunc = njit(sig)(getitem)
-        arr = np.arange(10)
+        arr = np.arange(10, dtype=np.int64)
         self.assertPreciseEqual(cfunc(arr, np.int64(2)), arr[2:3])
 
         # optional floats are still rejected
-        bad_sig = types.Array(types.int64, 1, "C")(
-            types.Array(types.int64, 1, "C"),
-            types.Optional(types.float64),
-        )
+        bad_sig = arrty(arrty, types.Optional(types.float64))
         with self.assertRaises(TypingError) as e:
             njit(bad_sig)(getitem)
         self.assertIn('slice indices must be integers', str(e.exception))
