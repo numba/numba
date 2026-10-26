@@ -1,0 +1,14 @@
+Add default repr for jitclass instances and allow __repr__
+----------------------------------------------------------
+
+``repr()`` and ``str()`` of a jitclass instance in nopython mode
+produced the generic
+``<object type:instance.jitclass...>`` placeholder. A default
+``__repr__`` rendering as ``ClassName(field=value, ...)`` in spec
+order is now injected at class registration when the class does not
+define one. Because it is a regular jit method it works in nopython
+mode and on the boxed Python object alike. ``__repr__`` is also added
+to the supported dunders, so a user defined ``__repr__`` is accepted
+(it previously raised ``Method '__repr__' is not supported``) and is
+used by both nopython ``repr()`` and the boxed Python object. A user
+defined ``__str__`` keeps precedence for ``str()`` as before.
