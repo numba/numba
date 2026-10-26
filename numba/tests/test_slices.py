@@ -249,6 +249,36 @@ class TestSlices(MemoryLeakMixin, TestCase):
         for n in [True, False]:
             self.assertPreciseEqual(cfunc(a, n), bool_upper(a, n))
 
+    def test_non_intp_integer_indices(self):
+        # Integer kinds narrower than intp must keep working: the template
+        # coerces them to intp in the returned signature so that the
+        # lowering receives intp values for the intp fields of the slice
+        # struct. A mismatch here surfaced in CI as
+        # "Invalid store of i32 to i64" in slice_constructor_impl.
+        def getitem_i32(a, i, j):
+            return a[i:j]
+
+        arr32 = np.arange(10, dtype=np.int32)
+        cfunc = njit(getitem_i32)
+        self.assertPreciseEqual(cfunc(arr32, np.int32(2), np.int32(8)),
+                                getitem_i32(arr32, 2, 8))
+
+        def slice_ctor_i32(a, i, j):
+            s = slice(i, j)
+            return a[s.start:s.stop]
+
+        cfunc = njit(slice_ctor_i32)
+        self.assertPreciseEqual(cfunc(arr32, np.int32(1), np.int32(9)),
+                                slice_ctor_i32(arr32, 1, 9))
+
+        def slice_ctor_none_step_i32(a, i, j):
+            s = slice(i, j, None)
+            return a[s.start:s.stop]
+
+        cfunc = njit(slice_ctor_none_step_i32)
+        self.assertPreciseEqual(cfunc(arr32, np.int32(1), np.int32(9)),
+                                slice_ctor_none_step_i32(arr32, 1, 9))
+
     def test_slice_from_constant(self):
         test_tuple = (1, 2, 3, 4)
 

@@ -58,27 +58,37 @@ class Slice(AbstractTemplate):
         clean = []
         for a in args:
             a = types.unliteral(a)
-            if isinstance(a, types.Boolean):
+            if isinstance(a, (types.Boolean, types.Integer)):
+                # Accept any integer kind, but normalize it to intp like
+                # the previous ConcreteTemplate cases did: the lowering
+                # stores these values into the intp fields of the slice
+                # struct, so the signature must declare intp arguments.
                 a = types.intp
             clean.append(a)
         if not clean:
             # slice() with no arguments is invalid in numba, let the
             # standard no-implementation error handle it
             return None
-        if all(isinstance(a, (types.Integer, types.NoneType))
-               for a in clean):
-            if len(args) == 1:
+        if not all(isinstance(a, (types.Integer, types.NoneType))
+                   for a in clean):
+            raise errors.TypingError(
+                "slice indices must be integers or None, not "
+                f"{', '.join(str(a) for a in clean)}")
+        if len(args) == 1:
+            return signature(types.slice2_type, *clean)
+        elif len(args) == 2:
+            return signature(types.slice2_type, *clean)
+        elif len(args) == 3:
+            if isinstance(clean[2], types.NoneType):
+                # A None step is a step of 1, i.e. a two-member slice.
+                # All three arguments are kept in the signature so that
+                # the lowering sees the same number of values as the
+                # call site provides.
                 return signature(types.slice2_type, *clean)
-            elif len(args) == 2:
-                return signature(types.slice2_type, *clean)
-            elif len(args) == 3:
-                if isinstance(clean[2], types.NoneType):
-                    # A None step is a step of 1, i.e. a two-member slice.
-                    return signature(types.slice2_type, *clean[:2])
-                return signature(types.slice3_type, *clean)
-        raise errors.TypingError(
-            "slice indices must be integers or None, not "
-            f"{', '.join(str(a) for a in clean)}")
+            return signature(types.slice3_type, *clean)
+        # Unsupported arity (0 or more than 3 arguments): let the
+        # standard no-implementation error handle it
+        return None
 
 
 @infer_global(range, typing_key=range)
