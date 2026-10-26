@@ -1,0 +1,5 @@
+Fix ``np.array`` of a list appended to in more than one loop
+------------------------------------------------------------
+
+``np.array(data)`` no longer drops items when ``data`` is appended to in
+several loops in a row. Previously only the items from the last loop were kept.
