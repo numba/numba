@@ -1,0 +1,12 @@
+Implement is-operator for jitclass instances
+--------------------------------------------
+
+``is`` between two jitclass instances failed lowering with ``no
+default implementation``: the generic is-lowering refuses mutable
+types, and jitclass instances are mutable, so identity could not be
+expressed at all in nopython mode. A lowering for
+(ClassInstanceType, ClassInstanceType) is added that compares the
+meminfo pointers of the two references, which is the identity of the
+underlying object: ``a is b`` is True exactly when both arguments
+refer to the same instance, including when one is aliased through
+another jitclass's attribute.
