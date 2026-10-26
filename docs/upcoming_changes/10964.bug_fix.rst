@@ -1,0 +1,11 @@
+Allocate np.clip result with the broadcast shape
+------------------------------------------------
+
+``np.clip`` under njit allocated the result with ``empty_like(a)``:
+when ``a_min`` or ``a_max`` broadcast to something larger than ``a``,
+the result had the shape of ``a`` instead of the broadcast shape, and
+the fill loop - which runs over the broadcast shape - wrote past the
+end of the too-small buffer. NumPy returns the broadcast shape.
+``_np_clip_prepare_out`` now allocates ``np.empty`` with the broadcast
+result shape (and the dtype of a) when ``out`` is None. Scalar bounds
+keep the shape of ``a``, since scalars broadcast to nothing.
