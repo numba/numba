@@ -1,0 +1,11 @@
+Make int() of an unsigned integer produce a signed integer
+----------------------------------------------------------
+
+``int()`` of an unsigned integer in nopython mode kept the unsigned
+type, so arithmetic on the result silently wrapped around:
+``abs(int(np.uint16(1)) - int(np.uint16(2))) <= 1`` returned 0 instead
+of 1, differing from pure Python where ``int()`` converts to a signed
+integer. The ``int()`` cast intrinsic now returns ``int64`` for
+unsigned integer operands: the result is CPython-exact for values
+that fit into an int64 and wraps like NumPy's int64 cast for larger
+uint64 values. Signed integers are unchanged and keep their type.
