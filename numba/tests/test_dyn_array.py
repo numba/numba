@@ -1460,9 +1460,9 @@ class TestNpArray(MemoryLeakMixin, BaseTest):
                 yield
             self.assertIn(msg, str(raises.exception))
 
-        with check_raises(('array(float64, 1d, C) not allowed in a '
-                           'homogeneous sequence')):
-            cfunc(np.array([1.]))
+        # An array argument is accepted and copied (see issue #2806)
+        got = cfunc(np.array([1.]))
+        self.assertPreciseEqual(got, np.array([1.]))
 
         with check_raises(('type Tuple(int64, reflected list(int64)<iv=None>) '
                           'does not have a regular shape')):

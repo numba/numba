@@ -339,6 +339,14 @@ def asarray_kws(a, dtype):
     return np.asarray(a, dtype=dtype)
 
 
+def np_array_from_array(a):
+    return np.array(a)
+
+
+def np_array_from_array_kws(a, dtype):
+    return np.array(a, dtype=dtype)
+
+
 def asfarray(a, dtype=np.float64):
     return np.asfarray(a, dtype=dtype)
 
@@ -5381,6 +5389,46 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                     check_pass_through(cfunc, True, params)
                 else:
                     check_pass_through(cfunc, True, params)
+
+    def test_np_array_from_array(self):
+        # See issue #2806, np.array accepts an array argument and
+        # returns a copy of it
+        def input_variations():
+            yield np.array([])
+            yield np.arange(4)
+            yield np.arange(12).reshape(3, 4)
+            yield np.arange(10, dtype=np.float32)[::2]
+
+        for pyfunc in [np_array_from_array, np_array_from_array_kws]:
+            cfunc = jit(nopython=True)(pyfunc)
+            for x in input_variations():
+                params = {'a': x}
+                if 'kws' in pyfunc.__name__:
+                    for dt in [None, np.complex128]:
+                        params['dtype'] = dt
+                        self._check_output(pyfunc, cfunc, params)
+                else:
+                    self._check_output(pyfunc, cfunc, params)
+
+        # a Fortran-ordered input is copied as a C-ordered array (numba's
+        # copy semantics), the values are preserved
+        x = np.asfortranarray(np.arange(12).reshape(3, 4))
+        for pyfunc in [np_array_from_array, np_array_from_array_kws]:
+            cfunc = jit(nopython=True)(pyfunc)
+            params = {'a': x, 'dtype': np.complex128}
+            if 'kws' not in pyfunc.__name__:
+                params = {'a': x}
+            got = cfunc(**params)
+            expected = pyfunc(**params)
+            np.testing.assert_allclose(got, expected)
+            self.assertEqual(got.dtype, expected.dtype)
+
+        # the result is a copy, not an alias of the input
+        cfunc = jit(nopython=True)(np_array_from_array)
+        x = np.arange(4)
+        got = cfunc(x)
+        got[0] = 99
+        self.assertEqual(x[0], 0)
 
     def test_asarray_literal(self):
 

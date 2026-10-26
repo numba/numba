@@ -6071,6 +6071,21 @@ def np_array(typingctx, obj, dtype):
 @overload(np.array)
 def impl_np_array(object, dtype=None):
     _check_const_str_dtype("array", dtype)
+    if isinstance(object, types.Array):
+        # a numpy array argument is copied, optionally casting the dtype,
+        # which follows NumPy (issue #2806)
+        if not is_nonelike(dtype) and ty_parse_dtype(dtype) is None:
+            msg = 'The argument "dtype" must be a data-type if it is provided'
+            raise errors.TypingError(msg)
+
+        if is_nonelike(dtype):
+            def impl_copy(object, dtype=None):
+                return object.copy()
+            return impl_copy
+        else:
+            def impl_cast(object, dtype=None):
+                return object.astype(dtype)
+            return impl_cast
     if not type_can_asarray(object):
         raise errors.TypingError('The argument "object" must '
                                  'be array-like')
