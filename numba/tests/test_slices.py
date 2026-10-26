@@ -240,6 +240,15 @@ class TestSlices(MemoryLeakMixin, TestCase):
         a = np.arange(10)
         self.assertPreciseEqual(ok(a, 2), a[2:8:2])
 
+        # bool indices are integers in Python and keep working (they
+        # appear e.g. through generic library code like heapq)
+        def bool_upper(a, n):
+            return a[:n]
+
+        cfunc = njit(bool_upper)
+        for n in [True, False]:
+            self.assertPreciseEqual(cfunc(a, n), bool_upper(a, n))
+
     def test_slice_from_constant(self):
         test_tuple = (1, 2, 3, 4)
 

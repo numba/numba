@@ -53,7 +53,14 @@ class Slice(AbstractTemplate):
         # Slice indices must be integers or None, matching Python, which
         # raises TypeError for e.g. slice(1.5, 3). The float64 -> int64
         # unsafe conversion would otherwise be applied silently.
-        clean = [types.unliteral(a) for a in args]
+        # Booleans are accepted and coerced to intp: bool is an integer
+        # subclass in Python.
+        clean = []
+        for a in args:
+            a = types.unliteral(a)
+            if isinstance(a, types.Boolean):
+                a = types.intp
+            clean.append(a)
         if not clean:
             # slice() with no arguments is invalid in numba, let the
             # standard no-implementation error handle it
