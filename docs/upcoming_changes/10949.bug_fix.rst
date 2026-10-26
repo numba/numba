@@ -1,0 +1,12 @@
+Compare unicode arrays elementwise against unicode scalars
+----------------------------------------------------------
+
+Comparing an array of unicode against a unicode scalar or literal in
+nopython mode returned a plain ``False`` (resp. ``True`` for ``!=``)
+instead of an elementwise comparison: an array of unicode is not
+itself a unicode type, so string arrays fell into the "one operand is
+unicode, everything compares False" shortcut of the eq/ne overloads.
+The overloads now detect a unicode array operand and implement the
+comparison elementwise via an ndindex loop, covering both operand
+orders and n-dimensional arrays. Comparisons where neither operand is
+a unicode array keep their previous behaviour.
