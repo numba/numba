@@ -399,7 +399,7 @@ class ClassBuilder(object):
                                    types.VarArg(types.Any))(get_imp())
 
         dunder_stripped = attr.strip('_')
-        if dunder_stripped in ("getitem", "setitem"):
+        if dunder_stripped in ("getitem", "setitem", "delitem"):
             _getsetitem_gen(dunder_stripped)
         else:
             registry.lower((types.ClassInstanceType, attr),

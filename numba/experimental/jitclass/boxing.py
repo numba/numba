@@ -103,6 +103,7 @@ def _specialize_box(typ):
         "__bool__",
         "__complex__",
         "__contains__",
+        "__delitem__",
         "__float__",
         "__getitem__",
         "__hash__",

@@ -10,6 +10,7 @@ import numpy as np
 from numba import njit, prange
 from numba.core import types
 from numba.core.errors import NumbaTypeSafetyWarning, TypingError
+from numba.typed import Dict
 from numba.typed.concurrentdict import (
     ConcurrentDict,
     concurrent_dict,
@@ -168,6 +169,123 @@ class TestConcurrentDictBasic(TestCase):
         with self.assertRaises(KeyError):
             cd.pop(2)
         self.assertEqual(cd[1], 10)
+
+    def test_delitem(self):
+        cd = self.make()
+        cd[1] = 10
+        cd[2] = 20
+        del cd[1]
+        self.assertFalse(1 in cd)
+        self.assertEqual(cd[2], 20)
+        self.assertEqual(len(cd), 1)
+        # a missing key raises and leaves the shard usable
+        with self.assertRaises(KeyError):
+            del cd[99]
+        cd[1] = 5
+        self.assertEqual(cd[1], 5)
+
+    def test_setdefault(self):
+        cd = self.make()
+        self.assertEqual(cd.setdefault(1, 42), 42)
+        # the default is not written when the key exists
+        self.assertEqual(cd.setdefault(1, 99), 42)
+        self.assertEqual(cd[1], 42)
+        self.assertEqual(len(cd), 1)
+
+    def test_update(self):
+        src = Dict.empty(key_type=types.int64, value_type=types.int64)
+        for k in range(10):
+            src[k] = k * 3
+
+        @njit
+        def upd(d, s):
+            d.update(s)
+            return len(d), d[7]
+
+        cd = self.make(n_shards=8)
+        n, v = upd(cd, src)
+        self.assertEqual(n, 10)
+        self.assertEqual(v, 21)
+
+    def test_popitem(self):
+        cd = self.make()
+        cd[5] = 55
+        key, val = cd.popitem()
+        self.assertEqual(key, 5)
+        self.assertEqual(val, 55)
+        self.assertEqual(len(cd), 0)
+        with self.assertRaises(KeyError):
+            cd.popitem()
+        # usable after draining
+        cd[1] = 1
+        self.assertEqual(cd[1], 1)
+
+    def test_clear(self):
+        cd = self.make()
+        for k in range(20):
+            cd[k] = k
+        cd.clear()
+        self.assertEqual(len(cd), 0)
+        cd[1] = 1
+        self.assertEqual(cd[1], 1)
+
+    def test_copy(self):
+        cd = self.make(n_shards=8)
+        for k in range(50):
+            cd[k] = k * 2
+
+        @njit
+        def do_copy(d):
+            c = d.copy()
+            return c, len(c), c.n_shards
+
+        cp, n, n_shards = do_copy(cd)
+        self.assertEqual(n, 50)
+        self.assertEqual(n_shards, 8)
+        for k in range(50):
+            self.assertEqual(cp[k], k * 2)
+        # the copy is independent
+        cp[0] = -1
+        self.assertEqual(cd[0], 0)
+
+        # copy with a different shard count
+        @njit
+        def do_copy2(d, nshards):
+            c = d.copy(nshards)
+            return c, len(c), c.n_shards
+
+        cp2, n, n_shards = do_copy2(cd, 32)
+        self.assertEqual(n, 50)
+        self.assertEqual(n_shards, 32)
+        for k in range(50):
+            self.assertEqual(cp2[k], k * 2)
+
+    def test_unsupported_iteration_views(self):
+        # keys()/values()/items() are deliberately unsupported; they
+        # would require (concurrent-unsafe) iteration.
+        cd = self.make()
+        cd[1] = 1
+
+        @njit
+        def keys_of(d):
+            return d.keys()
+
+        with self.assertRaises(TypingError):
+            keys_of(cd)
+
+        @njit
+        def items_of(d):
+            return d.items()
+
+        with self.assertRaises(TypingError):
+            items_of(cd)
+
+        @njit
+        def values_of(d):
+            return d.values()
+
+        with self.assertRaises(TypingError):
+            values_of(cd)
 
     def test_shard_count_one(self):
         # n_shards=1 degenerates to a globally locked dictionary

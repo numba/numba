@@ -21,4 +21,13 @@ argument of ``ConcurrentDict.empty`` / ``concurrent_dict``, e.g.::
             d[i] = i * 1.5
 
 This addresses the long-standing lack of thread-safe container
-mutation (see issue #8767) for the dictionary case.
+mutation (see issue #8767) for the dictionary case. ``ConcurrentDict``
+supports the full mutation interface of ``numba.typed.Dict``:
+``d[k] = v``, ``d[k]``, ``del d[k]``, ``len(d)``, ``k in d``, ``get``,
+``setdefault``, ``pop``, ``popitem``, ``clear``, ``copy`` and
+``update``. Iteration-based operations (``keys``/``values``/``items``,
+``==``) are deliberately unsupported: iterating a concurrently
+mutating dictionary is unsafe. Supporting ``del d[k]`` required
+enabling ``__delitem__`` for jitclasses (boxing and
+``operator.delitem`` typing), mirroring the existing
+``__getitem__``/``__setitem__`` handling.

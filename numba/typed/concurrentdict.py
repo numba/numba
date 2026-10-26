@@ -26,11 +26,25 @@ Notes on semantics
 * ``len()`` acquires every shard lock in turn and returns the exact
   number of stored entries (for a concurrently modified dictionary it
   is a snapshot that may be outdated by the time it is returned).
-* The dictionary cannot be iterated; concurrent iteration is unsafe
-  and iteration support is therefore not provided.
+* ``popitem()`` removes an arbitrary entry (whichever non-empty shard
+  is encountered first, locking one shard at a time).
+* ``copy()`` takes each shard lock in turn and returns a snapshot as a
+  new ``ConcurrentDict``; the shard count of the copy can be changed
+  through its optional argument.
+* ``update()`` accepts a ``numba.typed.Dict``; the source dictionary is
+  read-only for this operation and must not be concurrently modified.
 * Key types are those supported by ``numba.typed.Dict`` for which the
   ``hash()`` builtin is supported (e.g. integers, floats, booleans,
   unicode strings).
+
+Unsupported operations
+----------------------
+* The dictionary cannot be iterated, and consequently ``keys()``,
+  ``values()``, ``items()``, equality comparison (``==``) and
+  ``pop(key, default)`` (two-argument form) are not supported:
+  iteration of a concurrently mutating dictionary is unsafe. Use
+  ``ConcurrentDict`` where access happens by key, e.g. results
+  collected by worker id.
 """
 from threading import RLock as _pythreading_rlock
 
@@ -202,6 +216,17 @@ def _get_jit_class(key_type, value_type):
                         spin_unlock(self.locks, idx)
                         raise KeyError(key)
 
+                def __delitem__(self, key):
+                    idx = self._shard_index(key)
+                    spin_lock(self.locks, idx)
+                    if key in self.shards[idx]:
+                        del self.shards[idx][key]
+                        spin_unlock(self.locks, idx)
+                    else:
+                        # Unlock before raising (see __getitem__).
+                        spin_unlock(self.locks, idx)
+                        raise KeyError(key)
+
                 def get(self, key, default):
                     """Return the value for *key*, or *default* if the
                     key is not present.
@@ -214,6 +239,73 @@ def _get_jit_class(key_type, value_type):
                         val = default
                     spin_unlock(self.locks, idx)
                     return val
+
+                def setdefault(self, key, default):
+                    """If *key* is present, return its value. Otherwise
+                    insert *default* under *key* and return it.
+                    """
+                    idx = self._shard_index(key)
+                    spin_lock(self.locks, idx)
+                    if key in self.shards[idx]:
+                        val = self.shards[idx][key]
+                    else:
+                        self.shards[idx][key] = default
+                        val = default
+                    spin_unlock(self.locks, idx)
+                    return val
+
+                def update(self, other):
+                    """Update the dictionary with the key/value pairs of
+                    the typed dictionary *other*, overwriting existing
+                    keys. *other* is read-only for this operation and
+                    must not be concurrently modified.
+                    """
+                    for key, value in other.items():
+                        idx = self._shard_index(key)
+                        spin_lock(self.locks, idx)
+                        self.shards[idx][key] = value
+                        spin_unlock(self.locks, idx)
+
+                def popitem(self):
+                    """Remove and return an arbitrary ``(key, value)``
+                    pair; raises KeyError if the dictionary is empty.
+                    """
+                    for i in range(self.n_shards):
+                        spin_lock(self.locks, i)
+                        if len(self.shards[i]) > 0:
+                            keyval = self.shards[i].popitem()
+                            spin_unlock(self.locks, i)
+                            return keyval
+                        spin_unlock(self.locks, i)
+                    raise KeyError("popitem from an empty ConcurrentDict")
+
+                def clear(self):
+                    """Remove all entries.
+                    """
+                    for i in range(self.n_shards):
+                        spin_lock(self.locks, i)
+                        self.shards[i].clear()
+                        spin_unlock(self.locks, i)
+
+                def copy(self, n_shards=None):
+                    """Return a new ConcurrentDict with the same key and
+                    value types containing the same entries. The copy
+                    takes each shard lock in turn, so it is safe against
+                    concurrent writers (producing a snapshot). The
+                    *n_shards* argument optionally selects a different
+                    shard count for the copy; by default the shard count
+                    is inherited.
+                    """
+                    if n_shards is None:
+                        n_shards = self.n_shards
+                    new = ConcurrentDictImpl(n_shards)
+                    for i in range(self.n_shards):
+                        spin_lock(self.locks, i)
+                        for key, value in self.shards[i].items():
+                            idx = new._shard_index(key)
+                            new.shards[idx][key] = value
+                        spin_unlock(self.locks, i)
+                    return new
 
                 def __contains__(self, key):
                     idx = self._shard_index(key)
