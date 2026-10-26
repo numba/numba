@@ -919,6 +919,29 @@ def impl_keys(d):
     return impl
 
 
+@overload_method(types.DictType, '__str__')
+@overload_method(types.DictType, '__repr__')
+def ol_dict_repr(d):
+    if not isinstance(d, types.DictType):
+        return
+
+    def impl(d):
+        # follows the CPython dict repr, the items are rendered in the
+        # iteration order of the dict and with their repr
+        if len(d) == 0:
+            return '{}'
+        out = '{'
+        first = True
+        for k, v in d.items():
+            if not first:
+                out += ', '
+            first = False
+            out += repr(k) + ': ' + repr(v)
+        return out + '}'
+
+    return impl
+
+
 @overload_method(types.DictType, 'values')
 def impl_values(d):
     if not isinstance(d, types.DictType):

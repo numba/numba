@@ -1185,6 +1185,46 @@ class TestTypedDict(MemoryLeakMixin, TestCase):
     def test_str(self):
         self.check_stringify(str)
 
+    def test_str_nopython(self):
+        # See issue #6577, str/repr of a typed dict in jitted code
+        # follows the CPython dict repr
+        @njit
+        def str_nbd():
+            nbd = Dict.empty(int64, int64)
+            nbd[1] = 2
+            nbd[2] = 3
+            return str(nbd)
+
+        @njit
+        def repr_nbd():
+            nbd = Dict.empty(int64, int64)
+            nbd[1] = 2
+            return repr(nbd)
+
+        @njit
+        def str_empty_nbd():
+            nbd = Dict.empty(int64, int64)
+            return str(nbd)
+
+        @njit
+        def str_unicode_keys():
+            nbd = Dict.empty(types.unicode_type, int64)
+            nbd['a'] = 1
+            nbd['b'] = 2
+            return str(nbd)
+
+        @njit
+        def repr_bool_values():
+            nbd = Dict.empty(types.unicode_type, types.bool_)
+            nbd['flag'] = True
+            return repr(nbd)
+
+        self.assertEqual(str_nbd(), '{1: 2, 2: 3}')
+        self.assertEqual(repr_nbd(), '{1: 2}')
+        self.assertEqual(str_empty_nbd(), '{}')
+        self.assertEqual(str_unicode_keys(), "{'a': 1, 'b': 2}")
+        self.assertEqual(repr_bool_values(), "{'flag': True}")
+
 
 class DictIterableCtor:
 
