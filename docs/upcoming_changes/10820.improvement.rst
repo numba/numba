@@ -1,0 +1,21 @@
+Include the Numba version in cache filenames
+--------------------------------------------
+
+The index (``.nbi``) and data (``.nbc``) files written by the on-disk cache
+now include the Numba version in their filenames. This allows caches produced
+by different Numba versions to coexist side by side in the same cache
+directory instead of overwriting each other.
+
+For example, with Numba 0.68.0 on Python 3.12, the cache files for a function
+``funcA`` defined in ``mod.py`` change from::
+
+    mod.funcA-2.py312.nbi
+    mod.funcA-2.py312.1.nbc
+
+to::
+
+    mod.funcA-2.py312.numba0.68.0.nbi
+    mod.funcA-2.py312.numba0.68.0.1.nbc
+
+Existing cache files without the version tag are no longer used, so functions
+are recompiled once after upgrading.
