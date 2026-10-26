@@ -12,7 +12,7 @@ from numba import (boolean, deferred_type, float32, float64, int16, int32,
                    njit, optional, typeof)
 from numba.core import errors, types
 from numba.core.dispatcher import Dispatcher
-from numba.core.errors import LoweringError, TypingError
+from numba.core.errors import TypingError
 from numba.core.runtime.nrt import MemInfo
 from numba.experimental import jitclass
 from numba.experimental.jitclass import _box
@@ -362,17 +362,24 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(cstruct.c, st.c)
 
     def test_is(self):
+        # See issue #10336, `is` compares the references of jitclass
+        # instances (it used to be unimplemented for jitclasses)
         Vector = self._make_Vector2()
         vec_a = Vector(1, 2)
+        vec_b = Vector(1, 2)
 
         @njit
         def do_is(a, b):
             return a is b
 
-        with self.assertRaises(LoweringError) as raises:
-            # trigger compilation
-            do_is(vec_a, vec_a)
-        self.assertIn("no default `is` implementation", str(raises.exception))
+        @njit
+        def do_is_not(a, b):
+            return a is not b
+
+        self.assertTrue(do_is(vec_a, vec_a))
+        self.assertFalse(do_is(vec_a, vec_b))
+        self.assertFalse(do_is_not(vec_a, vec_a))
+        self.assertTrue(do_is_not(vec_a, vec_b))
 
     def test_isinstance(self):
         Vector2 = self._make_Vector2()
@@ -1363,6 +1370,43 @@ class TestJitClassOverloads(MemoryLeakMixin, TestCase):
         for py_f, jit_f in zip(py_funcs, jit_funcs):
             self.assertSame(py_f(py_list), py_f(jit_list))
             self.assertSame(py_f(py_list), jit_f(jit_list))
+
+    def test_is_identity(self):
+        # See issue #10336, `is` compares the references of jitclass
+        # instances
+        @jitclass([('val', types.intp)])
+        class Datum:
+            def __init__(self, val):
+                self.val = val
+
+        @jitclass([('amount', Datum.class_type.instance_type)])
+        class Holder:
+            def __init__(self, amount):
+                self.amount = amount
+
+        @njit
+        def same(a, b):
+            return a is b
+
+        @njit
+        def not_same(a, b):
+            return a is not b
+
+        @njit
+        def attr_is(h, d):
+            return h.amount is d
+
+        d1 = Datum(7)
+        d2 = Datum(7)
+        self.assertTrue(same(d1, d1))
+        self.assertFalse(same(d1, d2))
+        self.assertTrue(not_same(d1, d2))
+        self.assertFalse(not_same(d1, d1))
+
+        # alias through an attribute
+        h = Holder(d1)
+        self.assertTrue(attr_is(h, d1))
+        self.assertFalse(attr_is(h, d2))
 
     def test_bool_fallback(self):
 

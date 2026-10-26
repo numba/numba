@@ -69,6 +69,24 @@ def generic_is(context, builder, sig, args):
         return cgutils.false_bit
 
 
+@lower_builtin(operator.is_, types.ClassInstanceType,
+               types.ClassInstanceType)
+def jitclass_is(context, builder, sig, args):
+    """
+    Implementation for `x is y` for jitclass instances: identity is
+    equality of the meminfo pointers of the underlying references
+    (issue #10336).
+    """
+    lhs_type, rhs_type = sig.args
+    if lhs_type == rhs_type:
+        lhs_meminfo = builder.extract_value(args[0], 0)
+        rhs_meminfo = builder.extract_value(args[1], 0)
+        lhs_int = builder.ptrtoint(lhs_meminfo, cgutils.intp_t)
+        rhs_int = builder.ptrtoint(rhs_meminfo, cgutils.intp_t)
+        return builder.icmp_unsigned('==', lhs_int, rhs_int)
+    return cgutils.false_bit
+
+
 @lower_builtin(operator.is_, types.Opaque, types.Opaque)
 def opaque_is(context, builder, sig, args):
     """
