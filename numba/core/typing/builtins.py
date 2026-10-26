@@ -58,6 +58,13 @@ class Slice(AbstractTemplate):
         clean = []
         for a in args:
             a = types.unliteral(a)
+            if isinstance(a, types.Optional):
+                # An Optional argument (e.g. an int that may be None on
+                # another branch) is accepted if its underlying type is,
+                # matching the old ConcreteTemplate behaviour where the
+                # type unifier resolved Optional(int64) to intp. The
+                # value must be a valid index at runtime, as on main.
+                a = a.type
             if isinstance(a, (types.Boolean, types.Integer)):
                 # Accept any integer kind, but normalize it to intp like
                 # the previous ConcreteTemplate cases did: the lowering

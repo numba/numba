@@ -279,6 +279,32 @@ class TestSlices(MemoryLeakMixin, TestCase):
         self.assertPreciseEqual(cfunc(arr32, np.int32(1), np.int32(9)),
                                 slice_ctor_none_step_i32(arr32, 1, 9))
 
+    def test_optional_integer_indices(self):
+        # Optional(int64) slice arguments are accepted, as before this
+        # change, via unification with the underlying integer type.
+        # numba.tests.test_unicode.TestUnicode uses this for the
+        # start/stop arguments of str.count. As on main, the value must
+        # be an integer at runtime; None is not supported.
+        def getitem(a, x):
+            return a[x:3]
+
+        sig = types.Array(types.int64, 1, "C")(
+            types.Array(types.int64, 1, "C"),
+            types.Optional(types.int64),
+        )
+        cfunc = njit(sig)(getitem)
+        arr = np.arange(10)
+        self.assertPreciseEqual(cfunc(arr, np.int64(2)), arr[2:3])
+
+        # optional floats are still rejected
+        bad_sig = types.Array(types.int64, 1, "C")(
+            types.Array(types.int64, 1, "C"),
+            types.Optional(types.float64),
+        )
+        with self.assertRaises(TypingError) as e:
+            njit(bad_sig)(getitem)
+        self.assertIn('slice indices must be integers', str(e.exception))
+
     def test_slice_from_constant(self):
         test_tuple = (1, 2, 3, 4)
 
