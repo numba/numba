@@ -1,6 +1,10 @@
 """
 Test mutable struct, aka, structref
 """
+import os
+import shutil
+import subprocess
+import sys
 import warnings
 
 import numpy as np
@@ -452,3 +456,63 @@ class TestStructRefForwardTyping(MemoryLeakMixin, TestCase):
         got = check()
         expect = 5
         self.assertPreciseEqual(got, expect)
+
+
+class TestStructRefCache(TestCase):
+    # See issue #10021, a structref-typed function with cache=True must
+    # reuse the on-disk cache across processes.
+
+    MODULE = '''
+import os
+import numba as nb
+from numba.experimental import structref
+
+@structref.register
+class HeapStruct(nb.types.StructRef):
+    def preprocess_fields(self, fields):
+        return tuple((name, nb.types.unliteral(typ)) for name, typ in fields)
+
+class Heap(structref.StructRefProxy):
+    def __new__(cls, a):
+        return structref.StructRefProxy.__new__(cls, a)
+
+structref.define_proxy(Heap, HeapStruct, ['a'])
+
+@nb.njit(cache=True)
+def add_one(self):
+    self.a += 1
+    return self.a
+
+heap = Heap(1)
+print("RESULT", add_one(heap))
+
+import glob
+nbc = glob.glob(os.path.join(os.path.dirname(__file__), '__pycache__',
+                             '*.nbc'))
+print("NBC-COUNT", len(nbc))
+'''
+
+    def test_cache_reused_across_processes(self):
+        tmpdir = temp_directory('test_structref_cache')
+        try:
+            modfile = os.path.join(tmpdir, 'structref_cache_mod.py')
+            with open(modfile, 'w') as fh:
+                fh.write(self.MODULE)
+
+            counts = []
+            for _ in range(3):
+                proc = subprocess.run([sys.executable, modfile],
+                                      stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE, timeout=300)
+                self.assertEqual(proc.returncode, 0, proc.stderr)
+                out = proc.stdout.decode()
+                counts.append([l for l in out.splitlines()
+                               if l.startswith('NBC-COUNT')])
+
+            # the first run compiles and writes the cache, the following
+            # runs must reuse it instead of writing new entries
+            self.assertEqual(counts[0], ['NBC-COUNT 1'], counts)
+            self.assertEqual(counts[1], ['NBC-COUNT 1'], counts)
+            self.assertEqual(counts[2], ['NBC-COUNT 1'], counts)
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)

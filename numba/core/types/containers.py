@@ -1046,6 +1046,21 @@ class StructRef(Type):
         """
         return fields
 
+    def __eq__(self, other):
+        # The defining class may be recreated by value-serialization when
+        # the cache index is written/read by different processes
+        # (cloudpickle serializes classes from __main__ by value), so the
+        # class-identity check in Type.__eq__ would report a false
+        # mismatch and break cache hits. StructRef classes are pure type
+        # declarations: the qualified name plus the fields identify the
+        # type.
+        return (isinstance(other, StructRef)
+                and self.__class__.__qualname__ == other.__class__.__qualname__
+                and self.key == other.key)
+
+    # __eq__ is overridden above, so __hash__ must be re-bound explicitly
+    __hash__ = Type.__hash__
+
     @property
     def field_dict(self):
         """Return an immutable mapping for the field names and their
