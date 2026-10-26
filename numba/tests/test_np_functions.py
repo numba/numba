@@ -5382,6 +5382,33 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 else:
                     check_pass_through(cfunc, True, params)
 
+    def test_clip_broadcast_shape(self):
+        # See issue #10760, np.clip follows NumPy when a_min/a_max
+        # broadcast to a larger shape than a: the result has the
+        # broadcast shape instead of the shape of a.
+        @njit
+        def clip(a, a_min, a_max):
+            return np.clip(a, a_min, a_max)
+
+        a = np.arange(3.0).reshape(3, 1)
+        a_min = np.zeros((3, 4))
+
+        expected = np.clip(a, a_min, 3.0)
+        got = clip(a, a_min, 3.0)
+        self.assertEqual(got.shape, (3, 4))
+        np.testing.assert_array_equal(got, expected)
+
+        expected = np.clip(a, 0.0, np.full((3, 4), 2.0))
+        got = clip(a, 0.0, np.full((3, 4), 2.0))
+        self.assertEqual(got.shape, (3, 4))
+        np.testing.assert_array_equal(got, expected)
+
+        # scalar bounds keep the shape of a
+        expected = np.clip(np.arange(6.0), 1.0, 4.0)
+        got = clip(np.arange(6.0), 1.0, 4.0)
+        self.assertEqual(got.shape, (6,))
+        np.testing.assert_array_equal(got, expected)
+
     def test_asarray_literal(self):
 
         def case1():

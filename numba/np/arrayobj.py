@@ -2686,9 +2686,13 @@ def _np_clip_prepare_out(a, shape, out):
     # inputs onto a caller-provided output but never stretches the output
     # itself, so its shape has to match the shape of the result exactly.
     # Without this check the callers loop over the result shape and write
-    # past the end of a too-small `out` (issue #10682).
+    # past the end of a too-small `out` (issue #10682). The freshly
+    # allocated result uses the broadcast *shape* and not the shape of
+    # `a`: when a_min/a_max broadcast to something larger than `a`,
+    # `empty_like(a)` would be too small and the fill loop would write
+    # past its end (issue #10760).
     if out is None:
-        return np.empty_like(a)
+        return np.empty(shape, dtype=a.dtype)
     if out.shape != shape:
         raise ValueError("clip: the shape of the 'out' array does not "
                          "match the shape of the result")
