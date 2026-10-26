@@ -2247,6 +2247,7 @@ def np_median(a):
         return
 
     is_datetime = as_dtype(a.dtype).char in 'mM'
+    is_float = as_dtype(a.dtype).kind == 'f'
 
     def median_impl(a):
         # np.median() works on the flattened array, and we need a temporary
@@ -2255,6 +2256,12 @@ def np_median(a):
         n = temp_arry.shape[0]
         if not is_datetime and n == 0:
             return np.nan
+        if is_float:
+            # NumPy propagates NaN: the median of data containing NaN
+            # is NaN (issue #10095)
+            for i in range(n):
+                if np.isnan(temp_arry[i]):
+                    return np.nan
         return _median_inner(temp_arry, n)
     return median_impl
 

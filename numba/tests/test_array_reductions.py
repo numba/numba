@@ -833,6 +833,31 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         self.check_median_basic(pyfunc, variations)
 
+    def test_median_nan_propagation(self):
+        # See issue #10095, NumPy propagates NaN: the median of data
+        # containing NaN is NaN
+        pyfunc = array_median_global
+        cfunc = jit(nopython=True)(pyfunc)
+
+        variations = [
+            np.array([np.nan, 1.0, 2.0]),
+            np.array([1.0, np.nan, 3.0, 4.0]),
+            np.array([np.nan]),
+            np.array([np.nan, np.nan]),
+            np.arange(6.0).reshape(2, 3) + np.nan,
+        ]
+        for arr in variations:
+            expected = pyfunc(arr)
+            got = cfunc(arr)
+            self.assertTrue(np.isnan(expected), str(arr))
+            self.assertTrue(np.isnan(got), str(arr))
+
+        # no NaN present: unchanged
+        for arr in [np.array([3.0, 1.0, 2.0]), np.array([1.0, 2.0, 3.0, 4.0]),
+                    np.array([1.0, np.inf, 2.0])]:
+            self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+
     def check_percentile_and_quantile(self, pyfunc, q_upper_bound):
         cfunc = jit(nopython=True)(pyfunc)
 
