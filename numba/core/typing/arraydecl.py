@@ -336,7 +336,8 @@ class ArrayAttribute(AttributeTemplate):
         if ary.dtype in types.complex_domain:
             return ary.copy(dtype=ary.dtype.underlying_float, layout='A')
         elif ary.dtype in types.number_domain:
-            res = ary.copy(dtype=ary.dtype)
+            # the view aliases the array, any layout is suitable
+            res = ary.copy(dtype=ary.dtype, layout='A')
             if attr == 'imag':
                 res = res.copy(readonly=True)
             return res

@@ -96,6 +96,28 @@ def array_imag(arr):
     return arr.imag
 
 
+def array_set_real(z, vals):
+    z.real = vals
+    return z
+
+
+def array_set_imag(z, vals):
+    z.imag = vals
+    return z
+
+
+def array_set_real_on_real(a, vals):
+    a.real = vals
+    return a
+
+
+def array_set_real_issue_6249(input_tensor):
+    complex_input = np.empty(input_tensor.shape[-1:], dtype=np.complex128)
+    complex_input.real = input_tensor[0]
+    complex_input.imag = input_tensor[1]
+    return complex_input
+
+
 class TestArrayAttr(MemoryLeakMixin, TestCase):
 
     def setUp(self):
@@ -309,6 +331,56 @@ class TestRealImagAttr(MemoryLeakMixin, TestCase):
 
     def test_complex_imag(self):
         self.check_complex(array_imag)
+
+    def check_set_part(self, setfunc, dtype):
+        cfunc = njit(setfunc)
+        # 1D contiguous
+        z = np.zeros(6, dtype=dtype)
+        vals = np.arange(6, dtype=z.real.dtype)
+        self.assertPreciseEqual(setfunc(z.copy(), vals),
+                                cfunc(z.copy(), vals))
+        # 2D
+        z = np.zeros((2, 3), dtype=dtype)
+        vals = np.arange(6, dtype=z.real.dtype).reshape(2, 3)
+        self.assertPreciseEqual(setfunc(z.copy(), vals),
+                                cfunc(z.copy(), vals))
+        # strided source
+        z = np.zeros(4, dtype=dtype)
+        vals = np.arange(8, dtype=z.real.dtype)[::2]
+        self.assertPreciseEqual(setfunc(z.copy(), vals),
+                                cfunc(z.copy(), vals))
+
+    def test_array_set_real(self):
+        # See issue #6249, assignment to the real part of a complex array
+        self.check_set_part(array_set_real, np.complex128)
+        self.check_set_part(array_set_real, np.complex64)
+
+    def test_array_set_imag(self):
+        # See issue #6249, assignment to the imaginary part of a complex
+        # array
+        self.check_set_part(array_set_imag, np.complex128)
+        self.check_set_part(array_set_imag, np.complex64)
+
+    def test_array_set_real_on_real(self):
+        # .real assignment on a real array is an identity write, which
+        # follows NumPy
+        self.check_set_part(array_set_real_on_real, np.float64)
+
+    def test_array_set_imag_on_real_raises(self):
+        # .imag of a real array is readonly, the assignment is refused
+        cfunc = njit(array_set_imag)
+        with self.assertRaises(NotImplementedError) as raises:
+            cfunc(np.zeros(3), np.ones(3))
+        self.assertIn("cannot set .imag of array of float64",
+                      str(raises.exception))
+
+    def test_array_set_real_issue_6249(self):
+        # the reproducer of issue #6249
+        cfunc = njit(array_set_real_issue_6249)
+        input_tensor = np.arange(12, dtype=np.float64).reshape(6, 2)
+        self.assertPreciseEqual(cfunc(input_tensor),
+                                array_set_real_issue_6249(input_tensor))
+
 
     def check_number_real(self, dtype):
         pyfunc = array_real

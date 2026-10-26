@@ -22,6 +22,7 @@ from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
+                                 lower_setattr,
                                  lower_setattr_generic,
                                  lower_cast, lower_constant,
                                  iternext_impl, impl_ret_borrowed,
@@ -3407,6 +3408,36 @@ def array_imag_part(context, builder, typ, value):
         raise NotImplementedError('unsupported .imag for {}'.format(type.dtype))
 
 
+def _complex_array_view(context, builder, typ, value, attr):
+    """
+    Build the strided view array (of the underlying float type) that
+    aliases the real or imaginary part of the complex array *value*.
+    Returns the view type and the view as an array structure.
+    """
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+
+    # sizeof underlying float type
+    flty = typ.dtype.underlying_float
+    sizeof_flty = context.get_abi_sizeof(context.get_data_type(flty))
+    itemsize = array.itemsize.type(sizeof_flty)
+
+    # cast data pointer to float type
+    llfltptrty = context.get_value_type(flty).as_pointer()
+    dataptr = builder.bitcast(array.data, llfltptrty)
+
+    # add offset
+    if attr == 'imag':
+        dataptr = builder.gep(dataptr, [ir.IntType(32)(1)])
+
+    # make result
+    resultty = typ.copy(dtype=flty, layout='A')
+    result = make_array(resultty)(context, builder)
+    repl = dict(data=dataptr, itemsize=itemsize)
+    cgutils.copy_struct(result, array, repl)
+    return resultty, result
+
+
 def array_complex_attr(context, builder, typ, value, attr):
     """
     Given a complex array, it's memory layout is:
@@ -3438,28 +3469,59 @@ def array_complex_attr(context, builder, typ, value, attr):
     if attr not in ['real', 'imag'] or typ.dtype not in types.complex_domain:
         raise NotImplementedError("cannot get attribute `{}`".format(attr))
 
-    arrayty = make_array(typ)
-    array = arrayty(context, builder, value)
-
-    # sizeof underlying float type
-    flty = typ.dtype.underlying_float
-    sizeof_flty = context.get_abi_sizeof(context.get_data_type(flty))
-    itemsize = array.itemsize.type(sizeof_flty)
-
-    # cast data pointer to float type
-    llfltptrty = context.get_value_type(flty).as_pointer()
-    dataptr = builder.bitcast(array.data, llfltptrty)
-
-    # add offset
-    if attr == 'imag':
-        dataptr = builder.gep(dataptr, [ir.IntType(32)(1)])
-
-    # make result
-    resultty = typ.copy(dtype=flty, layout='A')
-    result = make_array(resultty)(context, builder)
-    repl = dict(data=dataptr, itemsize=itemsize)
-    cgutils.copy_struct(result, array, repl)
+    resultty, result = _complex_array_view(context, builder, typ, value, attr)
     return impl_ret_borrowed(context, builder, resultty, result._getvalue())
+
+
+def _complex_attr_setter(context, builder, sig, args, attr):
+    """
+    Implement ``arr.real = src`` and ``arr.imag = src`` for complex arrays
+    by assigning the source into the strided real/imaginary view of the
+    array. Real (non-complex) arrays support ``.real`` assignment as an
+    identity write, following NumPy.
+    """
+    typ, valty = sig.args
+    ary, val = args
+    if typ.dtype in types.complex_domain:
+        viewty, view = _complex_array_view(context, builder, typ, ary, attr)
+    elif typ.dtype in types.number_domain and attr == 'real':
+        viewty, view = typ, make_array(typ)(context, builder, ary)
+    else:
+        raise NotImplementedError(
+            "cannot set .{} of array of {}".format(attr, typ.dtype))
+    if not typ.mutable:
+        raise NotImplementedError(
+            "cannot set .{} of a readonly array".format(attr))
+
+    # Assign the source into the view through a full-slice setitem,
+    # fancy_setslice handles strided writes and broadcasting.
+    ndim = typ.ndim
+    index_types = [types.slice2_type] * ndim
+    indices = [slicing.make_slice_from_constant(context, builder,
+                                                types.slice2_type,
+                                                slice(None, None))
+               for _ in range(ndim)]
+    index_types, indices = normalize_indices(context, builder,
+                                             index_types, indices)
+    if ndim == 1:
+        idxty = index_types[0]
+    else:
+        idxty = types.Tuple(index_types)
+    setsig = signature(types.void, viewty, idxty, valty)
+    fancy_setslice(context, builder, setsig,
+                   [view._getvalue(), indices[0], val],
+                   index_types, indices)
+    return context.get_dummy_value()
+
+
+@lower_setattr(types.Array, 'real')
+def array_real_part_setattr(context, builder, sig, args):
+    return _complex_attr_setter(context, builder, sig, args, 'real')
+
+
+@lower_setattr(types.Array, 'imag')
+def array_imag_part_setattr(context, builder, sig, args):
+    return _complex_attr_setter(context, builder, sig, args, 'imag')
 
 
 @overload_method(types.Array, 'conj')
