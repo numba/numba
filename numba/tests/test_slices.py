@@ -207,6 +207,39 @@ class TestSlices(MemoryLeakMixin, TestCase):
             str(e.exception)
         )
 
+    def test_float_indices_rejected(self):
+        # See issue #9877, slice indices must be integers or None like in
+        # Python, floats are not silently truncated
+        def getitem(a):
+            return a[1.5:3]
+
+        with self.assertRaises(TypingError) as e:
+            njit(getitem)(np.arange(10))
+        self.assertIn('slice indices must be integers', str(e.exception))
+
+        def getitem_var(a, x):
+            return a[x:3]
+
+        with self.assertRaises(TypingError) as e:
+            njit(getitem_var)(np.arange(10), 1.5)
+        self.assertIn('slice indices must be integers', str(e.exception))
+
+        def setitem(a):
+            a[0.5:2] = 7
+            return a
+
+        with self.assertRaises(TypingError) as e:
+            njit(setitem)(np.arange(10))
+        self.assertIn('slice indices must be integers', str(e.exception))
+
+        # integer slices keep working
+        @njit
+        def ok(a, x):
+            return a[x:8:2]
+
+        a = np.arange(10)
+        self.assertPreciseEqual(ok(a, 2), a[2:8:2])
+
     def test_slice_from_constant(self):
         test_tuple = (1, 2, 3, 4)
 

@@ -48,24 +48,30 @@ class Abs(ConcreteTemplate):
 
 
 @infer_global(slice)
-class Slice(ConcreteTemplate):
-    cases = [
-        signature(types.slice2_type, types.intp),
-        signature(types.slice2_type, types.none),
-        signature(types.slice2_type, types.none, types.none),
-        signature(types.slice2_type, types.none, types.intp),
-        signature(types.slice2_type, types.intp, types.none),
-        signature(types.slice2_type, types.intp, types.intp),
-        signature(types.slice3_type, types.intp, types.intp, types.intp),
-        signature(types.slice3_type, types.none, types.intp, types.intp),
-        signature(types.slice3_type, types.intp, types.none, types.intp),
-        signature(types.slice3_type, types.none, types.none, types.intp),
-        # A None step is a step of 1, i.e. a two-member slice.
-        signature(types.slice2_type, types.intp, types.intp, types.none),
-        signature(types.slice2_type, types.intp, types.none, types.none),
-        signature(types.slice2_type, types.none, types.intp, types.none),
-        signature(types.slice2_type, types.none, types.none, types.none),
-    ]
+class Slice(AbstractTemplate):
+    def generic(self, args, kws):
+        # Slice indices must be integers or None, matching Python, which
+        # raises TypeError for e.g. slice(1.5, 3). The float64 -> int64
+        # unsafe conversion would otherwise be applied silently.
+        clean = [types.unliteral(a) for a in args]
+        if not clean:
+            # slice() with no arguments is invalid in numba, let the
+            # standard no-implementation error handle it
+            return None
+        if all(isinstance(a, (types.Integer, types.NoneType))
+               for a in clean):
+            if len(args) == 1:
+                return signature(types.slice2_type, *clean)
+            elif len(args) == 2:
+                return signature(types.slice2_type, *clean)
+            elif len(args) == 3:
+                if isinstance(clean[2], types.NoneType):
+                    # A None step is a step of 1, i.e. a two-member slice.
+                    return signature(types.slice2_type, *clean[:2])
+                return signature(types.slice3_type, *clean)
+        raise errors.TypingError(
+            "slice indices must be integers or None, not "
+            f"{', '.join(str(a) for a in clean)}")
 
 
 @infer_global(range, typing_key=range)
