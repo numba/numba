@@ -1,0 +1,11 @@
+Reject non-integer slice indices like Python
+--------------------------------------------
+
+The slice constructor template accepted float arguments through the
+standard unsafe float64 -> int64 conversion, so ``a[1.5:3]`` silently
+truncated the index to 1 where Python raises TypeError (slice indices
+must be integers or None). The template is now an AbstractTemplate
+that only accepts integer and None arguments for the 1/2/3-argument
+forms, preserving the previous signatures exactly (including a None
+step yielding a two-member slice), and raises a TypingError for
+anything else.
