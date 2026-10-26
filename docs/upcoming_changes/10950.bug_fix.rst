@@ -1,0 +1,11 @@
+Add str/repr for typed dicts in nopython mode
+---------------------------------------------
+
+``str()`` and ``repr()`` of a typed dict inside jitted code produced
+the generic ``<object type:DictType[...]>`` placeholder because
+neither ``__str__`` nor ``__repr__`` was implemented for DictType.
+The new implementations follow the CPython dict repr
+``{k1: v1, k2: v2}``, rendering the items with their repr in the
+iteration order of the dict. Items of types that have no str/repr
+support (e.g. floats) render with the existing generic fallback for
+that item.
