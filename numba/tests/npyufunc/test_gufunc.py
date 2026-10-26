@@ -12,8 +12,8 @@ from numba import void, float32, float64, int32, int64, jit, guvectorize, \
     types
 from numba.core import caching
 from numba.core.errors import TypingError
-from numba.np.ufunc import GUVectorize
-from numba.np.ufunc.wrappers import GufWrapperCache
+from numba.np.ufunc import GUVectorize, ufuncbuilder
+from numba.np.ufunc.wrappers import GufWrapperCache, _wrapper_info
 from numba.tests.support import (
     TestCase, MemoryLeakMixin, SerialMixin, temp_directory, override_config,
     run_in_new_process_in_cache_dir,
@@ -919,6 +919,16 @@ class TestGufWrapperCacheKey(TestCase):
         share a cache key, or either could be reused for the other."""
         self.assertNotEqual(self._key_for('_ZN1fB2v1E'),
                             self._key_for('_ZN1fB2v2E'))
+
+    def test_unresolved_wrapper_symbol_raises(self):
+        disp = jit('float64(float64)')(_plain_kernel)
+        cres, = disp.overloads.values()
+        info = _wrapper_info(library=cres.library, env=None,
+                             name='__numba_missing_wrapper_symbol')
+        with self.assertRaises(RuntimeError) as raises:
+            ufuncbuilder._pointer_to_wrapper(info)
+        self.assertIn('__numba_missing_wrapper_symbol',
+                      str(raises.exception))
 
 
 def _read_wrapper_index(path):
