@@ -1,0 +1,9 @@
+Validate boolean index length against the indexed dimension
+-----------------------------------------------------------
+
+Indexing with a boolean mask whose length does not match the indexed
+dimension silently produced results instead of raising: the mask was
+simply iterated and truncation/extension was ignored. The fancy
+getitem/setitem lowering now checks the mask length against the
+indexed dimension and raises an ``IndexError`` like NumPy. Matching
+masks behave exactly as before.
