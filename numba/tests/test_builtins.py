@@ -700,9 +700,34 @@ class TestBuiltins(TestCase):
             sig = cfunc.signatures[i]
             ov = cfunc.overloads[sig]
 
-            # Check that the return type is the same as the argument type,
-            # i.e. that int(x) does not widen the type of x.
-            self.assertIs(ov.signature.return_type, ov.signature.args[0])
+            # Signed integers are preserved, unsigned integers become
+            # signed (int64), following Python's int() semantics
+            # (see issue #1653).
+            argty = ov.signature.args[0]
+            if argty.signed:
+                self.assertIs(ov.signature.return_type, argty)
+            else:
+                self.assertEqual(ov.signature.return_type, types.int64)
+
+    def test_int_unsigned_becomes_signed(self):
+        # See issue #1653, int() of an unsigned integer produces a
+        # signed integer so that e.g. abs(int(a) - int(b)) does not
+        # wrap around.
+        def pyfunc(a, b):
+            return abs(int(a) - int(b)) <= 1
+
+        cfunc = njit(pyfunc)
+        args = (np.uint16(1), np.uint16(2))
+        self.assertEqual(cfunc(*args), pyfunc(*args))
+
+        def int_of(a):
+            return int(a)
+
+        cfunc = njit(int_of)
+        for typ in [types.uint8, types.uint16, types.uint32, types.uint64]:
+            self.assertEqual(cfunc(typ(7)), 7)
+        for ov in cfunc.overloads.values():
+            self.assertEqual(ov.signature.return_type, types.int64)
 
     def test_iter_next(self, flags=forceobj_flags):
         pyfunc = iter_next_usecase

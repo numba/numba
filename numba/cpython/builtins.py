@@ -299,7 +299,14 @@ def float_impl(context, builder, sig, args):
 @intrinsic
 def cast_int(typingctx, x):
     if isinstance(x, types.Integer):
-        retty = x
+        if x.signed:
+            retty = x
+        else:
+            # int() follows Python semantics and produces a signed
+            # integer, CPython-exact for values that fit into an int64
+            # and wrapping like NumPy's int64 cast otherwise (issue
+            # #1653).
+            retty = types.int64
     else:
         retty = types.intp
 
