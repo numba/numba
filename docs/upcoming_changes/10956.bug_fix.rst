@@ -1,0 +1,13 @@
+Support structured dtypes in np.full
+------------------------------------
+
+``np.full`` with a structured (record) dtype failed typing while
+``np.zeros`` and ``np.empty`` with the same dtype worked: the parsed
+record type was passed to np.empty positionally, which double-wrapped
+it into a dtype-of-dtype array type, and the fill loop then could not
+type. The np.full overload now detects a record dtype and generates an
+implementation that allocates the array through the dtype keyword and
+broadcasts the fill value onto every field, following NumPy.
+Additionally an unparseable dtype argument now raises a TypingError
+instead of silently falling back to the fill value's type, which
+produced a plain float64 array for a structured dtype spec.
