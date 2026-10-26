@@ -110,6 +110,7 @@ def _specialize_box(typ):
         "__invert__",
         "__int__",
         "__len__",
+        "__repr__",
         "__setitem__",
         "__str__",
         "__eq__",

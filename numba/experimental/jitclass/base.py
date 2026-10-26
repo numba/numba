@@ -157,6 +157,29 @@ def _add_linking_libs(context, call):
         context.add_linking_libs(libs)
 
 
+def _generate_default_repr(class_name, field_names):
+    """
+    Generate a default ``__repr__`` method for a jitclass, rendering as
+    "ClassName(field=value, ...)" in the order of the spec.
+    """
+    if field_names:
+        chunks = []
+        for i, name in enumerate(field_names):
+            if i:
+                chunks.append("', '")
+            chunks.append(repr(name))
+            chunks.append("'='")
+            chunks.append(f"repr(self.{name})")
+        body = " + ".join(chunks)
+        src = (f"def __repr__(self):\n"
+               f"    return {class_name!r} + '(' + {body} + ')'\n")
+    else:
+        src = f"def __repr__(self):\n    return {class_name!r} + '()'\n"
+    ns = {}
+    exec(src, {'repr': repr}, ns)
+    return ns['__repr__']
+
+
 def register_class_type(cls, spec, class_ctor, builder):
     """
     Internal function to create a jitclass.
@@ -188,6 +211,18 @@ def register_class_type(cls, spec, class_ctor, builder):
     clsdct = {}
     for basecls in reversed(inspect.getmro(cls)):
         clsdct.update(basecls.__dict__)
+
+    # Inject a default __repr__ if the class does not define one, the
+    # fields are known at registration time so the implementation is
+    # generated as a flat function. Note object defines __repr__ so the
+    # check has to skip it.
+    has_user_repr = any(
+        '__repr__' in base.__dict__
+        for base in inspect.getmro(cls) if base is not object
+    )
+    if not has_user_repr:
+        clsdct['__repr__'] = _generate_default_repr(cls.__name__,
+                                                    list(spec))
 
     methods, props, static_methods, others = {}, {}, {}, {}
     for k, v in clsdct.items():

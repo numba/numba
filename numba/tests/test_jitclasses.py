@@ -1364,6 +1364,86 @@ class TestJitClassOverloads(MemoryLeakMixin, TestCase):
             self.assertSame(py_f(py_list), py_f(jit_list))
             self.assertSame(py_f(py_list), jit_f(jit_list))
 
+    def test_default_repr(self):
+        # See issue #5881, a jitclass instance without a user defined
+        # __repr__ reprs as "ClassName(field=value, ...)". The default
+        # repr is used by both str() and repr() in nopython mode and on
+        # the boxed Python object.
+        @jitclass([('value', types.intp), ('name', types.unicode_type)])
+        class Record:
+            def __init__(self, value, name):
+                self.value = value
+                self.name = name
+
+        @njit
+        def call_repr(x):
+            return repr(x)
+
+        @njit
+        def call_str(x):
+            return str(x)
+
+        expected = "Record(value=42, name='a')"
+        self.assertEqual(call_repr(Record(42, 'a')), expected)
+        self.assertEqual(call_str(Record(42, 'a')), expected)
+        box = Record(42, 'a')
+        self.assertEqual(repr(box), expected)
+        self.assertEqual(str(box), expected)
+
+    def test_default_repr_empty(self):
+        @jitclass([])
+        class Marker:
+            def __init__(self):
+                pass
+
+        @njit
+        def call_repr(x):
+            return repr(x)
+
+        self.assertEqual(call_repr(Marker()), 'Marker()')
+        self.assertEqual(repr(Marker()), 'Marker()')
+
+    def test_user_str_preferred(self):
+        # a user defined __str__ takes precedence over the default repr
+        @jitclass([('value', types.intp)])
+        class Bag:
+            def __init__(self, value):
+                self.value = value
+
+            def __str__(self):
+                return 'Bag with ' + str(self.value)
+
+        @njit
+        def call_str(x):
+            return str(x)
+
+        self.assertEqual(call_str(Bag(7)), 'Bag with 7')
+
+    def test_user_repr(self):
+        # a user defined __repr__ is used in nopython mode and on the
+        # boxed Python object
+        @jitclass([('name', types.unicode_type)])
+        class Named:
+            def __init__(self, name):
+                self.name = name
+
+            def __repr__(self):
+                return 'Named(name=' + repr(self.name) + ')'
+
+        @njit
+        def call_repr(x):
+            return repr(x)
+
+        @njit
+        def call_str(x):
+            return str(x)
+
+        expected = "Named(name='a')"
+        self.assertEqual(call_repr(Named('a')), expected)
+        self.assertEqual(call_str(Named('a')), expected)
+        self.assertEqual(repr(Named('a')), expected)
+        self.assertEqual(str(Named('a')), expected)
+
     def test_bool_fallback(self):
 
         def py_b(x):
