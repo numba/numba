@@ -271,6 +271,11 @@ currently unsupported features:
    violation as containers require thread-safety under mutation but this feature
    is not implemented.
 
+   For the dictionary case, the sharded, thread-safe
+   ``numba.typed.ConcurrentDict`` can be used as a drop-in alternative for
+   concurrent writes from a ``prange`` region, see
+   :class:`numba.typed.ConcurrentDict`.
+
 #. **Induction variables are not associated with thread ID**
 
    The use of the induction variable induced by a ``prange`` based loop in

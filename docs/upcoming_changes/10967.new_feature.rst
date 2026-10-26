@@ -1,0 +1,24 @@
+Concurrent (sharded) typed dictionary
+-------------------------------------
+
+A thread-safe dictionary, ``numba.typed.ConcurrentDict``, is now
+available for concurrent write access from ``prange`` parallel
+regions. The dictionary holds ``n_shards`` internal typed dictionaries
+(each protected by its own atomic spinlock) and maps keys to shards via
+``hash(key) % n_shards``, so writers only contend when hashing to the
+same shard. The shard count is tunable through the ``n_shards``
+argument of ``ConcurrentDict.empty`` / ``concurrent_dict``, e.g.::
+
+    from numba.typed import ConcurrentDict
+
+    d = ConcurrentDict.empty(key_type=types.int64,
+                             value_type=types.float64,
+                             n_shards=256)
+
+    @njit(parallel=True)
+    def fill(d, n):
+        for i in prange(n):
+            d[i] = i * 1.5
+
+This addresses the long-standing lack of thread-safe container
+mutation (see issue #8767) for the dictionary case.

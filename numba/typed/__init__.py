@@ -2,6 +2,7 @@ import importlib
 
 
 _delayed_symbols = {
+    "ConcurrentDict": ".concurrentdict",
     "Dict": ".typeddict",
     "List": ".typedlist",
     "Set": ".typedset",
