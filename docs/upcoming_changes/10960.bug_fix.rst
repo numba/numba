@@ -1,0 +1,14 @@
+Make structref type equality independent of the defining class
+--------------------------------------------------------------
+
+A structref-typed function with ``cache=True`` recompiled on every
+process: the cache index stores the compile signature, which contains
+the StructRef type instance, and the defining class of that instance
+is serialized by value (cloudpickle serializes classes from
+``__main__`` by value), so loading the index in another process
+recreated the class and ``Type.__eq__``'s class-identity check
+reported a false mismatch - the index entry was never reused.
+``StructRef`` now compares types by the qualified name of the defining
+class plus the type key (the field declarations) instead of by class
+identity, and ``__hash__`` is re-bound explicitly since defining
+``__eq__`` would otherwise clear it.
