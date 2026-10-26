@@ -4936,8 +4936,37 @@ def impl_np_full(shape, fill_value, dtype=None):
     _check_const_str_dtype("full", dtype)
     if not is_nonelike(dtype):
         nb_dtype = ty_parse_dtype(dtype)
+        if nb_dtype is None:
+            # an unparseable dtype must not silently fall back to the
+            # fill value's type (which would e.g. produce a float64
+            # array for a structured dtype spec)
+            msg = ('The argument "dtype" must be a data-type if it is '
+                   'provided')
+            raise errors.TypingError(msg)
     else:
         nb_dtype = fill_value
+
+    if isinstance(nb_dtype, types.Record):
+        # The fill value is broadcast onto every field of the record,
+        # following NumPy. The field names are known at typing time, so
+        # the implementation is generated with them baked in. Note the
+        # record type is captured unwrapped: np.empty's typing unwraps
+        # the TypeRef of the captured record type itself.
+        field_names = list(nb_dtype.fields)
+        assignments = ''.join(
+            f"            arr_flat[idx].{name} = fill_value\n"
+            for name in field_names)
+        src = ("def make_full(np, nb_dtype):\n"
+               "    def full(shape, fill_value, dtype=None):\n"
+               "        arr = np.empty(shape, dtype=nb_dtype)\n"
+               "        arr_flat = arr.flat\n"
+               "        for idx in range(len(arr_flat)):\n"
+               f"{assignments}"
+               "        return arr\n"
+               "    return full\n")
+        glbls = {}
+        exec(src, glbls)
+        return glbls['make_full'](np, nb_dtype)
 
     def full(shape, fill_value, dtype=None):
         arr = np.empty(shape, nb_dtype)

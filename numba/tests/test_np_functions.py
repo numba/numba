@@ -5382,6 +5382,60 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
                 else:
                     check_pass_through(cfunc, True, params)
 
+    def test_full_structured_dtype(self):
+        # See issue #10518, np.full works with a structured dtype and
+        # broadcasts the fill value onto every field like NumPy
+        dt = np.dtype([('start', np.int32), ('end', np.int32)])
+
+        @njit
+        def full_zero(n):
+            return np.full(n, 0, dtype=dt)
+
+        @njit
+        def full_value(n):
+            return np.full(n, 7, dtype=dt)
+
+        @njit
+        def full_float(n):
+            return np.full(n, 2.5, dtype=dt)
+
+        @njit
+        def full_2d(n):
+            return np.full((2, n), 3, dtype=dt)
+
+        expected = np.full(3, 0, dtype=dt)
+        got = full_zero(3)
+        self.assertEqual(got.dtype, expected.dtype)
+        np.testing.assert_array_equal(got, expected)
+
+        expected = np.full(3, 7, dtype=dt)
+        got = full_value(3)
+        np.testing.assert_array_equal(got, expected)
+        self.assertEqual(got['start'][0], 7)
+        self.assertEqual(got['end'][0], 7)
+
+        expected = np.full(3, 2.5, dtype=dt)
+        got = full_float(3)
+        np.testing.assert_array_equal(got, expected)
+        self.assertEqual(got['start'][0], 2)
+
+        expected = np.full((2, 2), 3, dtype=dt)
+        got = full_2d(2)
+        self.assertEqual(got.shape, (2, 2))
+        np.testing.assert_array_equal(got, expected)
+
+    def test_full_unparseable_dtype_raises(self):
+        # See issue #10518, an unparseable dtype must not silently fall
+        # back to the fill value's type
+        @njit
+        def full(n):
+            return np.full(n, 0, dtype=[('left', np.int32),
+                                        ('right', np.int32)])
+
+        with self.assertRaises(TypingError) as raises:
+            full(3)
+        self.assertIn('must be a data-type', str(raises.exception))
+
     def test_asarray_literal(self):
 
         def case1():
