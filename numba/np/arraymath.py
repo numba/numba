@@ -2504,8 +2504,8 @@ def valid_kths(a, kth):
     Returns a sorted, unique array of kth values which serve
     as indexers for partitioning the input array, a.
 
-    If the absolute value of any of the provided values
-    is greater than a.shape[-1] an exception is raised since
+    If any of the provided values is outside the range
+    [-a.shape[-1], a.shape[-1]) an exception is raised since
     we are partitioning along the last axis (per Numpy default
     behaviour).
 
@@ -2519,7 +2519,8 @@ def valid_kths(a, kth):
         raise ValueError('kth must be scalar or 1-D')
         # numpy raises ValueError: object too deep for desired array
 
-    if np.any(np.abs(kth_array) >= a.shape[-1]):
+    n = a.shape[-1]
+    if np.any((kth_array < -n) | (kth_array >= n)):
         raise ValueError("kth out of bounds")
 
     out = np.empty_like(kth_array)
