@@ -941,6 +941,10 @@ def array_mean(a):
 def array_var(a):
     if isinstance(a, types.Array):
         def array_var_impl(a):
+            # NumPy returns nan for an empty array
+            if a.size == 0:
+                return np.nan
+
             # Compute the mean
             m = a.mean()
 
@@ -2003,7 +2007,7 @@ def np_nancumsum(a):
 @register_jitable
 def prepare_ptp_input(a):
     arr = _asarray(a)
-    if len(arr) == 0:
+    if arr.size == 0:
         raise ValueError('zero-size array reduction not possible')
     else:
         return arr

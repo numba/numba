@@ -557,6 +557,23 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_var_basic(self):
         self.check_reduction_basic(array_var, prec='double')
 
+    def test_var_std_empty_array(self):
+        # NumPy returns nan for the var and std of an empty array
+        arrays = [np.float64([]), np.float32([]), np.int64([]), np.bool_([]),
+                  np.complex64([]), np.complex128([]),
+                  np.empty((3, 0)), np.empty((0, 3))]
+        for pyfunc in (array_var, array_var_global,
+                       array_std, array_std_global):
+            cfunc = jit(nopython=True)(pyfunc)
+            for arr in arrays:
+                with self.subTest(pyfunc=pyfunc.__name__, dtype=arr.dtype,
+                                  shape=arr.shape):
+                    # Numba's var and std always return float64
+                    expected = np.float64(pyfunc(arr))
+                    self.assertPreciseEqual(cfunc(arr), expected)
+                    self.assertEqual(cfunc.nopython_signatures[-1].return_type,
+                                     types.float64)
+
     def test_std_basic(self):
         #scalar testing
         self.check_scalar_basic(array_std_global)
@@ -1433,6 +1450,12 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
         msg = "zero-size array reduction not possible"
         self.assertIn(msg, str(e.exception))
+
+        # zero-size along an axis other than the first
+        for a in (np.empty((3, 0)), np.empty((2, 0, 4))):
+            with self.assertRaises(ValueError) as e:
+                cfunc(a)
+            self.assertIn(msg, str(e.exception))
 
     def test_min_max_complex_basic(self):
         pyfuncs = array_min_global, array_max_global
