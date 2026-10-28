@@ -3802,17 +3802,22 @@ def round_ndigits(x, ndigits):
     # NOTE: this is CPython's algorithm, but perhaps this is overkill
     # when emulating Numpy's behaviour.
     if ndigits >= 0:
+        pow_ = 10.0 ** ndigits
+        if math.isinf(pow_):
+            # NumPy scales by the full power of ten, which overflows to
+            # infinity or NaN here (see issue #10025)
+            return _np_round_float(x * pow_) / pow_
         if ndigits > 22:
             # pow1 and pow2 are each safe from overflow, but
             # pow1*pow2 ~= pow(10.0, ndigits) might overflow.
             pow1 = 10.0 ** (ndigits - 22)
             pow2 = 1e22
         else:
-            pow1 = 10.0 ** ndigits
+            pow1 = pow_
             pow2 = 1.0
         y = (x * pow1) * pow2
         if math.isinf(y):
-            return x
+            return _np_round_float(x * pow_) / pow_
         return (_np_round_float(y) / pow2) / pow1
 
     else:
@@ -3842,7 +3847,7 @@ def impl_np_round(a, decimals=0, out=None):
                 return impl
             elif isinstance(a, types.Integer):
                 def impl(a, decimals=0, out=None):
-                    if decimals == 0:
+                    if decimals >= 0:
                         return a
                     else:
                         return int(round_ndigits(a, decimals))

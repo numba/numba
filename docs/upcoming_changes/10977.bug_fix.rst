@@ -1,0 +1,7 @@
+Match NumPy when ``np.around`` scaling overflows
+------------------------------------------------
+
+``np.around`` with a large number of decimals now returns the same values as
+NumPy when scaling by the power of ten overflows: an infinity when the power of
+ten is finite but the scaled value is not, and a NaN when the power of ten
+itself overflows. Rounding an integer is unaffected.
