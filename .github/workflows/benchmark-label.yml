@@ -1,0 +1,65 @@
+name: dispatch-benchmarks
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.label.name == 'benchmark' &&
+      github.event.pull_request.state == 'open'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch the benchmark run to numba/numba-benchmark
+        env:
+          TOKEN: ${{ secrets.BENCHMARK_DISPATCH_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REPO: ${{ github.repository }}
+          SENDER: ${{ github.event.sender.login }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::BENCHMARK_DISPATCH_TOKEN is not configured; cannot dispatch."
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          payload = {
+              "event_type": "numba-pr-benchmark",
+              "client_payload": {
+                  "pr": int(os.environ["PR_NUMBER"]),
+                  "repo": os.environ["HEAD_REPO"],
+                  "sha": os.environ["HEAD_SHA"],
+                  "base_repo": os.environ["BASE_REPO"],
+                  "actor": os.environ["SENDER"],
+                  "run_url": os.environ["RUN_URL"],
+              },
+          }
+          request = urllib.request.Request(
+              "https://api.github.com/repos/numba/numba-benchmark/dispatches",
+              data=json.dumps(payload).encode(),
+              headers={
+                  "Accept": "application/vnd.github+json",
+                  "Authorization": "Bearer " + os.environ["TOKEN"],
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+              method="POST",
+          )
+          try:
+              urllib.request.urlopen(request)
+          except urllib.error.HTTPError as exc:
+              print(exc.read().decode())
+              raise
+          print("dispatched benchmark run for", os.environ["HEAD_REPO"],
+                os.environ["HEAD_SHA"])
+          PY
