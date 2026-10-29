@@ -5,6 +5,7 @@ import re
 import shutil
 import warnings
 import traceback
+from importlib.util import find_spec
 
 # YAML needed to use file based Numba config
 try:
@@ -193,6 +194,11 @@ class _EnvReloader(object):
 
         def optional_str(x):
             return str(x) if x is not None else None
+
+        # Whether NumPy is available in the current environment. Setting
+        # NUMBA_NUMPY_AVAILABLE=0 pretends it is absent.
+        NUMPY_AVAILABLE = _readenv(
+            "NUMBA_NUMPY_AVAILABLE", int, int(find_spec("numpy") is not None))
 
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)

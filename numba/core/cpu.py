@@ -126,7 +126,6 @@ class CPUContext(BaseContext):
         from numba.np import npdatetime # noqa F401
 
         # Add target specific implementations
-        from numba.np import npyimpl
         from numba.cpython import cmathimpl, mathimpl, printimpl, randomimpl
         from numba.misc import cffiimpl
         from numba.experimental.jitclass.base import ClassBuilder as \
@@ -134,10 +133,18 @@ class CPUContext(BaseContext):
         self.install_registry(cmathimpl.registry)
         self.install_registry(cffiimpl.registry)
         self.install_registry(mathimpl.registry)
-        self.install_registry(npyimpl.registry)
         self.install_registry(printimpl.registry)
         self.install_registry(randomimpl.registry)
         self.install_registry(jitclassimpl.class_impl_registry)
+
+        if config.NUMPY_AVAILABLE:
+            from numba.np.npyimpl import init as npyimpl_init
+            # This can be removed once npyimpl registry no longer depends
+            # on builtins registry.
+            # In that case npyimpl_init can be added an entrypoint so it
+            # will be automatically called during the entrypoints.init_all()
+            # below when this explicit call is removed.
+            npyimpl_init()
 
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
