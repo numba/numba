@@ -8,7 +8,9 @@ import os
 import subprocess
 import threading
 
+import numpy as np
 from numba import njit
+from numba.core import types as nbtypes
 from numba.tests.support import TestCase
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
 
@@ -225,3 +227,31 @@ class TestEntrypoints(TestCase):
         _DEBUG = False
         if _DEBUG:
             print(out, err)
+
+
+@njit
+def _sin(x):
+    return np.sin(x)
+
+
+@njit
+def _add_one(x):
+    return x + 1
+
+
+class TestNpyimplRegistrySeparability(TestCase):
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_NUMPY_AVAILABLE": "1"})
+    def test_npyimpl_registry_enabled(self):
+        _sin.compile((nbtypes.float64,))
+
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_NUMPY_AVAILABLE": "0"})
+    def test_non_numpy_compiles_without_numpy(self):
+        _add_one.compile((nbtypes.float64,))
+
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_NUMPY_AVAILABLE": "0"})
+    def test_npyimpl_registry_disabled(self):
+        with self.assertRaises(NotImplementedError) as e:
+            _sin.compile((nbtypes.float64,))
+        self.assertIn(
+            "No definition for lowering <ufunc 'sin'>(float64,) -> float64",
+            str(e.exception))

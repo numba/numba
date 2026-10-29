@@ -28,9 +28,6 @@ PYVERSION = sys.version_info[:2]
 # this is the name of the user supplied configuration file
 _config_fname = '.numba_config.yaml'
 
-# Whether NumPy is available in the current environment.
-NUMPY_AVAILABLE = find_spec("numpy") is not None
-
 
 def _parse_cc(text):
     """
@@ -197,6 +194,11 @@ class _EnvReloader(object):
 
         def optional_str(x):
             return str(x) if x is not None else None
+
+        # Whether NumPy is available in the current environment. Setting
+        # NUMBA_NUMPY_AVAILABLE=0 pretends it is absent.
+        NUMPY_AVAILABLE = _readenv(
+            "NUMBA_NUMPY_AVAILABLE", int, int(find_spec("numpy") is not None))
 
         # developer mode produces full tracebacks, disables help instructions
         DEVELOPER_MODE = _readenv("NUMBA_DEVELOPER_MODE", int, 0)
