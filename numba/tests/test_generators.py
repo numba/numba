@@ -649,6 +649,194 @@ class TestGeneratorWithNRT(MemoryLeakMixin, TestCase):
 
         self.assertEqual(main(), magic)
 
+    def test_issue_8800(self):
+        def py_gen():
+            z = np.zeros(shape=(3,), dtype=np.int32)
+            for i in range(3):
+                z[i] = 1
+                yield z
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        py_res = [arr.copy() for arr in py_gen()]
+        c_res = [arr.copy() for arr in c_gen()]
+
+        self.assertEqual(len(c_res), len(py_res))
+        for py_arr, c_arr in zip(py_res, c_res):
+            np.testing.assert_equal(c_arr, py_arr)
+
+    def test_issue_9735(self):
+        def py_gen():
+            y = [42, 61]
+            yield y
+            yield y
+            y.pop()
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        py_res = [lst.copy() for lst in py_gen()]
+        c_res = [lst.copy() for lst in c_gen()]
+
+        self.assertEqual(c_res, py_res)
+
+    def test_issue_9735_leak(self):
+        def py_gen():
+            y = [42, 61]
+            yield (y,)[0]
+            yield (y,)[0]
+            y.pop()
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        py_res = [lst.copy() for lst in py_gen()]
+        c_res = [lst.copy() for lst in c_gen()]
+
+        self.assertEqual(c_res, py_res)
+
+    def test_never_boxed(self):
+        def py_gen(nr):
+            x = np.arange(nr, dtype=np.uint32)
+            yield x
+            yield x
+            yield x
+            x[:] = nr
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        def py_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            for i, x in enumerate(py_gen(nr)):
+                out[i, :] = x
+            return out
+
+        @jit(nopython=True)
+        def c_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            for i, x in enumerate(c_gen(nr)):
+                out[i, :] = x
+            return out
+
+        n = 4
+        py_res = py_driver(n)
+        c_res = c_driver(n)
+
+        np.testing.assert_equal(c_res, py_res)
+
+    def test_arg_never_boxed(self):
+        def py_gen(arg):
+            nr = arg.shape[0]
+            yield arg
+            yield arg
+            yield arg
+            arg[:] = nr
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        def py_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            arr = np.arange(nr, dtype=np.uint32)
+            py_iter = py_gen(arr)
+            for i, x in enumerate(py_iter):
+                out[i, :] = x
+            return out, py_iter
+
+        @jit(nopython=True)
+        def c_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            arr = np.arange(nr, dtype=np.uint32)
+            c_iter = c_gen(arr)
+            for i, x in enumerate(c_iter):
+                out[i, :] = x
+            # return the generator object so it can be manually deleted
+            # this is needed to work around an unrelated refleak, likely issue
+            # 1278
+            return out, c_iter
+
+        n = 4
+        py_res, py_iter = py_driver(n)
+        c_res, c_iter = c_driver(n)
+        del py_iter, c_iter
+
+        np.testing.assert_equal(c_res, py_res)
+
+    def test_external_arg_never_boxed(self):
+        def py_gen(arg):
+            nr = arg.shape[0]
+            yield arg
+            yield arg
+            yield arg
+            arg[:] = nr
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        def py_driver(arr):
+            nr = arr.shape[0]
+            out = np.empty((3, nr), dtype=np.uint32)
+            py_iter = py_gen(arr)
+            for i, x in enumerate(py_iter):
+                out[i, :] = x
+            return out, py_iter
+
+        @jit(nopython=True)
+        def c_driver(arr):
+            nr = arr.shape[0]
+            out = np.empty((3, nr), dtype=np.uint32)
+            c_iter = c_gen(arr)
+            for i, x in enumerate(c_iter):
+                out[i, :] = x
+            # return the generator object so it can be manually deleted
+            # this is needed to work around an unrelated refleak, likely issue
+            # 1278
+            return out, c_iter
+
+        py_arr = np.arange(4, dtype=np.uint32)
+        c_arr = py_arr.copy()
+
+        py_res, py_iter = py_driver(py_arr)
+        c_res, c_iter = c_driver(c_arr)
+        del py_iter, c_iter
+
+        np.testing.assert_equal(c_res, py_res)
+        self.assertRefCountEqual(c_res, py_res)
+
+        np.testing.assert_equal(c_arr, py_arr)
+        self.assertRefCountEqual(c_arr, py_arr)
+
+    @unittest.expectedFailure
+    def test_never_boxed_leak(self):
+        # disable the leak check at teardown, so we can do it manually and mark
+        # this test with unittest.expectedFailure
+        self.disable_leak_check()
+
+        def py_gen(nr):
+            x = np.arange(nr, dtype=np.uint32)
+            yield x
+            yield x
+            yield x
+
+        c_gen = jit(nopython=True)(py_gen)
+
+        def py_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            for i, x in enumerate(py_gen(nr)):
+                out[i, :] = x
+            return out
+
+        @jit(nopython=True)
+        def c_driver(nr):
+            out = np.empty((3, nr), dtype=np.uint32)
+            for i, x in enumerate(c_gen(nr)):
+                out[i, :] = x
+            return out
+
+        n = 4
+        py_res = py_driver(n)
+        c_res = c_driver(n)
+
+        np.testing.assert_equal(c_res, py_res)
+        del py_res, c_res
+        self.assert_no_memory_leak()
+
 
 class TestGeneratorModel(test_factory()):
     fe_type = types.Generator(gen_func=None, yield_type=types.int32,
