@@ -81,7 +81,9 @@ class StencilFunc(object):
         self._typingctx = registry.cpu_target.typing_context
         self._targetctx = registry.cpu_target.target_context
         self._install_type(self._typingctx)
-        self.neighborhood = self.options.get("neighborhood")
+        neighborhood = self.options.get("neighborhood")
+        _cast_numpy_to_int = lambda x: int(x) if isinstance(x, np.integer) else x
+        self.neighborhood = tuple([tuple(map(_cast_numpy_to_int, n)) for n in neighborhood]) if neighborhood else None
         self._type_cache = {}
         self._lower_me = StencilFuncLowerer(self)
 
