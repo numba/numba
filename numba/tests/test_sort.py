@@ -13,6 +13,7 @@ from numba.tests.support import TestCase, MemoryLeakMixin
 
 from numba.misc.quicksort import make_py_quicksort, make_jit_quicksort
 from numba.misc.mergesort import make_jit_mergesort
+from numba.misc.heapsort import make_jit_heapsort
 from numba.misc.timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
@@ -1077,7 +1078,7 @@ class TestNumpySort(TestCase):
             self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
 
         for real in self.float_arrays():
-            imag = real[::]
+            imag = real.copy()
             np.random.shuffle(imag)
             orig = np.array([complex(*x) for x in zip(real, imag)])
             self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
@@ -1114,7 +1115,7 @@ class TestNumpySort(TestCase):
             self.check_argsort(argsort_heapsort_usecase, cfunc, orig)
 
         for real in self.float_arrays():
-            imag = real[::]
+            imag = real.copy()
             np.random.shuffle(imag)
             orig = np.array([complex(*x) for x in zip(real, imag)])
             self.check_argsort(argsort_heapsort_usecase, cfunc, orig)
@@ -1177,6 +1178,40 @@ class TestPythonSort(TestCase):
             got = cfunc(orig, b)
             self.assertPreciseEqual(got, expected)
             self.assertNotEqual(list(orig), got)   # sanity check
+
+
+class TestHeapSort(TestCase):
+    def heapsort_arrays(self):
+        return (
+            np.array([], dtype=np.int64),
+            np.array([42], dtype=np.int64),
+            np.array([3, -1, 4, -1, 5, -9, 2, 6]),
+            np.array([1, 2, 3, 4, 5]),
+            np.array([5, 4, 3, 2, 1]),
+            np.array([np.inf, -np.inf, -0.0, 0.0, 1.5, 1.5]),
+            np.array(['2020-01-03', '2020-01-01', '2020-01-02'],
+                     dtype='datetime64[D]'),
+        )
+
+    def test_heapsort(self):
+        toplevel = make_jit_heapsort().run_heapsort
+        sorter = njit(lambda arr: toplevel(arr))
+        for data in self.heapsort_arrays():
+            expected = np.sort(data, kind='heapsort')
+            got = sorter(data)
+            self.assertPreciseEqual(got, expected)
+            self.assertPreciseEqual(data, expected)
+
+    def test_argheapsort(self):
+        toplevel = make_jit_heapsort(is_argsort=True).run_heapsort
+        sorter = njit(lambda arr: toplevel(arr))
+        for data in self.heapsort_arrays():
+            original = data.copy()
+            got = sorter(data)
+            self.assertPreciseEqual(data, original)
+            self.assertPreciseEqual(original[got], np.sort(original,
+                                                            kind='heapsort'))
+            self.assertPreciseEqual(np.sort(got), np.arange(data.size))
 
 
 class TestMergeSort(TestCase):
