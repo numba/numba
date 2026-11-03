@@ -84,7 +84,12 @@ The operation ``getattr(instance, name)`` (getting an attribute ``name`` from
 The special ``__init__`` method is also handled like regular functions.
 
 
-``__del__`` is not supported at this time.
+``__del__`` is now supported and will run when the NRT reference count of
+the instance reaches zero.  The destructor is invoked with the GIL held so
+it may interact with the Python runtime, but it should still avoid heavy
+Python work.
+Resurrection is not supported: storing ``self`` inside ``__del__`` will not
+keep the instance alive once its reference count reaches zero.
 
 
 Reference count and destructor
@@ -95,7 +100,7 @@ other NRT tracked object, it must call a destructor when its reference count
 dropped to zero.  The destructor will decrement the reference count of all
 attributes by one.
 
-At this time, there is no support for user defined ``__del__`` method.
+User-defined ``__del__`` methods are now executed as part of instance teardown.
 
 Proper cleanup for cyclic reference is not handled at this time.
 Cycles will cause memory leak.
