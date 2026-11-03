@@ -462,9 +462,23 @@ class TestInlinedClosure(TestCase):
         glbls = {}
         exec(src, glbls)
 
-        for ref in (outer_single, outer_default, glbls["outer_wide"]):
-            cfunc = njit(ref)
-            self.assertEqual(cfunc(10), ref(10))
+        def outer_empty(x):
+            def bar():
+                return 3
+            t = ()
+            return bar(*t)
+
+        def outer_const(x):
+            def bar(a, b):
+                return a + b
+            t = (1, 2)
+            return bar(*t)
+
+        cases = [(outer_single, (10,)), (outer_default, (10,)),
+                 (glbls["outer_wide"], (10,)), (outer_empty, (10,)),
+                 (outer_const, (10,))]
+        for ref, args in cases:
+            self.assertEqual(njit(ref)(*args), ref(*args))
 
     def test_closure_vararg_unsupported(self):
         # only a locally built tuple can be unpacked; any other vararg
@@ -481,10 +495,22 @@ class TestInlinedClosure(TestCase):
             t = x, x + 1
             return bar(x, *t)  # append + extend window: a concatenation
 
+        # tuple defined on two branches: not a single build_tuple
+        def outer_reassigned(x, c):
+            def bar(a, b):
+                return a - b
+            if c:
+                t = x, x + 1
+            else:
+                t = x + 2, x + 5
+            return bar(*t)
+
         msg = "Calling a closure with *args is unsupported."
-        for ref, arg in ((outer_param, (1, 2)), (outer_mixed, 1)):
+        cases = [(outer_param, ((1, 2),)), (outer_mixed, (1,)),
+                 (outer_reassigned, (1, True))]
+        for ref, args in cases:
             with self.assertRaises(UnsupportedError) as raises:
-                njit(ref)(arg)
+                njit(ref)(*args)
             self.assertIn(msg, str(raises.exception))
 
     def test_closure_renaming_scheme(self):
