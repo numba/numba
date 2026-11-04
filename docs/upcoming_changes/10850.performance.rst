@@ -1,7 +1,0 @@
-``np.sum`` performance regression from ``ArrayIterator``
---------------------------------------------------------
-
-``np.sum`` performance was regressed when ``ArrayIterator`` was adopted. The
-innermost loop now uses a static stride constant, which restores vectorization,
-and ``order='K'`` iteration over Fortran-layout arrays proceeds in reverse so
-the innermost loop does less work.

@@ -1,6 +1,0 @@
-Fix caching of functions imported from a zip archive on Windows
----------------------------------------------------------------
-
-Importing a module that defines a ``cache=True`` function from a zip archive
-no longer raises ``KeyError`` on Windows. The path of the module inside the
-archive is now built with ``/`` separators, as zip member names require.
