@@ -35,6 +35,9 @@ cd /io
 echo "Contents of /io directory:"
 ls -la
 
+# Configure Numba package format
+export NUMBA_PACKAGE_FORMAT="wheel"
+
 # Build wheel from the workspace directory
 $PYTHON_EXECUTABLE -m build --wheel --no-isolation
 

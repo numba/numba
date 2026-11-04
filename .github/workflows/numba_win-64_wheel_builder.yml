@@ -115,6 +115,7 @@ jobs:
 
       - name: Build wheel
         env:
+          NUMBA_PACKAGE_FORMAT: "wheel"
           # Use the pre-activated MSVC v14.44 environment instead of
           # setuptools' own discovery, which would pick VS2026's native
           # v14.5x toolset. use 14.44 instead.
@@ -173,11 +174,14 @@ jobs:
         env:
           NUMBA_CPU_NAME: generic
           _NUMBA_REDUCED_TESTING: 1
+          NUMBA_DIST_TEST: 1
+          TESTS_TO_RUN: "numba.tests.test_dist_validation"
         run: |
+
           # No versioned `which python<ver>` here: Windows setup-python installs
           # only `python.exe` (no python3.14[t]) and it's the sole interpreter,
           # so bare `python` already resolves to the setup-python one.
-          python -m pip install --upgrade pip twine
+          python -m pip install --upgrade pip twine lief
           python -m pip install numpy==${{ matrix.numpy_test }} tbb==2021.6 tbb-devel==2021.6
           if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
@@ -191,4 +195,4 @@ jobs:
           python -m numba -s
 
           # run tests
-          python -m numba.runtests -m 4 -v
+          python -m numba.runtests $TESTS_TO_RUN -m 4 -v
