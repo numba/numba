@@ -745,24 +745,21 @@ def inline_closure_call(func_ir, glbls, block, i, callee, typingctx=None,
 
 
 def _get_callee_args(call_expr, callee, loc, func_ir):
-    """Get arguments for calling 'callee', including the default arguments.
-    keyword arguments are currently only handled when 'callee' is a function.
+    """Get arguments for calling 'callee' (a function or make_function node),
+    folding in keyword and default arguments.
     """
+    kws = {}
     if call_expr.op == 'call':
-        args = list(call_expr.args)
+        args, kws = list(call_expr.args), dict(call_expr.kws)
         if call_expr.vararg:
-            # unpack a locally built tuple into direct arguments; a single
-            # definition for the tuple and each item guarantees the values
-            # cannot have changed between the build_tuple and the call
+            # unpack a locally built tuple; single definitions keep items fresh
             dfn = guard(get_definition, func_ir, call_expr.vararg)
-            defs = func_ir._definitions
-            if (isinstance(dfn, ir.Expr) and dfn.op == 'build_tuple'
-                    and all(len(defs.get(v.name, ())) == 1
-                            for v in [call_expr.vararg] + list(dfn.items))):
-                args.extend(dfn.items)
-            else:
+            if not (isinstance(dfn, ir.Expr) and dfn.op == 'build_tuple'
+                    and all(len(func_ir._definitions[v.name]) == 1
+                            for v in dfn.items)):
                 msg = "Calling a closure with *args is unsupported."
                 raise errors.UnsupportedError(msg, call_expr.loc)
+            args.extend(dfn.items)
     elif call_expr.op == 'getattr':
         args = [call_expr.value]
     elif ir_utils.is_operator_or_getitem(call_expr):
@@ -770,57 +767,41 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
     else:
         raise TypeError("Unsupported ir.Expr.{}".format(call_expr.op))
 
-    debug_print = _make_debug_print("inline_closure_call default handling")
-
-    # handle defaults and kw arguments using pysignature if callee is function
     if isinstance(callee, pytypes.FunctionType):
-        pysig = numba.core.utils.pysignature(callee)
-        normal_handler = lambda index, param, default: default
         default_handler = lambda index, param, default: ir.Const(default, loc)
-
-        # Throw error for stararg
-        # TODO: handle stararg
-        def stararg_handler(index, param, default):
-            raise NotImplementedError(
-                "Stararg not supported in inliner for arg {} {}".format(
-                    index, param))
-        if call_expr.op == 'call':
-            kws = dict(call_expr.kws)
-        else:
-            kws = {}
-        return numba.core.typing.fold_arguments(
-            pysig, args, kws, normal_handler, default_handler,
-            stararg_handler)
     else:
-        # TODO: handle arguments for make_function case similar to function
-        # case above
-        callee_defaults = (callee.defaults if hasattr(callee, 'defaults')
-                           else callee.__defaults__)
-        if callee_defaults:
-            debug_print("defaults = ", callee_defaults)
-            if isinstance(callee_defaults, tuple):  # Python 3.5
-                defaults_list = []
-                for x in callee_defaults:
-                    if isinstance(x, ir.Var):
-                        defaults_list.append(x)
-                    else:
-                        # this branch is predominantly for kwargs from
-                        # inlinable functions
-                        defaults_list.append(ir.Const(value=x, loc=loc))
-                args = args + defaults_list
-            elif (isinstance(callee_defaults, ir.Var)
-                    or isinstance(callee_defaults, str)):
-                default_tuple = func_ir.get_definition(callee_defaults)
-                assert (isinstance(default_tuple, ir.Expr))
-                assert (default_tuple.op == "build_tuple")
-                const_vals = [func_ir.get_definition(x) for
-                              x in default_tuple.items]
-                args = args + const_vals
-            else:
-                raise NotImplementedError(
-                    "Unsupported defaults to make_function: {}".format(
-                        callee_defaults))
-        return args
+        # stand-in function carrying the closure's signature, IR defaults
+        cells = tuple(pytypes.CellType() for _ in callee.code.co_freevars)
+        callee = pytypes.FunctionType(
+            callee.code, {}, None,
+            tuple(_make_function_defaults(callee, func_ir, loc)), cells)
+        default_handler = lambda index, param, default: default
+
+    # TODO: handle stararg
+    def stararg_handler(index, param, default):
+        raise NotImplementedError(
+            "Stararg not supported in inliner for arg {} {}".format(
+                index, param))
+    return numba.core.typing.fold_arguments(
+        numba.core.utils.pysignature(callee), args, kws,
+        lambda index, param, value: value, default_handler, stararg_handler)
+
+
+def _make_function_defaults(callee, func_ir, loc):
+    defaults = callee.defaults
+    if not defaults:
+        return []
+    if isinstance(defaults, tuple):
+        # non-Var entries are predominantly kwargs from inlinable functions
+        return [x if isinstance(x, ir.Var) else ir.Const(value=x, loc=loc)
+                for x in defaults]
+    if isinstance(defaults, (ir.Var, str)):
+        default_tuple = func_ir.get_definition(defaults)
+        assert (isinstance(default_tuple, ir.Expr))
+        assert (default_tuple.op == "build_tuple")
+        return [func_ir.get_definition(x) for x in default_tuple.items]
+    raise NotImplementedError(
+        "Unsupported defaults to make_function: {}".format(defaults))
 
 
 def _make_debug_print(prefix):

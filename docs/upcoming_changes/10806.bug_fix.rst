@@ -1,0 +1,8 @@
+Fix argument binding when inlining closure calls
+------------------------------------------------
+
+Inlined closure calls now bind arguments against the closure's signature.
+Previously keyword arguments were ignored, every default was appended even
+when some had been passed positionally, and surplus positional arguments were
+dropped, all silently producing wrong results. Mismatched calls now raise
+``TypingError``.

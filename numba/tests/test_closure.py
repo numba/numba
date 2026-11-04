@@ -434,23 +434,13 @@ class TestInlinedClosure(TestCase):
         self.assertIn(msg, str(raises.exception))
 
     def test_closure_vararg(self):
-        # a closure called with a locally built *args tuple is inlined by
-        # unpacking the tuple into direct arguments
-
         def outer_single(x):
             def bar(a):
                 return a * 2
             t = (x,)
             return bar(*t)
 
-        def outer_default(x):
-            def bar(a, b, c=10):
-                return a + b + c
-            t = x, x + 1
-            return bar(*t)
-
-        # more than 30 arguments: CPython emits the append window that the
-        # list_to_tuple peephole coalesces into one build_tuple (#10782)
+        # >30 args: the append window coalesced into one build_tuple (#10782)
         n = 31
         src = ("def outer_wide(x):\n"
                "    def bar(%s):\n"
@@ -474,16 +464,11 @@ class TestInlinedClosure(TestCase):
             t = (1, 2)
             return bar(*t)
 
-        cases = [(outer_single, (10,)), (outer_default, (10,)),
-                 (glbls["outer_wide"], (10,)), (outer_empty, (10,)),
-                 (outer_const, (10,))]
-        for ref, args in cases:
-            self.assertEqual(njit(ref)(*args), ref(*args))
+        for ref in (outer_single, glbls["outer_wide"], outer_empty,
+                    outer_const):
+            self.assertEqual(njit(ref)(10), ref(10))
 
     def test_closure_vararg_unsupported(self):
-        # only a locally built tuple can be unpacked; any other vararg
-        # still raises
-
         def outer_param(t):
             def bar(a, b):
                 return a + b
@@ -512,6 +497,63 @@ class TestInlinedClosure(TestCase):
             with self.assertRaises(UnsupportedError) as raises:
                 njit(ref)(*args)
             self.assertIn(msg, str(raises.exception))
+
+    def test_closure_args(self):
+        # defaults fill only the omitted tail; keywords bind by name
+
+        def outer_partial_default(x):
+            def bar(a, b=5, c=10):
+                return a * 100 + b * 10 + c
+            return bar(x, 2)
+
+        def outer_kwarg(x):
+            def bar(a, b=5, c=10):
+                return a * 100 + b * 10 + c
+            return bar(x, c=2)
+
+        def outer_vararg_kwarg(x):
+            def bar(a, b=5, c=10):
+                return a * 100 + b * 10 + c
+            t = x, 2
+            return bar(*t, c=3)
+
+        for ref in (outer_partial_default, outer_kwarg, outer_vararg_kwarg):
+            self.assertEqual(njit(ref)(1), ref(1))
+
+    def test_closure_args_mismatch(self):
+        def outer_too_many(x):
+            def bar(a, b):
+                return a + b
+            return bar(x, x + 1, x + 2)
+
+        def outer_too_many_vararg(x):
+            def bar(a, b):
+                return a + b
+            t = x, x + 1, x + 2
+            return bar(*t)
+
+        def outer_too_few(x):
+            def bar(a, b, c=1):
+                return a + b + c
+            return bar(x)
+
+        cases = ((outer_too_many, "too many positional arguments"),
+                 (outer_too_many_vararg, "too many positional arguments"),
+                 (outer_too_few, "missing a required argument: 'b'"))
+        for ref, msg in cases:
+            with self.assertRaises(TypingError) as raises:
+                njit(ref)(1)
+            self.assertIn(msg, str(raises.exception))
+
+        def outer_star_callee(x):
+            def bar(*a):
+                return a[0]
+            return bar(x, 2)
+
+        with self.assertRaises(NotImplementedError) as raises:
+            njit(outer_star_callee)(1)
+        self.assertIn("Stararg not supported in inliner",
+                      str(raises.exception))
 
     def test_closure_renaming_scheme(self):
         # See #7380, this checks that inlined (from closure) variables have a
