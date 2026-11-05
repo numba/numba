@@ -638,7 +638,7 @@ class TestCallFunctionExPeepHole(MemoryLeakMixin, TestCase):
         with self.assertRaisesRegex(UnsupportedBytecodeError, msg):
             @njit('void()')
             def genexp_args():
-                x(*(s for s in ["a", "b"]), sep=2)
+                f(*(s for s in ["a", "b"]), sep=2)
 
 
 class TestLargeConstDict(TestCase, MemoryLeakMixin):
