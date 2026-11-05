@@ -65,7 +65,7 @@ jobs:
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
-          python-version: 3.14
+          python-version: 3.15
           auto-update-conda: true
           auto-activate-base: true
           activate-environment: true
@@ -140,7 +140,7 @@ jobs:
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
         with:
-          python-version: 3.14
+          python-version: 3.15
           auto-update-conda: true
           auto-activate-base: true
           activate-environment: true
