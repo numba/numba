@@ -141,7 +141,7 @@ class CPUContext(BaseContext):
             from numba.np.npyimpl import init as npyimpl_init
             # Installed explicitly here. In future, this may be handled via
             # the standard extension mechanism once core numba is numpy-exclusive.
-            npyimpl_init()
+            npyimpl_init(self)
 
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
