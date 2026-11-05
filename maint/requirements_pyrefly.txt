@@ -1,2 +1,2 @@
-pyrefly==1.4.0
+pyrefly==1.4.1
 types-cffi
