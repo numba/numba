@@ -3356,10 +3356,11 @@ class TestParforsMisc(TestParforsBase):
         # issue 10908: under @njit(parallel=True), when an inline="always"
         # helper that returns a view into a structured-dtype field is chained
         # into another inline="always" helper whose body ends in np.argmax(),
-        # the ir.Del for the view ends up inside the sub-parfor that
-        # argmax_parallel_impl expands into. remove_dels only touches
-        # top-level blocks, so the Del survives into ParforPreLoweringPass
-        # and enforce_no_dels rejects it with "Illegal IR, del found".
+        # the view's last use is in the init_block of the sub-parfor that
+        # argmax_parallel_impl expands into, so its ir.Del lands there. The
+        # gufunc body creation only removed top-level dels, and sequential
+        # lowering of the sub-parfor then exposed the Del to
+        # enforce_no_dels ("Illegal IR, del found").
         @numba.njit(inline="always")
         def sample_outcome(y_pred):
             r = 0.5
