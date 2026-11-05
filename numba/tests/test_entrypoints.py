@@ -9,7 +9,7 @@ import subprocess
 import threading
 
 import numpy as np
-from numba import njit
+from numba import jit, njit
 from numba.core import types as nbtypes
 from numba.tests.support import TestCase
 from numba.testing.main import _TIMEOUT as _RUNNER_TIMEOUT
@@ -229,12 +229,12 @@ class TestEntrypoints(TestCase):
             print(out, err)
 
 
-@njit
+@jit
 def _sin(x):
     return np.sin(x)
 
 
-@njit
+@jit
 def _add_one(x):
     return x + 1
 

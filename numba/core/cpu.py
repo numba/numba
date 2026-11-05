@@ -139,11 +139,8 @@ class CPUContext(BaseContext):
 
         if config.NUMPY_AVAILABLE:
             from numba.np.npyimpl import init as npyimpl_init
-            # This can be removed once npyimpl registry no longer depends
-            # on builtins registry.
-            # In that case npyimpl_init can be added an entrypoint so it
-            # will be automatically called during the entrypoints.init_all()
-            # below when this explicit call is removed.
+            # Installed explicitly here. In future, this may be handled via
+            # the standard extension mechanism once core numba is numpy-exclusive.
             npyimpl_init()
 
         # load 3rd party extensions
