@@ -30,6 +30,19 @@ from numba.np import types as npy_types
 registry = Registry('npyimpl')
 
 
+def init(target_context=None):
+    """Install the ``npyimpl`` registry on a target context.
+
+    This is called by the CPU target during its initialization.
+    """
+    if target_context is None:
+        from numba.core.target_extension import (current_target,
+                                                 resolve_dispatcher_from_str)
+        td = resolve_dispatcher_from_str(current_target()).targetdescr
+        target_context = td.target_context
+    target_context.install_registry(registry)
+
+
 ########################################################################
 
 # In the way we generate code, ufuncs work with scalar as well as
