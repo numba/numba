@@ -36,7 +36,7 @@ class WithContext(object):
         blocks : dict[ir.Block]
         blk_start, blk_end : int
             labels of the starting and ending block of the context-manager.
-        body_block: sequence[int]
+        body_blocks: sequence[int]
             A sequence of int's representing labels of the with-body
         dispatcher_factory : callable
             A callable that takes a `FunctionIR` and returns a `Dispatcher`.

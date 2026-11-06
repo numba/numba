@@ -116,10 +116,6 @@ class MemoryTracker:
         Records start/end memory usage and timing, calculates RSS delta,
         and stores all data in instance attributes.
 
-        Args:
-            name (str): Name/identifier for the function or operation being
-                        monitored
-
         Yields:
             self: The MemoryTracker instance for accessing stored data
         """
