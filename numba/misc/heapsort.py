@@ -1,9 +1,5 @@
 """
-Heapsort implementation for Numba arrays.
-
-The algorithm is translated from NumPy 2.5.3
-(commit dd88c0c19b54ad9ed3533224221285bf0873249a).
-See https://github.com/numpy/numpy/blob/dd88c0c19b54ad9ed3533224221285bf0873249a/numpy/_core/src/npysort/npysort_heapsort.h
+See https://github.com/numpy/numpy/blob/dd88c0c19b54ad9ed3533224221285bf0873249a/numpy/_core/src/npysort/npysort_heapsort.h  # noqa: E501
 """
 from collections import namedtuple
 
