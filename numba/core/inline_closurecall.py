@@ -782,6 +782,7 @@ def _get_callee_args(call_expr, callee, loc, func_ir):
         raise NotImplementedError(
             "Stararg not supported in inliner for arg {} {}".format(
                 index, param))
+
     return numba.core.typing.fold_arguments(
         numba.core.utils.pysignature(callee), args, kws,
         lambda index, param, value: value, default_handler, stararg_handler)
@@ -791,17 +792,19 @@ def _make_function_defaults(callee, func_ir, loc):
     defaults = callee.defaults
     if not defaults:
         return []
-    if isinstance(defaults, tuple):
+    elif isinstance(defaults, tuple):
         # non-Var entries are predominantly kwargs from inlinable functions
         return [x if isinstance(x, ir.Var) else ir.Const(value=x, loc=loc)
                 for x in defaults]
-    if isinstance(defaults, (ir.Var, str)):
+    elif isinstance(defaults, (ir.Var, str)):
         default_tuple = func_ir.get_definition(defaults)
         assert (isinstance(default_tuple, ir.Expr))
         assert (default_tuple.op == "build_tuple")
         return [func_ir.get_definition(x) for x in default_tuple.items]
-    raise NotImplementedError(
-        "Unsupported defaults to make_function: {}".format(defaults))
+    else:
+        # unreachable: make_function defaults are None, a tuple or a Var
+        raise NotImplementedError(
+            "Unsupported defaults to make_function: {}".format(defaults))
 
 
 def _make_debug_print(prefix):
