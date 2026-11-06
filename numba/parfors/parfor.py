@@ -589,6 +589,16 @@ def argmax_checker(arr_size):
     if arr_size == 0:
         raise ValueError("attempt to get argmax of an empty sequence")
 
+@register_jitable
+def bool_mask_checker(arr, mask):
+    msg = "boolean index did not match indexed array"
+    if arr.ndim != mask.ndim:
+        raise IndexError(msg)
+    # NumPy allows a mask axis of length zero whatever the array axis length
+    for i in range(mask.ndim):
+        if mask.shape[i] != 0 and mask.shape[i] != arr.shape[i]:
+            raise IndexError(msg)
+
 checker_impl = namedtuple('checker_impl', ['name', 'func'])
 
 replace_functions_checkers_map = {
@@ -1958,8 +1968,30 @@ class ConvertSetItemPass:
         else:
             # Otherwise it is a boolean array that is used as index.
             assert(isinstance(index_typ, types.ArrayCompatible))
-            size_vars = equiv_set.get_shape(target)
+            # Loop over the mask, it is checked against the target below
+            size_vars = equiv_set.get_shape(index)
             bool_typ = index_typ.dtype
+            checked = [target]
+            if isinstance(pass_states.typemap[value.name],
+                          types.npytypes.Array):
+                checked.append(value)
+            checker_var = ir.Var(scope, mk_unique_var("$bool_mask_checker"),
+                                 loc)
+            checker_typ = pass_states.typingctx.resolve_value_type(
+                bool_mask_checker)
+            pass_states.typemap[checker_var.name] = checker_typ
+            init_block.append(ir.Assign(
+                ir.Global('bool_mask_checker', bool_mask_checker, loc),
+                checker_var, loc))
+            for arr in checked:
+                check_call = ir.Expr.call(checker_var, [arr, index], (), loc)
+                pass_states.calltypes[check_call] = checker_typ.get_call_type(
+                    pass_states.typingctx,
+                    (pass_states.typemap[arr.name], index_typ), {})
+                check_var = ir.Var(scope, mk_unique_var("$bool_mask_check"),
+                                   loc)
+                pass_states.typemap[check_var.name] = types.none
+                init_block.append(ir.Assign(check_call, check_var, loc))
 
         # generate loopnests and size variables from lhs correlations
         loopnests = []

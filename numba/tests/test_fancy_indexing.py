@@ -208,6 +208,29 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         foo(arr, 1)
         self.assertEqual(arr[0], arr[1])
 
+    def test_boolean_mask_wrong_length(self):
+        # See https://github.com/numba/numba/issues/10374
+        @jit
+        def getitem(arr, idx):
+            return arr[idx]
+
+        @jit
+        def setitem(arr, idx):
+            arr[idx] = 7
+
+        self.disable_leak_check()
+        msg = "boolean index did not match indexed array"
+        arr = np.arange(6).reshape(2, 3)
+        for idx in [np.array([True, True, False]), np.array([True]),
+                    (slice(None), np.array([False, True]))]:
+            with self.subTest(idx=idx):
+                with self.assertRaisesRegex(IndexError, msg):
+                    getitem(arr, idx)
+                with self.assertRaisesRegex(IndexError, msg):
+                    setitem(arr, idx)
+        # An empty mask is allowed whatever the axis length
+        self.assertEqual(getitem(arr, np.zeros(0, np.bool_)).shape, (0, 3))
+
     def test_np_take(self):
         def np_take(array, indices):
             return np.take(array, indices)
