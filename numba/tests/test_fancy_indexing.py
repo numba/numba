@@ -325,8 +325,10 @@ class TestFancyIndexing(MemoryLeakMixin, TestCase):
         arr = np.arange(9).reshape(3, 3)
         msg = 'axis 2 is out of bounds for array of dimension 2'
         indices = np.array([0, 1, 2])
-        with self.assertRaisesRegex(ValueError, msg):
+        with self.assertRaisesRegex(ValueError, msg) as raises:
             cfunc(arr, indices, axis=2)
+        self.assertIs(type(raises.exception), ValueError)
+        self.assertEqual(raises.exception.args, (msg,))
 
         self.disable_leak_check()
 

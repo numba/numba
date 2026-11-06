@@ -1597,6 +1597,10 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         # BAD: axis > dimensions
         with self.assertRaises(ValueError) as raises:
             cfunc(b, 2)
+        err = ValueError if numpy_version < (1, 25) else np.exceptions.AxisError
+        self.assertIs(type(raises.exception), err)
+        self.assertEqual(raises.exception.args,
+                         ("axis 2 is out of bounds for array of dimension 2",))
         self.assertIn(
             "axis 2 is out of bounds "
             "for array of dimension 2",
