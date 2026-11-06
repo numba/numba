@@ -511,7 +511,10 @@ def box_tuple(typ, val, c):
         obj = c.box(dtype, item)
         c.pyapi.tuple_setitem(tuple_val, i, obj)
 
-    return tuple_val
+    is_error = c.pyapi.c_api_error()
+    with c.builder.if_then(is_error, likely=False):
+        c.pyapi.decref(tuple_val)
+    return c.builder.select(is_error, c.pyapi.get_null_object(), tuple_val)
 
 @box(types.NamedTuple)
 @box(types.NamedUniTuple)
@@ -521,10 +524,13 @@ def box_namedtuple(typ, val, c):
     """
     cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
     tuple_obj = box_tuple(typ, val, c)
-    obj = c.pyapi.call(cls_obj, tuple_obj)
+    obj = cgutils.alloca_once_value(c.builder, c.pyapi.get_null_object())
+    with c.builder.if_then(cgutils.is_not_null(c.builder, tuple_obj),
+                           likely=True):
+        c.builder.store(c.pyapi.call(cls_obj, tuple_obj), obj)
     c.pyapi.decref(cls_obj)
     c.pyapi.decref(tuple_obj)
-    return obj
+    return c.builder.load(obj)
 
 
 @unbox(types.BaseTuple)
