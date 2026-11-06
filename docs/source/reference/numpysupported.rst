@@ -573,10 +573,13 @@ Bit-twiddling functions
  bitwise_or          Yes          Yes
  bitwise_xor         Yes          Yes
  bitwise_not         Yes          Yes
+ bitwise_count       Yes          Yes
  invert              Yes          Yes
  left_shift          Yes          Yes
  right_shift         Yes          Yes
 ==============  =============  ===============
+
+``bitwise_count`` requires NumPy 2.0 or later.
 
 
 Comparison functions

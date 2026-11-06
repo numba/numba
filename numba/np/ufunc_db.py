@@ -1087,6 +1087,21 @@ def _fill_ufunc_db(ufunc_db):
         'Q->Q': numbers.int_invert_impl,
     }
 
+    if numpy_version >= (2, 0):
+        ufunc_db[np.bitwise_count] = {
+            '?->B': numbers.int_bitwise_count_impl,
+            'b->B': numbers.int_bitwise_count_impl,
+            'B->B': numbers.int_bitwise_count_impl,
+            'h->B': numbers.int_bitwise_count_impl,
+            'H->B': numbers.int_bitwise_count_impl,
+            'i->B': numbers.int_bitwise_count_impl,
+            'I->B': numbers.int_bitwise_count_impl,
+            'l->B': numbers.int_bitwise_count_impl,
+            'L->B': numbers.int_bitwise_count_impl,
+            'q->B': numbers.int_bitwise_count_impl,
+            'Q->B': numbers.int_bitwise_count_impl,
+        }
+
     ufunc_db[np.left_shift] = {
         'bb->b': numbers.int_shl_impl,
         'BB->B': numbers.int_shl_impl,
