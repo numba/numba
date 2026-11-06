@@ -1,0 +1,7 @@
+Fix parameter names in three docstrings
+---------------------------------------
+
+The docstrings of ``WithContext.mutate_with_body`` and
+``ParforLoweringBuilder.getitem`` now use the actual parameter names, and the
+docstring of ``MemoryTracker.monitor`` no longer documents a ``name`` argument
+that the method does not take.
