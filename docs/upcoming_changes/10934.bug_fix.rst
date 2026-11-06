@@ -1,0 +1,6 @@
+Report an error for unsupported arguments to ``literal_unroll``
+---------------------------------------------------------------
+
+Passing something that cannot be unrolled to ``literal_unroll``, such as
+``literal_unroll(range(n))``, now raises an ``UnsupportedError`` instead of
+being silently treated as an ordinary loop.

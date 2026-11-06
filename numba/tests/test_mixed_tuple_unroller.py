@@ -1064,6 +1064,33 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         msg = "argument should be a tuple or a list of constant values"
         self.assertIn(msg, str(raises.exception))
 
+    def test_unroll_call_result(self):
+        # See issue #9882, a call result cannot be unrolled and this should
+        # be reported rather than silently ignored.
+        @njit
+        def foo(x):
+            acc = 0
+            for i in literal_unroll(range(x)):
+                acc += i
+            return acc
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo(2)
+
+        msg = "argument should be a tuple or a list of constant values"
+        self.assertIn(msg, str(raises.exception))
+
+        @njit
+        def bar(a):
+            acc = 0
+            for i in literal_unroll(np.arange(a.shape[0])):
+                acc += i
+            return acc
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            bar(np.arange(3))
+        self.assertIn(msg, str(raises.exception))
+
     def test_25(self):
         # use unroll by reference/alias
         @njit
