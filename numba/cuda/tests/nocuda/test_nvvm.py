@@ -50,5 +50,27 @@ class TestNvvmWithoutCuda(unittest.TestCase):
         self.assertIn(myconstant, ptx)
 
 
+@skip_on_cudasim('NVVM not supported in the simulator')
+class TestNvvmArchSupport(unittest.TestCase):
+    def test_blackwell_in_compute_capabilities(self):
+        self.assertIn((10, 0), nvvm.COMPUTE_CAPABILITIES)
+        self.assertIn((12, 0), nvvm.COMPUTE_CAPABILITIES)
+
+    def test_ctk_supported_blackwell(self):
+        self.assertIn((12, 8), nvvm.CTK_SUPPORTED)
+        self.assertIn((12, 9), nvvm.CTK_SUPPORTED)
+        self.assertEqual(nvvm.CTK_SUPPORTED[(12, 8)], ((5, 0), (12, 0)))
+        self.assertEqual(nvvm.CTK_SUPPORTED[(12, 9)], ((5, 0), (12, 0)))
+
+        ccs_128 = nvvm.ccs_supported_by_ctk((12, 8))
+        self.assertIn((10, 0), ccs_128)
+        self.assertIn((12, 0), ccs_128)
+
+        ccs_124 = nvvm.ccs_supported_by_ctk((12, 4))
+        self.assertNotIn((10, 0), ccs_124)
+        self.assertNotIn((12, 0), ccs_124)
+        self.assertIn((9, 0), ccs_124)
+
+
 if __name__ == '__main__':
     unittest.main()
