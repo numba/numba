@@ -1,0 +1,10 @@
+Fix ``NUMBA_ENABLE_AVX`` falling back to the wrong value when unparseable
+-------------------------------------------------------------------------
+
+The environment variable reader in ``numba.core.config`` calls a default that
+is a callable when the variable is unset, but returned the callable itself when
+the variable was set to a value it could not parse. ``NUMBA_ENABLE_AVX`` is the
+only setting with such a default, so an unparseable value left
+``numba.config.ENABLE_AVX`` bound to a function object. That object is truthy,
+so the ``avx*`` host CPU features were left enabled even on hosts where the
+default computes ``False``. The default is now resolved on both paths.

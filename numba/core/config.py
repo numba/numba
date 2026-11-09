@@ -189,7 +189,7 @@ class _EnvReloader(object):
                               "parsed.\nThe parse failed with exception:\n"
                               f"{traceback.format_exc()}",
                               RuntimeWarning)
-                return default
+                return default() if callable(default) else default
 
         def optional_str(x):
             return str(x) if x is not None else None
