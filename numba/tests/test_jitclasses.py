@@ -5,11 +5,11 @@ import random
 import typing as pt
 import unittest
 
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 
 import numpy as np
 from numba import (boolean, deferred_type, float32, float64, int16, int32,
-                   njit, optional, typeof)
+                   jit, njit, optional, typeof)
 from numba.core import errors, types
 from numba.core.dispatcher import Dispatcher
 from numba.core.errors import LoweringError, TypingError
@@ -255,6 +255,41 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         self.assertEqual(obj.x, 333)
         self.assertEqual(obj.y, 444)
         self.assertIs(obj.arr, newarr)
+
+    def test_jitclass_box_creation_failure(self):
+        Vector2 = self._make_Vector2()
+        ObjAndInt = namedtuple("ObjAndInt", ["obj", "n"])
+
+        @jit
+        def identity(obj):
+            return obj
+
+        @jit
+        def as_tuple(obj):
+            return obj, 1
+
+        @jit
+        def as_namedtuple(obj):
+            return ObjAndInt(obj, 1)
+
+        obj = Vector2(1, 2)
+        funcs = (identity, as_tuple, as_namedtuple)
+        for fn in funcs:
+            fn(obj)
+
+        def raising_init(self):
+            raise RuntimeError("box creation failed")
+
+        box_cls = type(obj)
+        orig_init = box_cls.__init__
+        box_cls.__init__ = raising_init
+        try:
+            for fn in funcs:
+                with self.assertRaisesRegex(RuntimeError,
+                                            "box creation failed"):
+                    fn(obj)
+        finally:
+            box_cls.__init__ = orig_init
 
     def test_jitclass_datalayout(self):
         spec = OrderedDict()
