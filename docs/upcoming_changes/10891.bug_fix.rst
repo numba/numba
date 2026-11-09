@@ -1,0 +1,5 @@
+Fix ``np.searchsorted`` for ``complex64`` inputs
+------------------------------------------------
+
+``np.searchsorted`` failed to compile for ``complex64`` inputs. They are now
+supported, with the same ordering of NaNs as ``complex128`` inputs.
