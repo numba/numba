@@ -1100,6 +1100,14 @@ class TestNdEmptyLikeShape(MemoryLeakMixin, ConstructorLikeBaseTest,
         arr = np.zeros((4, 6))[::2, ::2]
         self.check_shape_kwarg(func, arr, (3, 4), 'C')
 
+    def test_shape_kwarg_structured(self):
+        dtype = np.dtype([('a', np.int16), ('b', np.float32)])
+
+        def func(arr):
+            return np.empty_like(arr, shape=(3, 4))
+        arr = np.zeros(5, dtype=dtype)
+        self.check_shape_kwarg(func, arr, (3, 4), 'C')
+
     def test_shape_kwarg_dtype(self):
         # shape and dtype can be combined
         def func(arr):
