@@ -1,0 +1,6 @@
+Add support for ``numpy.bitwise_count`` and ``int.bit_count``
+-------------------------------------------------------------
+
+The :func:`numpy.bitwise_count` ufunc (requires NumPy 2.0 or later) and the
+``bit_count`` method of :class:`int` and :class:`bool` are now supported. Both
+return the number of set bits in the absolute value of the operand.
