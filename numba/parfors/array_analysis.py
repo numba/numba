@@ -2438,6 +2438,14 @@ class ArrayAnalysis(object):
     def _analyze_op_call_numpy_empty_like(
         self, scope, equiv_set, loc, args, kws
     ):
+        shape_var = kws["shape"] if "shape" in kws else None
+        if shape_var is None and len(args) >= 3:
+            shape_var = args[2]
+        if shape_var is not None and not isinstance(
+            self.typemap[shape_var.name], types.NoneType
+        ):
+            # output shape comes from the shape kwarg, not the prototype
+            return ArrayAnalysis.AnalyzeResult(shape=shape_var)
         return self._analyze_numpy_array_like(scope, equiv_set, args, kws)
 
     def _analyze_op_call_numpy_zeros_like(
