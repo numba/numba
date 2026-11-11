@@ -1,0 +1,5 @@
+Added ``heapsort`` support to array sorting
+-------------------------------------------
+
+The ``kind`` argument of ``ndarray.sort``, ``ndarray.argsort`` and
+``numpy.argsort`` now accepts ``"heapsort"`` in nopython mode.
