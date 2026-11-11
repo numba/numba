@@ -717,6 +717,13 @@ class TestArrayAnalysis(TestCase):
             equivs=[self.with_equiv('b', ('m', 'n')),
                     self.with_equiv('a', 'c')])
 
+        def test_array_like_shape_positional(a, m, n):
+            b = np.empty_like(a, None, None, None, (m, n))
+        self._compile_and_test(
+            test_array_like_shape_positional,
+            (types.Array(types.intp, 2, 'C'), types.intp, types.intp),
+            equivs=[self.with_equiv('b', ('m', 'n'))])
+
         def test_reshape(n):
             a = np.ones(n * n)
             b = a.reshape((n, n))

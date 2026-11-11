@@ -5,3 +5,6 @@ Support the ``shape`` kwarg for ``np.empty_like``
 When given, the returned array has the specified shape while the dtype and
 memory layout are taken from the prototype array. The layout is preserved
 only if the number of dimensions matches, mirroring NumPy's ``order='K'``.
+The overload's signature now matches NumPy's parameter order
+(``prototype, dtype, order, subok, shape``); ``order`` is only supported as
+``'K'`` and ``subok`` is accepted but ignored.

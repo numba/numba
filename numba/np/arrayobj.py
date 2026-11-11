@@ -4868,41 +4868,53 @@ def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_shape,
 
 
 @overload(np.empty_like)
-def ol_np_empty_like(arr, dtype=None, shape=None):
+def ol_np_empty_like(prototype, dtype=None, order=None, subok=None,
+                     shape=None):
     _check_const_str_dtype("empty_like", dtype)
     if not is_nonelike(dtype):
         nb_dtype = ty_parse_dtype(dtype)
-    elif isinstance(arr, types.Array):
-        nb_dtype = arr.dtype
+    elif isinstance(prototype, types.Array):
+        nb_dtype = prototype.dtype
     else:
-        nb_dtype = arr
+        nb_dtype = prototype
     if nb_dtype is None:
         msg = ("Cannot parse input types to function "
-               f"np.empty_like({arr}, {dtype}, {shape})")
+               f"np.empty_like({prototype}, {dtype}, {order}, {subok}, "
+               f"{shape})")
         raise errors.TypingError(msg)
+    # order='K' is NumPy's default and the only order Numba implements
+    # (via the prototype's static layout); subok is accepted but ignored
+    # as Numba has no ndarray subclasses.
+    if not (is_nonelike(order) or
+            (isinstance(order, types.StringLiteral) and
+             order.literal_value == 'K')):
+        raise errors.TypingError("np.empty_like() only supports "
+                                 "order='K'")
     if is_nonelike(shape):
-        if isinstance(arr, types.Array):
-            layout = arr.layout if arr.layout != 'A' else 'C'
-            retty = arr.copy(dtype=nb_dtype, layout=layout, readonly=False)
+        if isinstance(prototype, types.Array):
+            layout = prototype.layout if prototype.layout != 'A' else 'C'
+            retty = prototype.copy(dtype=nb_dtype, layout=layout,
+                                   readonly=False)
         else:
             retty = types.Array(nb_dtype, 0, 'C')
     else:
         ndim = ty_parse_shape(shape)
         if ndim is None:
             msg = ("Cannot parse input types to function "
-                   f"np.empty_like({arr}, {dtype}, {shape})")
+                   f"np.empty_like({prototype}, {dtype}, {order}, {subok}, "
+                   f"{shape})")
             raise errors.TypingError(msg)
         # NumPy's 'K' keeps the input's layout only if the number of
         # dimensions matches; otherwise the result is C-ordered.
-        if (isinstance(arr, types.Array) and arr.ndim == ndim
-                and arr.layout != 'A'):
-            layout = arr.layout
+        if (isinstance(prototype, types.Array) and prototype.ndim == ndim
+                and prototype.layout != 'A'):
+            layout = prototype.layout
         else:
             layout = 'C'
         retty = types.Array(nb_dtype, ndim, layout)
 
-    def impl(arr, dtype=None, shape=None):
-        return numpy_empty_like_nd(arr, dtype, shape, retty)
+    def impl(prototype, dtype=None, order=None, subok=None, shape=None):
+        return numpy_empty_like_nd(prototype, dtype, shape, retty)
     return impl
 
 
