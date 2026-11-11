@@ -2604,6 +2604,39 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         _check(a, -11)
         _check(a, (3, 30))
 
+    def test_partition_kth_minus_length(self):
+        # kth=-a.shape[-1] is a valid index for the first element, see #9124
+        pyfunc = partition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.array([30., 20., 10.])
+        for kth in (-3, [-3], [-3, -1], [0, -3]):
+            tgt = np.sort(a)[kth]
+            self.assertPreciseEqual(cfunc(a, kth)[kth], tgt)
+            self.assertPreciseEqual(pyfunc(a, kth)[kth], tgt)
+
+        a = np.arange(12.)[::-1].reshape(3, 4)
+        for kth in (-4, [-4, 1]):
+            tgt = np.sort(a)[:, kth]
+            self.assertPreciseEqual(cfunc(a, kth)[:, kth], tgt)
+
+    def test_argpartition_kth_minus_length(self):
+        # kth=-a.shape[-1] is a valid index for the first element, see #9124
+        pyfunc = argpartition
+        cfunc = jit(nopython=True)(pyfunc)
+
+        a = np.array([30., 20., 10.])
+        for kth in (-3, [-3], [-3, -1], [0, -3]):
+            tgt = np.sort(a)[kth]
+            self.assertPreciseEqual(a[cfunc(a, kth)[kth]], tgt)
+            self.assertPreciseEqual(a[pyfunc(a, kth)[kth]], tgt)
+
+        a = np.arange(12.)[::-1].reshape(3, 4)
+        for kth in (-4, [-4, 1]):
+            tgt = np.sort(a)[:, kth]
+            got = np.take_along_axis(a, cfunc(a, kth), axis=-1)
+            self.assertPreciseEqual(got[:, kth], tgt)
+
     def test_partition_exception_non_integer_kth(self):
         # inspired by the test of the same name in:
         # https://github.com/numpy/numpy/blob/043a840/numpy/core/tests/test_multiarray.py    # noqa: E501

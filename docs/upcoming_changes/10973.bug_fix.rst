@@ -1,0 +1,5 @@
+Allow ``kth=-n`` in ``np.partition`` and ``np.argpartition``
+------------------------------------------------------------
+
+``np.partition`` and ``np.argpartition`` previously raised ``ValueError: kth out of
+bounds`` for ``kth=-n``, where `n` is length of the last axis. Both functions now accept this value, matching NumPy. Values below `-n` still raise.
