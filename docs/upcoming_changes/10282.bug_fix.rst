@@ -1,0 +1,5 @@
+Report unsupported generator expressions in call arguments
+----------------------------------------------------------
+
+Generator expressions unpacked into function call arguments now raise an
+``UnsupportedBytecodeError`` with a clear error message instead of an ``AssertionError``.
