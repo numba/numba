@@ -2439,8 +2439,9 @@ class ArrayAnalysis(object):
         self, scope, equiv_set, loc, args, kws
     ):
         shape_var = kws["shape"] if "shape" in kws else None
-        if shape_var is None and len(args) >= 3:
-            shape_var = args[2]
+        if shape_var is None and len(args) >= 5:
+            # shape is the 5th positional argument
+            shape_var = args[4]
         if shape_var is not None and not isinstance(
             self.typemap[shape_var.name], types.NoneType
         ):

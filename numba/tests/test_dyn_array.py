@@ -1155,6 +1155,42 @@ class TestNdEmptyLikeShape(MemoryLeakMixin, ConstructorLikeBaseTest,
         self.assertIn("Cannot parse input types to function np.empty_like",
                       str(raises.exception))
 
+    def test_shape_positional(self):
+        # shape is the 5th positional argument in NumPy
+        def func(arr):
+            return np.empty_like(arr, np.float64, 'K', True, (3, 4))
+        self.check_shape_kwarg(func, np.zeros((2, 3)), (3, 4), 'C')
+
+    def test_shape_positional_order_slot_rejected(self):
+        # the 3rd positional argument is order, not shape
+        @jit
+        def func(arr):
+            return np.empty_like(arr, np.float64, (2, 3))
+        with self.assertRaises(TypingError) as raises:
+            func(np.zeros((2, 3)))
+        self.assertIn("only supports order='K'", str(raises.exception))
+
+    def test_order_kwarg(self):
+        # order='K' is the NumPy default and is accepted
+        def func(arr):
+            return np.empty_like(arr, shape=(3, 4), order='K')
+        self.check_shape_kwarg(func, np.zeros((2, 3)), (3, 4), 'C')
+
+    def test_order_kwarg_rejected(self):
+        @jit
+        def func(arr):
+            return np.empty_like(arr, shape=(3, 4), order='C')
+        with self.assertRaises(TypingError) as raises:
+            func(np.zeros((2, 3)))
+        self.assertIn("only supports order='K'", str(raises.exception))
+
+    def test_subok_ignored(self):
+        # Numba has no ndarray subclasses, subok has no effect
+        for subok in (None, True, False):
+            def func(arr):
+                return np.empty_like(arr, shape=(3, 4), subok=subok)
+            self.check_shape_kwarg(func, np.zeros((2, 3)), (3, 4), 'C')
+
 
 class TestNdZerosLike(TestNdEmptyLike):
 
