@@ -24,7 +24,7 @@ env:
 
 permissions:
   contents: read
-  actions: read
+  actions: read  # required to download llvmlite artifacts from another workflow run
 
 jobs:
   win-arm64-build-conda:

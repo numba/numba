@@ -29,12 +29,14 @@ concurrency:
 
 permissions:
   contents: read
-  actions: read
 
 jobs:
   find-workflow-runs:
     name: Find Workflow Runs
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read  # required to query workflow runs via gh API
     outputs:
       conda_run_ids: ${{ steps.find-runs.outputs.conda_run_ids }}
       wheel_run_ids: ${{ steps.find-runs.outputs.wheel_run_ids }}
@@ -71,6 +73,9 @@ jobs:
     name: Download Artifacts
     needs: find-workflow-runs
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read  # required to download artifacts from other workflow runs
 
     steps:
       - name: Checkout repository
@@ -156,7 +161,8 @@ jobs:
       name: testpypi
       url: https://test.pypi.org/p/numba
     permissions:
-      id-token: write
+      # https://docs.pypi.org/trusted-publishers/using-a-publisher/
+      id-token: write  # required for OIDC publishing; for details see above
 
     steps:
       - name: Download wheels artifact
@@ -187,7 +193,8 @@ jobs:
       name: pypi
       url: https://pypi.org/p/numba
     permissions:
-      id-token: write
+      # https://docs.pypi.org/trusted-publishers/using-a-publisher/
+      id-token: write  # required for OIDC publishing; for details see above
 
     steps:
       - name: Download wheels artifact
