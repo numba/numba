@@ -189,6 +189,23 @@ class TestRemoveDead(TestCase):
 
         self.run_array_index_test(func)
 
+    def test_alias_unpack_tuple(self):
+        # test for issue #10907
+        def func(A, i):
+            a, b, c, B = 0, 0, 0, A
+            B[i, 0] = 3
+
+        self.run_array_index_test(func)
+
+    def test_alias_unpack_tuple_arg(self):
+        # test for issue #10907
+        def func(A, i):
+            T = (0, 0, 0, A)
+            a, b, c, B = T
+            B[i, 0] = 3
+
+        self.run_array_index_test(func)
+
     def test_alias_func_ext(self):
         def func(A, i):
             B = dummy_aliased_func(A)

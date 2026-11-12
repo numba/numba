@@ -736,8 +736,13 @@ def find_potential_aliases(blocks, args, typemap, func_ir, alias_map=None,
                     _add_alias(lhs, expr.name, alias_map, arg_aliases)
                 # subarrays like A = B[0] for 2D B
                 if (isinstance(expr, ir.Expr) and (expr.op == 'cast' or
-                    expr.op in ['getitem', 'static_getitem'])):
+                    expr.op in ['getitem', 'static_getitem', 'exhaust_iter'])):
                     _add_alias(lhs, expr.value.name, alias_map, arg_aliases)
+                if (isinstance(expr, ir.Expr) and
+                        expr.op in ['build_tuple', 'build_list', 'build_set']):
+                    for item in expr.items:
+                        if not is_immutable_type(item.name, typemap):
+                            _add_alias(lhs, item.name, alias_map, arg_aliases)
                 if isinstance(expr, ir.Expr) and expr.op == 'inplace_binop':
                     _add_alias(lhs, expr.lhs.name, alias_map, arg_aliases)
                 # array attributes like A.T

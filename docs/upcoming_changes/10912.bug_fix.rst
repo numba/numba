@@ -1,0 +1,7 @@
+Fix dead code removal in parfor for arrays bound via tuple unpacking
+--------------------------------------------------------------------
+
+Alias tracking in ``find_potential_aliases`` now tracks through ``build_tuple``,
+``build_list``, ``build_set``, and ``exhaust_iter``. This prevents array
+mutations in parfor loops from being incorrectly eliminated as dead code when
+arrays are assigned via tuple unpacking.
