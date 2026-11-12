@@ -39,6 +39,15 @@ for permanent use by adding::
 
     color_scheme: dark_bg
 
+NumPy availability
+------------------
+
+.. envvar:: NUMBA_NUMPY_AVAILABLE
+
+    If set to 0, Numba behaves as if NumPy is not installed: the NumPy ufunc
+    lowering registry is not installed. Defaults to whether NumPy can be found
+    in the current environment.
+
 Jit flags
 ---------
 
