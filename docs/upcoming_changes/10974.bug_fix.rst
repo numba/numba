@@ -1,0 +1,8 @@
+Fix ``np.ptp``, ``np.var`` and ``np.std`` on empty arrays
+---------------------------------------------------------
+
+``np.ptp`` now raises ``ValueError`` for any zero-size array, such as one of
+shape ``(3, 0)``. Before, only an empty first axis was caught and the function
+read past the end of the data. ``np.var``, ``np.std``, ``ndarray.var()`` and
+``ndarray.std()`` now return ``nan`` for an empty array, as NumPy does. Before,
+they raised ``ZeroDivisionError``.
