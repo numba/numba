@@ -831,6 +831,44 @@ class TestQuicksortMultidimensionalArrays(BaseSortingTest, TestCase):
 
 class TestNumpySort(TestCase):
 
+    def test_temporal_nat_sort(self):
+        for kind in ('quicksort', 'mergesort', 'stable'):
+            def sort(a):
+                return np.sort(a)
+
+            def sort_inplace(a):
+                a.sort(kind=kind)
+                return a
+
+            def argsort(a):
+                return np.argsort(a, kind=kind)
+
+            def array_argsort(a):
+                return a.argsort(kind=kind)
+
+            compiled = [jit(f) for f in
+                        (sort, sort_inplace, argsort, array_argsort)]
+            for dtype in ('M8[s]', 'M8[D]', 'm8[s]', 'm8[D]'):
+                nat = np.iinfo(np.int64).min
+                cases = ([], [nat], [nat, nat], [30, nat, 20],
+                         [nat, 30, 10], [30, 10, nat], [30, 10, 20],
+                         [nat, 3, 1, nat, 2, 1] * 10)
+                for values in cases:
+                    with self.subTest(kind=kind, dtype=dtype, values=values):
+                        a = np.array(values, dtype=np.int64).view(dtype)
+                        expected = np.sort(a, kind=kind).view(np.int64)
+                        for func in compiled[:2]:
+                            got = func(a.copy())
+                            np.testing.assert_array_equal(
+                                got.view(np.int64), expected)
+                        for func in compiled[2:]:
+                            indices = func(a.copy())
+                            np.testing.assert_array_equal(
+                                a[indices].view(np.int64), expected)
+                            if kind != 'quicksort':
+                                np.testing.assert_array_equal(
+                                    indices, np.argsort(a, kind=kind))
+
     def setUp(self):
         np.random.seed(42)
 

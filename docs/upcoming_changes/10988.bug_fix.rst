@@ -1,0 +1,6 @@
+Sort temporal NaT values last
+-----------------------------
+
+Sorting datetime64 and timedelta64 arrays containing NaT now places valid
+values in order and NaT values last, matching NumPy. This also corrects
+the ordering returned by argsort for these arrays.

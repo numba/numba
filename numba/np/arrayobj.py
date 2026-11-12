@@ -7047,7 +7047,7 @@ def get_sort_func(kind, lt_impl, is_argsort=False):
 
 
 def lt_implementation(dtype):
-    if isinstance(dtype, types.Float):
+    if isinstance(dtype, (types.Float, types.NPDatetime, types.NPTimedelta)):
         return lt_floats
     elif isinstance(dtype, types.Complex):
         return lt_complex
