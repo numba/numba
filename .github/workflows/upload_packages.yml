@@ -219,6 +219,7 @@ jobs:
     name: Publish to Anaconda.org
     needs: download-artifacts
     runs-on: ubuntu-latest
+    environment: anaconda
     env:
       ANACONDA_USER: numba
       ANACONDA_LABEL: ${{ inputs.anaconda_label || 'dev' }}
