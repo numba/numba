@@ -65,10 +65,9 @@ class GUFuncKernel(npyimpl._Kernel, Generic[_GUFuncT_co]):
 def make_gufunc_kernel(_dufunc: _GUFuncT) -> type[GUFuncKernel[_GUFuncT]]: ...
 
 class GUFuncLowerer(
-    UfuncLowererBase[_GUFuncT_co, GUFuncKernel],
+    UfuncLowererBase[_GUFuncT_co, GUFuncKernel[_GUFuncT_co]],
     Generic[_GUFuncT_co],
 ):
-    @override
     def __init__(self, gufunc: _GUFuncT_co) -> None: ...
 
 class GUFunc(
@@ -106,14 +105,19 @@ class GUFunc(
         writable_args: tuple[int | str, ...] = ...,
     ) -> None: ...
     def __call__(
-        self: GUFunc[Callable[_Tss, _T]], *args: _Tss.args, **kws: _Tss.kwargs
+        self: GUFunc[Callable[Concatenate[_T1, _Tss], _T]],
+        arg0: _T1,
+        /,
+        *args: _Tss.args,
+        **kws: _Tss.kwargs,
     ) -> _T: ...
 
     #
     def add(self, fty: _ToSignature) -> None: ...
     def expected_ndims(self) -> tuple[tuple[int, ...], tuple[int, ...]]: ...
     def build_ufunc(self) -> Self: ...
-    def match_signature(
+    @override
+    def match_signature(  # pyrefly:ignore[bad-override-mutable-attribute]
         self, ewise_types: tuple[Type, ...], sig: Signature
     ) -> bool: ...
 
@@ -126,7 +130,7 @@ class GUFunc(
     def _reduce_states(self) -> dict[str, Any]: ...
     @classmethod
     @override
-    def _rebuild(  # type: ignore[override]
+    def _rebuild(  # type: ignore[override]  # pyrefly:ignore[bad-override]
         cls,
         py_func: Callable[..., object],
         signature: str,

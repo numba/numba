@@ -21,19 +21,22 @@ Style
 Typing annotations
 ------------------
 
-- Numba uses `Mypy <http://mypy-lang.org/>`_ to verify typing annotations in
-  the CI.
+- Numba uses `Pyrefly <https://pyrefly.org/>`_ to verify typing annotations in
+  the CI. Run ``pyrefly check``.
 
-    - Only a subset of files are being tested (See ``mypy.ini``).
+    - Only a subset of files are being checked (see ``pyrefly.toml``).
     - Only in exceptional circumstances should ``type: ignore`` comments be
       used.
 
+- Mypy's `stubtest <https://mypy.readthedocs.io/en/stable/stubtest.html>`_ tool
+  is used to verify that Numba's ``.pyi`` type stubs are consistent with the
+  runtime implementation. Run ``python maint/stubtest.py`` (dependencies in
+  ``maint/stubtest/requirements_stubtest.txt``).
 - Most of Numba code base does not use type hints. We welcome incremental PRs for
   gradually adding type hints.
-- New features: use type hints even if the file isn't in the mypy checklist.
-- To add a file to the checklist: add it to ``files`` in ``mypy.ini`` and choose
-  a compliance level (3=basic static checks, 2/1=stricter; see ``mypy.ini``
-  for details).
+- New features: use type hints even if the file isn't in the pyrefly checklist.
+- To add a file to the checklist: add it to ``project-includes`` in
+  ``pyrefly.toml``.
 
 Python's ``typing`` vs ``numba.core.typing``
 ''''''''''''''''''''''''''''''''''''''''''''
@@ -51,7 +54,7 @@ Python's ``typing`` vs ``numba.core.typing``
 Runtime type checking
 '''''''''''''''''''''
 
-Most code is unannotated, so runtime type checking complements mypy.
+Most code is unannotated, so runtime type checking complements pyrefly.
 
 - The test suite uses `typeguard`_ to validate type annotations at runtime.
 - To enable: use `runtests.py`_ as the test runner with

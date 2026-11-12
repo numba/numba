@@ -200,7 +200,7 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
         # Normalize dict kws
         kws = dict(kws)
 
-    # deal with kwonly args
+    # deal with kwonly args that might appear as the last positional arguments
     params = pysig.parameters
     kwonly = []
     for name, p in params.items():
@@ -214,7 +214,7 @@ def fold_arguments(pysig, args, kws, normal_handler, default_handler,
     bind_kws = kws.copy()
     if kwonly:
         for idx, n in enumerate(kwonly):
-            bind_kws[n] = args[len(kwonly) + idx]
+            bind_kws[n] = args[-len(kwonly) + idx]
 
     # now bind
     try:
@@ -978,7 +978,7 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
         parameters = list(pysig.parameters.values())[1:]
         sig = sig.replace(pysig=pysig.replace(parameters=parameters))
         self._impl_cache[cache_key] = sig
-        self._overload_cache[sig.args] = imp
+        self._overload_cache[(self.context, sig.args)] = imp
         # register the lowering
         lower_builtin(imp, *sig.args)(imp)
         return sig
@@ -988,7 +988,7 @@ class _IntrinsicTemplate(_TemplateTargetHelperMixin, AbstractTemplate):
         Return the key for looking up the implementation for the given
         signature on the target context.
         """
-        return self._overload_cache[sig.args]
+        return self._overload_cache[(self.context, sig.args)]
 
     def get_template_info(self):
         basepath = os.path.dirname(os.path.dirname(numba.__file__))

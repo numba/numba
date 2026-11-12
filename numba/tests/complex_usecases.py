@@ -4,6 +4,8 @@ import cmath
 def div_usecase(x, y):
     return x / y
 
+def mul_usecase(x, y):
+    return x * y
 
 def real_usecase(x):
     return x.real

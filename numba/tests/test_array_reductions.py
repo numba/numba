@@ -3,7 +3,7 @@ from itertools import product, combinations_with_replacement
 import numpy as np
 
 from numba import jit, njit, typeof, types
-from numba.np.numpy_support import numpy_version
+from numba.np.numpy_support import as_dtype, numpy_version
 from numba.tests.support import TestCase, MemoryLeakMixin, tag, skip_if_numpy_2
 import unittest
 
@@ -118,6 +118,18 @@ def array_nanprod(arr):
 
 def array_nanstd(arr):
     return np.nanstd(arr)
+
+def array_nanstd_ddof0(arr):
+    return np.nanstd(arr, ddof=0)
+
+def array_nanstd_ddof1(arr):
+    return np.nanstd(arr, ddof=1)
+
+def array_nanvar_ddof0(arr):
+    return np.nanvar(arr, ddof=0)
+
+def array_nanvar_ddof1(arr):
+    return np.nanvar(arr, ddof=1)
 
 def array_nanvar(arr):
     return np.nanvar(arr)
@@ -505,6 +517,17 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
         expected = np.mean(arr)
         self.assertPreciseEqual(cfunc(arr), expected)
 
+    def test_mean_count_rounding(self):
+        # Reproducer from issue #10647: 2**24 + 1 is the smallest length
+        # not exactly representable as float32, so any incorrect cast
+        # in the computation will mismatch the np result.
+        n = 2**24 + 1
+        for dtype in (np.float32, np.complex64):
+            arr = np.zeros(n, dtype=dtype)
+            arr[0] = dtype(2**24 - 1)
+            npr, nbr = run_comparative(array_mean, arr)
+            self.assertPreciseEqual(npr, nbr)
+
     def test_mean_empty_timedelta(self):
         """Test that mean of empty timedelta array returns NaT"""
         cfunc = jit(nopython=True)(array_mean)
@@ -584,6 +607,131 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
     def test_nanmax_basic(self):
         self.check_reduction_basic(array_nanmax)
 
+    def test_nanargmax_nanargmin(self):
+        # np.nanargmax and np.nanargmin are tested together to avoid code
+        # duplication, they only differ in the comparison applied
+        pyfuncs = [
+            lambda a, axis=None: np.nanargmax(a, axis),
+            lambda a, axis=None: np.nanargmin(a, axis),
+        ]
+
+        # floats without NaN, NaN in various positions, and integers (NumPy
+        # treats integer input like plain argmax/argmin as there is no NaN)
+        cases = [
+            np.array([1.0, 3.0, 2.0]),
+            np.array([np.nan, 1.0, 3.0]),
+            np.array([1.0, 3.0, np.nan]),
+            np.array([1.0, np.nan, 3.0, 2.0]),
+            np.array([3.0, np.nan, 1.0, 2.0]),
+            np.array([[1.0, np.nan, 3.0], [2.0, 5.0, np.nan]]),
+            np.array([1, 3, 2]),                 # int64
+            np.array([1, 3, 2], dtype=np.int32),
+            # non-contiguous and F-order input, 0-d arrays, and +/- inf,
+            # following the coverage of NumPy's own nanfunctions tests
+            np.array([1.0, 5.0, np.nan, 3.0, 7.0])[::2],
+            np.asfortranarray(np.array([[1.0, np.nan], [3.0, 4.0]])),
+            np.array(1.0),
+            np.array([np.inf, -np.inf]),
+            np.array([np.nan, np.inf]),
+            np.array([-np.inf, -np.inf]),
+            # a NaN next to an infinity equal to NumPy's NaN replacement
+            # value wins the tie-break, the replaced index is returned
+            np.array([np.nan, -np.inf]),
+            np.array([np.inf, np.nan]),
+        ]
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for arr in cases:
+                self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+        # the scalar (axis=None) result is boxed by Numba as a Python int,
+        # the same as for np.argmax/np.argmin; wrapping a Python int with
+        # np.asarray would give the platform default integer (int32 on
+        # Windows), so there is no NumPy dtype to assert for it. The
+        # with-axis reduction returns an array of dtype np.intp
+        for pyfunc in pyfuncs:
+            got = jit(nopython=True)(pyfunc)(np.array([1.0, 3.0]))
+            self.assertIsInstance(got, int)
+            got = jit(nopython=True)(pyfunc)(
+                np.array([[1.0, 2.0], [3.0, 4.0]]), 1)
+            self.assertEqual(got.dtype, np.dtype(np.intp))
+
+        # axis=None flattens, axis=k (including negative) reduces along the
+        # given axis, matching NumPy exactly; also for F-order input.
+        # Note: a 0-d array with an explicit axis is not supported, the
+        # same as for np.argmax/np.argmin.
+        arr2d = np.array([[1.0, np.nan, 3.0], [2.0, 5.0, np.nan]])
+        arr4d = np.arange(120.).reshape(2, 3, 4, 5)
+        arr4d[0, 1, 1, 2] = np.nan
+        arr4d[1, 2, 3, 4] += 100
+
+        for arr in [arr2d, np.asfortranarray(arr2d), arr4d]:
+            axes = list(range(arr.ndim)) + [-(i + 1) for i in range(arr.ndim)]
+            py_functions = [
+                lambda a, _axis=axis: np.nanargmax(a, axis=_axis)
+                for axis in [None] + axes
+            ] + [
+                lambda a, _axis=axis: np.nanargmin(a, axis=_axis)
+                for axis in [None] + axes
+            ]
+            c_functions = [
+                jit(nopython=True)(pyfunc) for pyfunc in py_functions
+            ]
+            for pyfunc, cfunc in zip(py_functions, c_functions):
+                self.assertPreciseEqual(pyfunc(arr), cfunc(arr))
+
+        # errors: empty input and all-NaN input, the latter both for the
+        # whole array and for a slice along the reduced axis
+        # Exceptions leak references
+        self.disable_leak_check()
+
+        for pyfunc, empty_msg in [
+            (pyfuncs[0], "attempt to get argmax of an empty sequence"),
+            (pyfuncs[1], "attempt to get argmin of an empty sequence"),
+        ]:
+            cfunc = jit(nopython=True)(pyfunc)
+            empty = np.array([], dtype=np.float64)
+            # NumPy's message for empty input is version dependent: NumPy
+            # < 2.0 reports an empty array to np.nanarg* as an all-NaN
+            # slice, NumPy >= 2.0 reports an empty sequence. Numba always
+            # raises the NumPy >= 2.0 message.
+            if numpy_version < (2, 0):
+                pyfunc_msg = "All-NaN slice encountered"
+            else:
+                pyfunc_msg = empty_msg
+            with self.assertRaisesRegex(ValueError, pyfunc_msg):
+                pyfunc(empty)
+            with self.assertRaisesRegex(ValueError, empty_msg):
+                cfunc(empty)
+
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            allnan = np.array([np.nan, np.nan])
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                pyfunc(allnan)
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                cfunc(allnan)
+            # a 0-d NaN array is an all-NaN slice too
+            allnan_0d = np.array(np.nan)
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                pyfunc(allnan_0d)
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                cfunc(allnan_0d)
+            # an all-NaN slice along the reduced axis also raises, the second
+            # column of nan_col is all-NaN
+            nan_col = np.array([[1.0, np.nan], [3.0, np.nan]])
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                pyfunc(nan_col, 0)
+            with self.assertRaisesRegex(ValueError,
+                                         "All-NaN slice encountered"):
+                cfunc(nan_col, 0)
+
     def test_nanmean_basic(self):
         self.check_reduction_basic(array_nanmean)
 
@@ -595,6 +743,34 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_nanstd_basic(self):
         self.check_reduction_basic(array_nanstd)
+
+    def test_nanstd_ddof(self):
+        self.check_reduction_basic(array_nanstd_ddof0)
+        self.check_reduction_basic(array_nanstd_ddof1)
+        # test complex branch
+        for arr in full_test_arrays(np.complex64):
+            for pyfunc in (array_nanstd_ddof0, array_nanstd_ddof1):
+                npr, nbr = run_comparative(pyfunc, arr.ravel())
+                self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
+        # complex array containing NaNs
+        arr = np.array([1+2j, np.nan, 3-1j, np.nan, 5+0j], dtype=np.complex64)
+        for pyfunc in (array_nanstd_ddof0, array_nanstd_ddof1):
+            npr, nbr = run_comparative(pyfunc, arr)
+            self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
+
+    def test_nanvar_ddof(self):
+        self.check_reduction_basic(array_nanvar_ddof0, prec='double')
+        self.check_reduction_basic(array_nanvar_ddof1, prec='double')
+        # test complex branch
+        for arr in full_test_arrays(np.complex64):
+            for pyfunc in (array_nanvar_ddof0, array_nanvar_ddof1):
+                npr, nbr = run_comparative(pyfunc, arr.ravel())
+                self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
+        # complex array containing NaNs
+        arr = np.array([1+2j, np.nan, 3-1j, np.nan, 5+0j], dtype=np.complex64)
+        for pyfunc in (array_nanvar_ddof0, array_nanvar_ddof1):
+            npr, nbr = run_comparative(pyfunc, arr)
+            self.assertPreciseEqual(npr, nbr, prec='single', ulps=2)
 
     def test_nanvar_basic(self):
         self.check_reduction_basic(array_nanvar, prec='double')
@@ -656,6 +832,33 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
             yield a
 
         self.check_median_basic(pyfunc, variations)
+
+    def test_np_median_scalar(self):
+        self.check_scalar_basic(array_median_global)
+
+        cfunc = jit(nopython=True)(array_median_global)
+
+        def check(arg):
+            self.assertPreciseEqual(cfunc(arg), array_median_global(arg))
+
+        check(np.int64(-3))
+        check(np.uint32(5))
+
+        check(np.complex64(2 + 3j))
+        check(np.complex128(-1 - 1j))
+        check(np.complex64(complex('nan')))
+
+        check(5)
+        check(True)
+        check(3.5)
+
+        check(np.timedelta64())
+        check(np.timedelta64(5, 'ms'))
+        check(np.timedelta64(-3, 'D'))
+        check(np.timedelta64('NaT', 's'))
+
+        with self.assertTypingError():
+            cfunc(np.datetime64('2020-01-01'))
 
     def check_percentile_and_quantile(self, pyfunc, q_upper_bound):
         cfunc = jit(nopython=True)(pyfunc)
@@ -928,6 +1131,76 @@ class TestArrayReductions(MemoryLeakMixin, TestCase):
 
     def test_array_cumprod_global(self):
         self.check_cumulative(array_cumprod_global)
+
+    def check_cumulative_scalar(self, pyfunc):
+        cfunc = jit(nopython=True)(pyfunc)
+        dtypes = [np.bool_, np.int8, np.int16, np.int32, np.int64,
+                  np.uint8, np.uint16, np.uint32, np.uint64,
+                  np.float32, np.float64, np.complex64, np.complex128]
+        for dtype in dtypes:
+            val = dtype(3)
+            with self.subTest(dtype=dtype):
+                nb_val = cfunc(val)
+                py_val = pyfunc(val)
+                self.assertEqual(nb_val.dtype, py_val.dtype)
+                self.assertPreciseEqual(nb_val, py_val)
+
+    def test_array_cumsum_scalar(self):
+        self.check_cumulative_scalar(array_cumsum_global)
+
+    def test_array_cumprod_scalar(self):
+        self.check_cumulative_scalar(array_cumprod_global)
+
+    def get_return_dtype(self, cfunc, arr):
+        arrty = typeof(arr)
+        for sig in cfunc.nopython_signatures:
+            if sig.args[0] == arrty:
+                return as_dtype(sig.return_type)
+        raise AssertionError("no signature compiled for %s" % (arrty,))
+
+    def test_accumulator_dtype_parity(self):
+        """NumPy parity for the accumulator dtype of the reductions.
+
+        See issue #10846: booleans and integers narrower than the platform
+        integer accumulate into intp (signed) or uintp (unsigned), the other
+        dtypes keep their own type.
+        """
+        dtypes = [np.bool_, np.int8, np.int16, np.int32, np.int64,
+                  np.uint8, np.uint16, np.uint32, np.uint64,
+                  np.float32, np.float64, np.complex64, np.complex128]
+        pyfuncs = [array_sum_global, array_prod_global, array_nansum,
+                   array_nanprod, array_cumsum_global, array_cumprod_global,
+                   array_nancumsum, array_nancumprod]
+        for pyfunc in pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for dtype in dtypes:
+                arr = np.arange(1, 5).astype(dtype)
+                expected = pyfunc(arr)
+                got = cfunc(arr)
+                if isinstance(got, np.ndarray):
+                    got_dtype = got.dtype
+                else:
+                    got_dtype = self.get_return_dtype(cfunc, arr)
+                with self.subTest(pyfunc=pyfunc.__name__, dtype=dtype):
+                    self.assertEqual(got_dtype, np.asarray(expected).dtype)
+
+        # Only some of the reductions have a scalar variant, but those that do
+        # must return the accumulator dtype too.
+        scalar_pyfuncs = [array_sum_global, array_prod_global,
+                          array_cumsum_global, array_cumprod_global]
+        for pyfunc in scalar_pyfuncs:
+            cfunc = jit(nopython=True)(pyfunc)
+            for dtype in dtypes:
+                val = dtype(3)
+                expected = pyfunc(val)
+                got = cfunc(val)
+                if isinstance(got, np.ndarray):
+                    got_dtype = got.dtype
+                else:
+                    got_dtype = self.get_return_dtype(cfunc, val)
+                with self.subTest(pyfunc=pyfunc.__name__, dtype=dtype,
+                                  scalar=True):
+                    self.assertEqual(got_dtype, np.asarray(expected).dtype)
 
     def check_aggregation_magnitude(self, pyfunc, is_prod=False):
         """

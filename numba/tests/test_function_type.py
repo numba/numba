@@ -1119,6 +1119,33 @@ class TestMiscIssues(TestCase):
         self.assertEqual(bar(((foo1, foo2),)), 4)
         self.assertEqual(bar(((foo1, foo2), (foo1, foo3))), 9)  # reproducer
 
+    def test_issue_10758(self):
+        # See https://github.com/numba/numba/issues/10758
+        # Two functions with different signatures can't be unified. That used
+        # to hit a bare assert and raise an AssertionError with no message.
+
+        @cfunc(float64(float64))
+        def f(x):
+            return x + 1.0
+
+        @cfunc(int64(int64))
+        def g(x):
+            return x + 1
+
+        @cfunc(float64(float64))
+        def h(x):
+            return x + 2.0
+
+        @njit
+        def foo(pair, x):
+            return pair[0](x), pair[1](x)
+
+        with self.assertRaisesRegex(ValueError, 'mismatch of argument types:'):
+            foo((f, g), 1.0)  # reproducer
+
+        # matching signatures still unify
+        self.assertEqual(foo((f, h), 1.0), (2.0, 3.0))
+
 
 class TestBasicSubtyping(TestCase):
     def test_basic(self):
@@ -1402,6 +1429,54 @@ class TestExceptionInFunctionType(MemoryLeakMixin, TestCase):
 
         self.assertIn("Exception ignored in:", err)
         self.assertIn(str(MyError(101)), err)
+
+
+class TestFunctionTypeReturnMismatch(TestCase):
+    """https://github.com/numba/numba/issues/10755"""
+
+    def test_literal_str_vs_unicode(self):
+        @jit
+        def gm():
+            return "hello"
+
+        @jit((types.FunctionType(types.unicode_type()),))
+        def probe(fn):
+            r = fn()
+            return len(r), r == "hello", r == ""
+
+        self.assertEqual(probe(gm), (5, True, False))
+        self.assertEqual(list(gm.nopython_signatures),
+                         [types.unicode_type()])
+
+    def test_literal_int_vs_float64(self):
+        @jit
+        def gm():
+            return 7
+
+        @jit((types.FunctionType(float64()),))
+        def probe(fn):
+            return fn()
+
+        self.assertEqual(probe(gm), 7.0)
+        self.assertEqual(list(gm.nopython_signatures), [float64()])
+
+    def test_preexisting_literal_str_mismatch(self):
+        # Pre-existing () -> Literal[str] overload is keyed by args only,
+        # so compile(sig) does not replace it, mismatch must raise.
+        @jit
+        def gm():
+            return "hello"
+
+        self.assertEqual(gm(), "hello")
+
+        @jit((types.FunctionType(types.unicode_type()),))
+        def probe(fn):
+            r = fn()
+            return len(r), r == "hello", r == ""
+
+        with self.assertRaises(TypeError) as raises:
+            probe(gm)
+        self.assertIn("mismatch of return type", str(raises.exception))
 
 
 if __name__ == '__main__':

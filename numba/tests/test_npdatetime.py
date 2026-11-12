@@ -335,8 +335,10 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD(-7), -1.5, TD(10))
         check(TD('NaT', 'ps'), -1.5, TD('NaT', 'ps'))
         check(TD(7, 'ps'), float('nan'), TD('NaT', 'ps'))
-        # wraparound on overflow
-        check(TD(2**62, 'ps'), 16, TD(0, 'ps'))
+        if numpy_version < (2, 5):
+            # wraparound on overflow, post NumPy 2.5, 
+            # timedelta64s raise on overflow instead.
+            check(TD(2**62, 'ps'), 16, TD(0, 'ps'))
 
     def test_div(self):
         div = self.jit(div_usecase)
@@ -836,6 +838,14 @@ class TestDatetimeArithmetic(TestCase):
             i = all_units.index(a_unit)
             units = all_units[i:i+6]
             for unit in units:
+                if numpy_version >= (2, 5):
+                    try:
+                        # Post NumPy 2.5 it is possible for
+                        # astype to raise on overflow, pre 
+                        # 2.5 it wraps around.
+                        b = a.astype('M8[%s]' % unit)
+                    except OverflowError:
+                        continue
                 # Force conversion
                 b = a.astype('M8[%s]' % unit)
                 if (not npdatetime_helpers.same_kind(value_unit(a),

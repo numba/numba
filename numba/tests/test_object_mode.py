@@ -91,7 +91,7 @@ class TestObjectMode(TestCase):
 
         # This tests 'None in None' with the python interpreter. The error
         # message has changed in 3.14.
-        if PYVERSION in ((3, 14), ):
+        if PYVERSION in ((3, 14), (3, 15)):
             expected_snippet = "is not a container or iterable"
         elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
             expected_snippet = "is not iterable"

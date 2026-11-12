@@ -19,7 +19,7 @@ from numba.core.unsafe import eh
 from numba.cpython.unsafe.tuple import unpack_single_tuple
 
 
-if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
     # Operands for CALL_INTRINSIC_1
     from numba.core.byteflow import CALL_INTRINSIC_1_Operand as ci1op
 elif PYVERSION in ((3, 10), (3, 11)):
@@ -786,12 +786,39 @@ def peep_hole_list_to_tuple(func_ir):
     2. Sets an accumulator's initial value as the target of the BUILD_TUPLE
     3. Searches for 'extend' on the original list and turns these into binary
        additions on the accumulator.
-    4. Searches for 'append' on the original list and turns these into a
-       `BUILD_TUPLE` which is then appended via binary addition to the
-       accumulator.
+    4. Searches for 'append' on the original list, collecting runs of them
+       into a single `BUILD_TUPLE` which is then appended via binary addition
+       to the accumulator (an append-only window becomes the result itself).
     5. Assigns the accumulator to the variable that exits the peephole and the
        rest of the block/code refers to as the result of the unpack operation.
     6. Patches up
+
+    Step 4 coalesces because CPython emits this bytecode for every call with
+    more than 30 arguments, and a `BUILD_TUPLE` per item leaves a tuple of
+    every prefix length, i.e. IR (and LLVM lowered from it) quadratic in the
+    item count. For `f(x[0], x[1], ..., x[30])` the emitted IR used to be::
+
+        $14build_list.2 = build_tuple(items=[])
+        $20binary_subscr.5 = getitem(value=x, index=$const18.4.1)
+        $24list_append.6_var = build_tuple(items=[$20binary_subscr.5])
+        $24list_append.7 = $14build_list.2 + $24list_append.6_var
+        $30binary_subscr.10 = getitem(value=x, index=$const28.9.2)
+        $34list_append.11_var = build_tuple(items=[$30binary_subscr.10])
+        $34list_append.12 = $24list_append.7 + $34list_append.11_var
+        ...                    # 29 more tuples, of widths 3, 4, ..., 31
+        $326call_intrinsic_1.158 = $324list_append.157
+        $328call_function_ex.159 = call $4load_global.0(
+            *$326call_intrinsic_1.158, vararg=$326call_intrinsic_1.158)
+
+    and is now a single tuple, built once and passed straight to the call::
+
+        $20binary_subscr.5 = getitem(value=x, index=$const18.4.1)
+        $30binary_subscr.10 = getitem(value=x, index=$const28.9.2)
+        ...
+        $326call_intrinsic_1.158 = build_tuple(items=[$20binary_subscr.5,
+            $30binary_subscr.10, ..., $320binary_subscr.155])
+        $328call_function_ex.159 = call $4load_global.0(
+            *$326call_intrinsic_1.158, vararg=$326call_intrinsic_1.158)
     """
     _DEBUG = False
 
@@ -865,6 +892,51 @@ def peep_hole_list_to_tuple(func_ir):
 
                 the_build_list = init.target
 
+                # Buffer appended items and emit them as one build_tuple: a
+                # binary add per item makes the IR, and the LLVM lowered from
+                # it, quadratic in the number of items. Only an `extend` (which
+                # reads the accumulator) forces a flush; item values are
+                # computed by statements that stay in place, so buffering past
+                # them preserves evaluation order.
+                pending_appends = []
+
+                def flush_pending_appends(acc, loc, target=None):
+                    """Emit pending appends as one build_tuple. When `target`
+                    is given, an append-only window is written to it as a
+                    plain build_tuple (which the CALL_FUNCTION_EX peephole
+                    requires for calls with kwargs); any other shape keeps
+                    the assignment of the accumulator to `target`."""
+                    if pending_appends:
+                        items = list(pending_appends)
+                        pending_appends.clear()
+                        scope = items[0].scope
+                        tup = ir.Expr.build_tuple(items, loc)
+                        if acc is the_build_list and not init.value.items:
+                            # accumulator is still the empty initial list
+                            if target is not None:
+                                append_and_fix(ir.Assign(tup, target, loc))
+                                return target
+                            acc = scope.redefine("$_list_append_tuple",
+                                                 loc=loc)
+                            append_and_fix(ir.Assign(tup, acc, loc))
+                            return acc
+                        tup_var = scope.redefine("$_list_append_tuple",
+                                                 loc=loc)
+                        append_and_fix(ir.Assign(tup, tup_var, loc))
+                        acc_var = scope.redefine("$_list_append_acc", loc=loc)
+                        append_and_fix(
+                            ir.Assign(
+                                ir.Expr.binop(fn=operator.add, lhs=acc,
+                                              rhs=tup_var, loc=loc),
+                                acc_var, loc,
+                            )
+                        )
+                        acc = acc_var
+                    if target is not None:
+                        append_and_fix(ir.Assign(acc, target, loc))
+                        return target
+                    return acc
+
                 # Do the transform on the peep hole
                 if _DEBUG:
                     print("\nBLOCK:")
@@ -896,6 +968,13 @@ def peep_hole_list_to_tuple(func_ir):
                                 fname = expr.func.name
                                 if fname in extends or fname in appends:
                                     arg = expr.args[0]
+                                    if (fname in appends
+                                            and isinstance(arg, ir.Var)):
+                                        pending_appends.append(arg)
+                                        func_ir._definitions.pop(x.target.name,
+                                                                 None)
+                                        continue
+                                    acc = flush_pending_appends(acc, x.loc)
                                     if isinstance(arg, ir.Var):
                                         tmp_name = "%s_var_%s" % (fname,
                                                                   arg.name)
@@ -955,10 +1034,12 @@ def peep_hole_list_to_tuple(func_ir):
                     else:
                         # stick everything else in as-is
                         new_hole.append(x)
-                # Finally write the result back into the original build list as
-                # everything refers to it.
-                append_and_fix(ir.Assign(acc, t2l_agn.target,
-                                         the_build_list.loc))
+                # Finally write the result back into the original build list
+                # as everything refers to it. Flushing straight into it keeps
+                # an all-append window a plain build_tuple, which the
+                # CALL_FUNCTION_EX peephole requires for calls with kwargs.
+                flush_pending_appends(acc, the_build_list.loc,
+                                      target=t2l_agn.target)
                 if _DEBUG:
                     print("\nNEW HOLE:")
                     for x in new_hole:
@@ -1389,7 +1470,7 @@ class Interpreter(object):
                                          max(inst_blocks.body))
         self.last_active_offset = last_active_offset
 
-        if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
             self.active_exception_entries = tuple(
                 [entry for entry in self.bytecode.exception_entries
                  if entry.start < self.last_active_offset])
@@ -1405,7 +1486,7 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             # Insert end of try markers
             self._end_try_blocks()
         elif PYVERSION in ((3, 10),):
@@ -1423,12 +1504,12 @@ class Interpreter(object):
         # post process the IR to rewrite opcodes/byte sequences that are too
         # involved to risk handling as part of direct interpretation
         peepholes = []
-        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             peepholes.append(peep_hole_split_at_pop_block)
-        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             peepholes.append(peep_hole_list_to_tuple)
         peepholes.append(peep_hole_delete_with_exit)
-        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             # peep_hole_call_function_ex_to_call_function_kw
             # depends on peep_hole_list_to_tuple converting
             # any large number of arguments from a list to a
@@ -1461,7 +1542,7 @@ class Interpreter(object):
 
         See also: _insert_try_block_end
         """
-        assert PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14))
+        assert PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15))
         graph = self.cfa.graph
         for offset, block in self.blocks.items():
             # Get current blockstack
@@ -1569,7 +1650,7 @@ class Interpreter(object):
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
         # Check out-of-scope syntactic-block
-        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             # This is recreating pre-3.11 code structure
             while self.syntax_blocks:
                 if offset >= self.syntax_blocks[-1].exit:
@@ -1740,7 +1821,8 @@ class Interpreter(object):
                 val = self.get(varname)
             except ir.NotDefinedError:
                 # Hack to make sure exception variables are defined
-                assert PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)), \
+                assert PYVERSION in ((3, 11), (3, 12), (3, 13),
+                                     (3, 14), (3, 15)), \
                        "unexpected missing definition"
                 val = ir.Const(value=None, loc=self.loc)
             stmt = ir.Assign(value=val, target=target,
@@ -1800,7 +1882,7 @@ class Interpreter(object):
         if self._DEBUG_PRINT:
             print(inst)
         assert self.current_block is not None
-        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
             if self.syntax_blocks:
                 top = self.syntax_blocks[-1]
                 if isinstance(top, ir.With) :
@@ -1887,7 +1969,7 @@ class Interpreter(object):
     def op_NOP(self, inst):
         pass
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # New in 3.14
         op_NOT_TAKEN = op_NOP
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -1991,7 +2073,7 @@ class Interpreter(object):
                                      (), loc=self.loc)
         self.store(value=sliceinst, name=res)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_BINARY_SLICE(self, inst, start, end, container, res, slicevar,
                             temp_res):
             start = self.get(start)
@@ -2010,7 +2092,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_STORE_SLICE(self, inst, start, end, container, value, res,
                            slicevar):
             start = self.get(start)
@@ -2242,7 +2324,7 @@ class Interpreter(object):
         srcname = self.code_locals[inst.arg]
         self.store(value=self.get(srcname), name=res)
 
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_LOAD_FAST(self, inst, res, as_load_deref=False):
             if as_load_deref:
                 self.op_LOAD_DEREF(inst, res)
@@ -2252,7 +2334,7 @@ class Interpreter(object):
     else:
         op_LOAD_FAST = _op_LOAD_FAST
 
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_LOAD_FAST_LOAD_FAST(self, inst, res1, res2):
             oparg = inst.arg
             oparg1 = oparg >> 4
@@ -2289,7 +2371,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         op_LOAD_FAST_CHECK = op_LOAD_FAST
 
         def op_LOAD_FAST_AND_CLEAR(self, inst, res):
@@ -2307,7 +2389,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 14),):
+    if PYVERSION in ((3, 14), (3, 15)):
         # New in 3.14.
         op_LOAD_FAST_BORROW = op_LOAD_FAST
         op_LOAD_FAST_BORROW_LOAD_FAST_BORROW = op_LOAD_FAST_LOAD_FAST
@@ -2346,7 +2428,7 @@ class Interpreter(object):
 
     def op_LOAD_ATTR(self, inst, item, res):
         item = self.get(item)
-        if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+        if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
             attr = self.code_names[inst.arg >> 1]
         elif PYVERSION in ((3, 10), (3, 11)):
             attr = self.code_names[inst.arg]
@@ -2404,7 +2486,7 @@ class Interpreter(object):
             const = ir.Const(value, loc=self.loc)
         self.store(const, res)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # New in 3.14
         def op_LOAD_SMALL_INT(self, inst, res):
             value = inst.arg
@@ -2415,7 +2497,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         def op_LOAD_GLOBAL(self, inst, idx, res):
             name = self.code_names[idx]
             value = self.get_global_value(name)
@@ -2433,7 +2515,7 @@ class Interpreter(object):
     def op_COPY_FREE_VARS(self, inst):
         pass
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         def op_LOAD_DEREF(self, inst, res):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             if name in self.code_cellvars:
@@ -2462,11 +2544,11 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         def op_MAKE_CELL(self, inst):
             pass  # ignored bytecode
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         def op_STORE_DEREF(self, inst, value):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             value = self.get(value)
@@ -2504,7 +2586,7 @@ class Interpreter(object):
         exit_fn_obj = ir.Const(None, loc=self.loc)
         self.store(value=exit_fn_obj, name=exitfn)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # Replaced by LOAD_SPECIAL in 3.14.
         pass
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -2571,7 +2653,7 @@ class Interpreter(object):
         expr = ir.Expr.call(func, args, kwargs, loc=self.loc)
         self.store(expr, res)
 
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_CALL_KW(self, inst, func, args, kw_names, res):
             func = self.get(func)
             args = [self.get(x) for x in args]
@@ -2770,7 +2852,7 @@ class Interpreter(object):
                        loc=self.loc)
         self.current_block.append(br)
 
-    if PYVERSION in ((3, 14),):
+    if PYVERSION in ((3, 14), (3, 15)):
         # Removed in 3.14 -- replaced with BINARY_OP and []
         pass
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -2931,7 +3013,7 @@ class Interpreter(object):
 
     def op_BINARY_OP(self, inst, op, lhs, rhs, res):
         if op == "[]":
-            # Special case 3.14 -- body of BINARY_SUBSCR now here
+            # Special case 3.14+: body of BINARY_SUBSCR now here
             lhs = self.get(lhs)
             rhs = self.get(rhs)
             expr = ir.Expr.getitem(lhs, index=rhs, loc=self.loc)
@@ -3053,7 +3135,7 @@ class Interpreter(object):
         ret = ir.Return(self.get(castval), loc=self.loc)
         self.current_block.append(ret)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_RETURN_CONST(self, inst, retval, castval):
             value = self.code_consts[inst.arg]
             const = ir.Const(value, loc=self.loc)
@@ -3066,7 +3148,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 13), (3, 14)):
+    if PYVERSION in ((3, 13), (3, 14), (3, 15)):
         def op_TO_BOOL(self, inst, val, res):
             self.store(self.get(val), res) # TODO: just a lazy hack
 
@@ -3076,7 +3158,7 @@ class Interpreter(object):
         raise NotImplementedError(PYVERSION)
 
     def op_COMPARE_OP(self, inst, lhs, rhs, res):
-        if PYVERSION in ((3, 13), (3, 14)):
+        if PYVERSION in ((3, 13), (3, 14), (3, 15)):
             op = dis.cmp_op[inst.arg >> 5]
             # TODO: fifth lowest bit now indicates a forced version to bool.
         elif PYVERSION in ((3, 12),):
@@ -3197,7 +3279,7 @@ class Interpreter(object):
     def op_POP_JUMP_FORWARD_IF_NOT_NONE(self, inst, pred):
         self._jump_if_none(inst, pred, False)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_POP_JUMP_IF_NONE(self, inst, pred):
             self._jump_if_none(inst, pred, True)
 
@@ -3341,7 +3423,7 @@ class Interpreter(object):
         self.op_MAKE_FUNCTION(inst, name, code, closure, annotations,
                               kwdefaults, defaults, res)
 
-    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14), (3, 15)):
         def op_LOAD_CLOSURE(self, inst, res):
             name = self.func_id.func.__code__._varname_from_oparg(inst.arg)
             if name in self.code_cellvars:
@@ -3461,7 +3543,7 @@ class Interpreter(object):
                                   loc=self.loc)
         self.store(value=appendinst, name=res)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # Removed in 3.14
         pass
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -3485,7 +3567,7 @@ class Interpreter(object):
     def op_CALL_METHOD(self, *args, **kws):
         self.op_CALL_FUNCTION(*args, **kws)
 
-    if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+    if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
         def op_CALL_INTRINSIC_1(self, inst, operand, **kwargs):
             if operand == ci1op.INTRINSIC_STOPITERATION_ERROR:
                 stmt = ir.StaticRaise(INTRINSIC_STOPITERATION_ERROR, (),
@@ -3505,7 +3587,7 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         # New in 3.14, replaces BEFORE_WITH.
         def op_LOAD_SPECIAL(self, inst, contextmanager, exit_method, block_end):
             assert self.blocks[inst.offset] is self.current_block
@@ -3534,22 +3616,28 @@ class Interpreter(object):
     else:
         raise NotImplementedError(PYVERSION)
 
-    if PYVERSION in ((3, 14), ):
+    if PYVERSION in ((3, 14), (3, 15)):
         def op_LOAD_COMMON_CONSTANT(self, inst, res, idx):
-            if dis._common_constants[idx] == AssertionError:
-                gv_fn = ir.Global("AssertionError",
-                                  AssertionError,
-                                  loc=self.loc)
-                self.store(value=gv_fn, name=res)
+            # Keep in sync with dis._common_constants and
+            # byteflow.op_LOAD_COMMON_CONSTANT.
+            # Types/callables become ir.Global (like LOAD_GLOBAL);
+            # literals become ir.Const (like LOAD_CONST).
+            const = dis._common_constants[idx]
+            if const in (AssertionError, NotImplementedError,
+                         tuple, all, any, list, set):
+                value = ir.Global(const.__name__, const, loc=self.loc)
+            elif const in (None, '', True, False, -1):
+                value = ir.Const(const, loc=self.loc)
             else:
-                raise NotImplementedError
+                raise NotImplementedError(const)
+            self.store(value=value, name=res)
     elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
         pass
     else:
         raise NotImplementedError(PYVERSION)
 
 
-if PYVERSION in ((3, 12), (3, 13), (3, 14)):
+if PYVERSION in ((3, 12), (3, 13), (3, 14), (3, 15)):
     class INTRINSIC_STOPITERATION_ERROR(AssertionError):
         pass
 elif PYVERSION in ((3, 10), (3, 11)):

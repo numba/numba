@@ -3,7 +3,7 @@ import math
 import sys
 
 from numba import jit, types
-from numba.tests.support import TestCase, skip_if_py314
+from numba.tests.support import TestCase, skip_unless_py314_or_later
 from .complex_usecases import *
 import unittest
 
@@ -114,9 +114,40 @@ class TestComplex(BaseComplexTest, TestCase):
                        (types.complex64, types.complex64)]
         self.run_binary(div_usecase, value_types, values, flags=flags)
 
-    @skip_if_py314
     def test_div_npm(self):
         self.test_div(flags=no_pyobj_flags)
+
+
+@skip_unless_py314_or_later
+class TestComplexNaNRecovery(BaseComplexTest, TestCase):
+    """
+    Verify CPython NaN-recovery for complex mul / div.
+    """
+
+    def special_values(self):
+        # 1e200 (large finite) is here so mul can overflow before recovering
+        reals = [-0.0, +0.0, 1, -1, 1e200,
+                 float('-inf'), float('+inf'), float('nan')]
+        return [complex(x, y) for x, y in itertools.product(reals, reals)]
+
+    def test_mul(self, flags=no_pyobj_flags):
+        values = list(itertools.product(self.special_values(),
+                                        self.special_values()))
+        value_types = [(types.complex128, types.complex128)]
+        self.run_binary(mul_usecase, value_types, values, flags=flags)
+
+    def test_div(self, flags=no_pyobj_flags):
+        values = list(itertools.product(self.special_values(),
+                                        self.special_values()))
+        value_types = [(types.complex128, types.complex128)]
+        self.run_binary(div_usecase, value_types, values, flags=flags)
+
+    def test_div_zero(self, flags=no_pyobj_flags):
+        cfunc = jit((types.complex128, types.complex128), **flags)(div_usecase)
+        for denom in [0j, complex(0.0, 0.0), complex(-0.0, -0.0),
+                      complex(0.0, -0.0), complex(-0.0, 0.0)]:
+            with self.assertRaises(ZeroDivisionError):
+                cfunc(1+1j, denom)
 
 
 class TestCMath(BaseComplexTest, TestCase):
@@ -208,7 +239,6 @@ class TestCMath(BaseComplexTest, TestCase):
         self.run_binary(log_base_usecase, value_types, values, flags=flags,
                         ulps=3)
 
-    @skip_if_py314
     def test_log_base_npm(self):
         self.test_log_base(flags=no_pyobj_flags)
 

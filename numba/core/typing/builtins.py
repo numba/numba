@@ -59,11 +59,12 @@ class Slice(ConcreteTemplate):
         signature(types.slice3_type, types.intp, types.intp, types.intp),
         signature(types.slice3_type, types.none, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.none, types.intp),
-        signature(types.slice3_type, types.intp, types.intp, types.none),
-        signature(types.slice3_type, types.intp, types.none, types.none),
-        signature(types.slice3_type, types.none, types.intp, types.none),
         signature(types.slice3_type, types.none, types.none, types.intp),
-        signature(types.slice3_type, types.none, types.none, types.none),
+        # A None step is a step of 1, i.e. a two-member slice.
+        signature(types.slice2_type, types.intp, types.intp, types.none),
+        signature(types.slice2_type, types.intp, types.none, types.none),
+        signature(types.slice2_type, types.none, types.intp, types.none),
+        signature(types.slice2_type, types.none, types.none, types.none),
     ]
 
 

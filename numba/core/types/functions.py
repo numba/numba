@@ -3,9 +3,10 @@ from collections import namedtuple, defaultdict
 import itertools
 import logging
 import textwrap
+import weakref
 from shutil import get_terminal_size
 
-from .abstract import Callable, DTypeSpec, Dummy, Literal, Type, weakref
+from .abstract import Callable, DTypeSpec, Dummy, Literal, Type
 from .common import Opaque
 from .misc import unliteral
 from numba.core import errors, utils, types, config

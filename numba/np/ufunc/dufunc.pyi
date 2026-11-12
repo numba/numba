@@ -92,10 +92,9 @@ class UfuncAtIterator:
 def make_dufunc_kernel(_dufunc: _DUFuncT) -> type[DUFuncKernel[_DUFuncT]]: ...
 
 class DUFuncLowerer(
-    UfuncLowererBase[_DUFuncT_co, DUFuncKernel],
+    UfuncLowererBase[_DUFuncT_co, DUFuncKernel[_DUFuncT_co]],
     Generic[_DUFuncT_co],
 ):
-    @override
     def __init__(self, dufunc: _DUFuncT_co) -> None: ...
 
 #
@@ -132,13 +131,18 @@ class DUFunc(
         targetoptions: dict[str, Any] | None = None,
     ) -> None: ...
     def __call__(
-        self: DUFunc[Callable[_Tss, _T]], *args: _Tss.args, **kws: _Tss.kwargs
+        self: DUFunc[Callable[Concatenate[_T1, _Tss], _T]],
+        arg0: _T1,
+        /,
+        *args: _Tss.args,
+        **kws: _Tss.kwargs,
     ) -> _T: ...
 
     #
     def build_ufunc(self) -> Self: ...
     def add(self, sig: _ToSignature) -> CompileResult: ...
-    def match_signature(
+    @override
+    def match_signature(  # pyrefly:ignore[bad-override-mutable-attribute]
         self, ewise_types: tuple[Type, ...], sig: Signature
     ) -> bool: ...
 
@@ -149,7 +153,7 @@ class DUFunc(
     #
     @override  # type: ignore[override]
     @overload
-    def at(
+    def at(  # pyrefly:ignore[bad-override]
         self: DUFunc[Any, Callable[[_T1, _T2, None], Any]],
         a: _T1,
         indices: _T2,
@@ -168,7 +172,7 @@ class DUFunc(
     def _reduce_states(self) -> dict[str, Any]: ...
     @classmethod
     @override
-    def _rebuild(  # type: ignore[override]
+    def _rebuild(  # type: ignore[override] # pyrefly:ignore[bad-override]
         cls,
         dispatcher: Dispatcher,
         identity: _T,

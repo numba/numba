@@ -652,8 +652,9 @@ def unified_function_type(numba_types, require_precise=True):
             else:
                 if function is None:
                     function = t
-                else:
-                    assert function == t
+                elif function != t:
+                    # Refuse to unify two different function types
+                    return
         else:
             return
     if require_precise and (function is None or undefined_function is not None):

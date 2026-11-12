@@ -41,7 +41,7 @@ class AsNumbaTypeRegistry:
             return py_type
 
     def _builtin_infer(self, py_type):
-        if PYVERSION in ((3, 14), ):
+        if PYVERSION in ((3, 14), (3, 15)):
             # As of 3.14 the typing module has been updated to return a
             # different type when calling: `typing.Optional[X]`.
             #

@@ -32,7 +32,7 @@ _TupleT_co = TypeVar(
 
 _TemplateType: TypeAlias = type[FunctionTemplate]
 _AnyCallable: TypeAlias = _Callable[..., Any]
-_BoundFunctionKey: TypeAlias = tuple[Hashable, _ThisT, _Callable | None]
+_BoundFunctionKey: TypeAlias = tuple[Hashable, _ThisT, _Callable[..., object] | None]
 _GetPointerFn: TypeAlias = _Callable[[Any], int]
 
 ###
@@ -43,7 +43,7 @@ class BaseFunction(Callable):
     templates: Final[tuple[_TemplateType, ...]]
     typing_key: Final[Hashable]
 
-    @override  # this free `_TemplateT` is needed because `list` is invariant
+    # this free `_TemplateT` is needed because `list` is invariant
     def __init__(
         self,
         template: tuple[_TemplateTypeT, ...] | list[_TemplateTypeT] | _TemplateTypeT,
@@ -74,7 +74,6 @@ class BoundFunction(Callable, Opaque, Generic[_ThisT_co]):
     typing_key: Final[Hashable]
     this: _ThisT_co
 
-    @override
     def __init__(self, template: _TemplateType, this: _ThisT_co) -> None: ...
 
     #
@@ -104,7 +103,7 @@ class BoundFunction(Callable, Opaque, Generic[_ThisT_co]):
     @override
     def get_call_signatures(self) -> tuple[Sequence[Signature], bool]: ...
 
-class MakeFunctionLiteral(Literal, Opaque): ...
+class MakeFunctionLiteral(Literal[_T_co], Opaque): ...
 
 class WeakType(Type, Generic[_T_co]):
     @property
@@ -113,12 +112,11 @@ class WeakType(Type, Generic[_T_co]):
 
     #
     @override
-    def __eq__(self, other: Self) -> bool: ...  # type: ignore[override]
+    def __eq__(self, other: Self) -> bool: ...  # type: ignore[override]  # pyrefly:ignore[bad-override]
     @override
     def __hash__(self) -> int: ...
 
 class Dispatcher(WeakType[_DispatcherT_co], Callable, Dummy, Generic[_DispatcherT_co]):
-    @override
     def __init__(self, dispatcher: _DispatcherT_co) -> None: ...
 
     #
@@ -147,7 +145,6 @@ class ExternalFunctionPointer(BaseFunction):
     get_pointer: Final[_GetPointerFn]
     cconv: Final[str | None]
 
-    @override
     def __init__(
         self,
         sig: Signature,
@@ -158,24 +155,22 @@ class ExternalFunctionPointer(BaseFunction):
     #
     @property
     @override
-    def key(self) -> tuple[Signature, str | None, _GetPointerFn]: ...  # type: ignore[override]
+    def key(self) -> tuple[Signature, str | None, _GetPointerFn]: ...  # type: ignore[override] # pyrefly:ignore[bad-override]
 
 class ExternalFunction(Function):
     symbol: Final[str]
     sig: Final[Signature]
 
-    @override
     def __init__(self, symbol: str, sig: Signature) -> None: ...
 
     #
     @property
     @override
-    def key(self) -> tuple[str, Signature]: ...  # type: ignore[override]
+    def key(self) -> tuple[str, Signature]: ...  # type: ignore[override] # pyrefly:ignore[bad-override]
 
 class NamedTupleClass(Callable, Opaque, Generic[_TupleT_co]):
     instance_class: type[_TupleT_co]
 
-    @override
     def __init__(self, instance_class: type[_TupleT_co]) -> None: ...
 
     #
@@ -199,7 +194,6 @@ class NamedTupleClass(Callable, Opaque, Generic[_TupleT_co]):
 class NumberClass(Callable, DTypeSpec, Opaque, Generic[_T_co]):
     instance_type: _T_co
 
-    @override
     def __init__(self, instance_type: _T_co) -> None: ...
 
     #
@@ -230,7 +224,6 @@ class _RecursiveCallOverloads(NamedTuple):
 class RecursiveCall(Opaque, Generic[_DispatcherT_co]):
     dispatcher_type: Dispatcher[_DispatcherT_co]
 
-    @override
     def __init__(self, dispatcher_type: Dispatcher[_DispatcherT_co]) -> None: ...
     @property
     @override

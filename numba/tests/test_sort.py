@@ -13,6 +13,7 @@ from numba.tests.support import TestCase, MemoryLeakMixin
 
 from numba.misc.quicksort import make_py_quicksort, make_jit_quicksort
 from numba.misc.mergesort import make_jit_mergesort
+from numba.misc.heapsort import make_jit_heapsort
 from numba.misc.timsort import make_py_timsort, make_jit_timsort, MergeRun
 
 
@@ -39,6 +40,12 @@ jit_quicksort = make_jit_quicksort()
 def sort_usecase(val):
     val.sort()
 
+def sort_kind_usecase(val, is_stable=False):
+    if is_stable:
+        val.sort(kind='mergesort')
+    else:
+        val.sort(kind='quicksort')
+
 def argsort_usecase(val):
     return val.argsort()
 
@@ -47,6 +54,15 @@ def argsort_kind_usecase(val, is_stable=False):
         return val.argsort(kind='mergesort')
     else:
         return val.argsort(kind='quicksort')
+
+def sort_heapsort_usecase(val):
+    val.sort(kind='heapsort')
+
+def argsort_heapsort_usecase(val):
+    return val.argsort(kind='heapsort')
+
+def np_argsort_heapsort_usecase(val):
+    return np.argsort(val, kind='heapsort')
 
 def sorted_usecase(val):
     return sorted(val)
@@ -846,11 +862,13 @@ class TestNumpySort(TestCase):
             return True
         return False
 
-    def check_sort_inplace(self, pyfunc, cfunc, val):
+    def check_sort_inplace(self, pyfunc, cfunc, val, kwargs=None):
+        if kwargs is None:
+            kwargs = {}
         expected = copy.copy(val)
         got = copy.copy(val)
-        pyfunc(expected)
-        cfunc(got)
+        pyfunc(expected, **kwargs)
+        cfunc(got, **kwargs)
         self.assertPreciseEqual(got, expected)
 
     def check_sort_copy(self, pyfunc, cfunc, val):
@@ -899,6 +917,50 @@ class TestNumpySort(TestCase):
             np.random.shuffle(imag)
             orig = np.array([complex(*x) for x in zip(real, imag)])
             self.check_sort_inplace(pyfunc, cfunc, orig)
+
+    def test_array_sort_kind_int(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in self.int_arrays():
+                self.check_sort_inplace(pyfunc, cfunc, orig,
+                                        dict(is_stable=is_stable))
+
+        check(sort_kind_usecase, is_stable=True)
+        check(sort_kind_usecase, is_stable=False)
+
+    def test_array_sort_kind_float(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in self.float_arrays():
+                self.check_sort_inplace(pyfunc, cfunc, orig,
+                                        dict(is_stable=is_stable))
+
+        check(sort_kind_usecase, is_stable=True)
+        check(sort_kind_usecase, is_stable=False)
+
+    def test_array_sort_kind_complex(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for real in self.float_arrays():
+                imag = real[::]
+                np.random.shuffle(imag)
+                orig = np.array([complex(*x) for x in zip(real, imag)])
+                self.check_sort_inplace(pyfunc, cfunc, orig,
+                                        dict(is_stable=is_stable))
+
+        check(sort_kind_usecase, is_stable=True)
+        check(sort_kind_usecase, is_stable=False)
+
+    def test_array_sort_kind_multidim(self):
+        def check(pyfunc, is_stable):
+            cfunc = jit(nopython=True)(pyfunc)
+            for shape in ((4, 5), (3, 4, 5), (2, 30)):
+                orig = np.random.random(shape) * 100
+                self.check_sort_inplace(pyfunc, cfunc, orig,
+                                        dict(is_stable=is_stable))
+
+        check(sort_kind_usecase, is_stable=True)
+        check(sort_kind_usecase, is_stable=False)
 
     def test_np_sort_int(self):
         pyfunc = np_sort_usecase
@@ -997,6 +1059,75 @@ class TestNumpySort(TestCase):
         check(argsort_kind_usecase, is_stable=False)
         check(np_argsort_kind_usecase, is_stable=False)
 
+    def test_array_sort_heapsort(self):
+        cfunc = jit(nopython=True)(sort_heapsort_usecase)
+        arrays = (
+            np.array([], dtype=np.int64),
+            np.array([42], dtype=np.int64),
+            np.array([3, -1, 4, -1, 5, -9, 2, 6]),
+            np.array([1, 2, 3, 4, 5]),
+            np.array([5, 4, 3, 2, 1]),
+        )
+        for orig in arrays:
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+        for orig in self.int_arrays():
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+        for orig in self.float_arrays():
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+        for real in self.float_arrays():
+            imag = real.copy()
+            np.random.shuffle(imag)
+            orig = np.array([complex(*x) for x in zip(real, imag)])
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+        arrays = (
+            np.array(['2020-01-03', '2020-01-01', '2020-01-02'],
+                     dtype='datetime64[D]'),
+            np.array([3, -1, 2], dtype='timedelta64[D]'),
+        )
+        for orig in arrays:
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+        for shape in ((4, 5), (3, 4, 5), (2, 30)):
+            orig = np.random.random(shape) * 100
+            self.check_sort_inplace(sort_heapsort_usecase, cfunc, orig)
+
+    def test_argsort_heapsort(self):
+        arrays = (
+            np.array([], dtype=np.int64),
+            np.array([42], dtype=np.int64),
+            np.array([3, -1, 4, -1, 5, -9, 2, 6]),
+            np.array([5, 4, 3, 2, 1]),
+        )
+        for pyfunc in (argsort_heapsort_usecase,
+                       np_argsort_heapsort_usecase):
+            cfunc = jit(nopython=True)(pyfunc)
+            for orig in arrays:
+                self.check_argsort(pyfunc, cfunc, orig)
+            for orig in self.int_arrays():
+                self.check_argsort(pyfunc, cfunc, orig)
+
+        cfunc = jit(nopython=True)(argsort_heapsort_usecase)
+        for orig in self.float_arrays():
+            self.check_argsort(argsort_heapsort_usecase, cfunc, orig)
+
+        for real in self.float_arrays():
+            imag = real.copy()
+            np.random.shuffle(imag)
+            orig = np.array([complex(*x) for x in zip(real, imag)])
+            self.check_argsort(argsort_heapsort_usecase, cfunc, orig)
+
+        arrays = (
+            np.array(['2020-01-03', '2020-01-01', '2020-01-02'],
+                     dtype='datetime64[D]'),
+            np.array([3, -1, 2], dtype='timedelta64[D]'),
+        )
+        for orig in arrays:
+            self.check_argsort(argsort_heapsort_usecase, cfunc, orig)
+
     def test_bad_array(self):
         cfunc = jit(nopython=True)(np_sort_usecase)
         msg = '.*Argument "a" must be array-like.*'
@@ -1047,6 +1178,40 @@ class TestPythonSort(TestCase):
             got = cfunc(orig, b)
             self.assertPreciseEqual(got, expected)
             self.assertNotEqual(list(orig), got)   # sanity check
+
+
+class TestHeapSort(TestCase):
+    def heapsort_arrays(self):
+        return (
+            np.array([], dtype=np.int64),
+            np.array([42], dtype=np.int64),
+            np.array([3, -1, 4, -1, 5, -9, 2, 6]),
+            np.array([1, 2, 3, 4, 5]),
+            np.array([5, 4, 3, 2, 1]),
+            np.array([np.inf, -np.inf, -0.0, 0.0, 1.5, 1.5]),
+            np.array(['2020-01-03', '2020-01-01', '2020-01-02'],
+                     dtype='datetime64[D]'),
+        )
+
+    def test_heapsort(self):
+        toplevel = make_jit_heapsort().run_heapsort
+        sorter = njit(lambda arr: toplevel(arr))
+        for data in self.heapsort_arrays():
+            expected = np.sort(data, kind='heapsort')
+            got = sorter(data)
+            self.assertPreciseEqual(got, expected)
+            self.assertPreciseEqual(data, expected)
+
+    def test_argheapsort(self):
+        toplevel = make_jit_heapsort(is_argsort=True).run_heapsort
+        sorter = njit(lambda arr: toplevel(arr))
+        for data in self.heapsort_arrays():
+            original = data.copy()
+            got = sorter(data)
+            self.assertPreciseEqual(data, original)
+            self.assertPreciseEqual(original[got], np.sort(original,
+                                                            kind='heapsort'))
+            self.assertPreciseEqual(np.sort(got), np.arange(data.size))
 
 
 class TestMergeSort(TestCase):
@@ -1228,6 +1393,56 @@ class TestSortSlashSortedWithKey(MemoryLeakMixin, TestCase):
             self.assertIn(expect, str(raises.exception))
 
 
+class TestArraySort(MemoryLeakMixin, TestCase):
+    """Tests specific to array.sort"""
+
+    def test_exceptions(self):
+
+        @njit
+        def nonliteral_kind(kind):
+            np.arange(5).sort(kind=kind)
+
+        # check non-literal kind
+        with self.assertRaises(errors.TypingError) as raises:
+            # valid spelling but not literal
+            nonliteral_kind('quicksort')
+
+        expect = '"kind" must be a string literal'
+        self.assertIn(expect, str(raises.exception))
+
+        @njit
+        def unsupported_kwarg():
+            np.arange(5).sort(foo='')
+
+        with self.assertRaises(errors.TypingError) as raises:
+            unsupported_kwarg()
+
+        expect = "Unsupported keywords: ['foo']"
+        self.assertIn(expect, str(raises.exception))
+
+        @jit
+        def unsupported_kind():
+            np.arange(5).sort(kind='unknown')
+
+        with self.assertRaises(errors.TypingError) as raises:
+            unsupported_kind()
+
+        expect = "Unsupported \"kind\": 'unknown'"
+        self.assertIn(expect, str(raises.exception))
+
+    def test_kinds(self):
+        for kind in ('quicksort', 'mergesort', 'stable', 'heapsort'):
+            @jit
+            def sort_kind(arr):
+                arr.sort(kind=kind)
+
+            for arr in (np.array([3, 1, 4, 1, 5, 9, 2, 6]),
+                        np.array([[3, 1, 4, 1], [5, 9, 2, 6]])):
+                expected = np.sort(arr, kind=kind)
+                sort_kind(arr)
+                self.assertPreciseEqual(arr, expected)
+
+
 class TestArrayArgsort(MemoryLeakMixin, TestCase):
     """Tests specific to array.argsort"""
 
@@ -1254,6 +1469,43 @@ class TestArrayArgsort(MemoryLeakMixin, TestCase):
 
         expect = "Unsupported keywords: ['foo']"
         self.assertIn(expect, str(raises.exception))
+
+        @jit
+        def unsupported_kind():
+            np.arange(5).argsort(kind='unknown')
+
+        with self.assertRaises(errors.TypingError) as raises:
+            unsupported_kind()
+
+        expect = "Unsupported \"kind\": 'unknown'"
+        self.assertIn(expect, str(raises.exception))
+
+    def test_kinds(self):
+        arr = np.array([3, 1, 4, 7, 5, 9, 2, 6])
+        for kind in ('quicksort', 'mergesort', 'stable', 'heapsort'):
+            @jit
+            def argsort_kind(arr):
+                return arr.argsort(kind=kind)
+
+            expected = np.argsort(arr, kind=kind)
+            self.assertPreciseEqual(argsort_kind(arr), expected)
+
+        # ties and more than SMALL_QUICKSORT elements, so only a stable
+        # sort reproduces numpy's index order
+        arr = np.array([3, 2, 2, 1, 1, 0, 0, 0, 0, 3,
+                        2, 3, 2, 2, 3, 2, 2, 2, 2, 3])
+        expected = np.argsort(arr, kind='stable')
+        for kind in ('mergesort', 'stable'):
+            @jit
+            def argsort_stable(arr):
+                return arr.argsort(kind=kind)
+
+            @jit
+            def np_argsort_stable(arr):
+                return np.argsort(arr, kind=kind)
+
+            self.assertPreciseEqual(argsort_stable(arr), expected)
+            self.assertPreciseEqual(np_argsort_stable(arr), expected)
 
 
 if __name__ == '__main__':

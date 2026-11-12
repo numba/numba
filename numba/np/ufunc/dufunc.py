@@ -44,7 +44,7 @@ class UfuncAtIterator:
 
     def _prepare(self, context, builder):
         from numba.np.arrayobj import (normalize_indices, FancyIndexer,
-                                       make_array, get_bdcast_idx)
+                                       make_array, get_subspace_shape)
 
         a, indices = self.a, self.indices
         a_ty, indices_ty = self.a_ty, self.indices_ty
@@ -74,13 +74,8 @@ class UfuncAtIterator:
                 array_indices.append((i, idx, idxty, idx_make))
 
         if array_indices:
-            bdcast_indices, subspace_shape_tuple = \
-                get_bdcast_idx(context, builder, array_indices)
-            indices = list(indices)
-            index_types = list(index_types)
-            for i, bdcast_idx, bdcast_idxty in bdcast_indices:
-                indices[i] = bdcast_idx
-                index_types[i] = bdcast_idxty
+            subspace_shape_tuple = \
+                get_subspace_shape(context, builder, array_indices)
         else:
             subspace_shape_tuple = ()
         self.indexer = FancyIndexer(context, builder, a_ty, a,

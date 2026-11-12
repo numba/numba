@@ -373,7 +373,7 @@ class NRTContext(object):
             # XXX "nonnull" causes a crash in test_dyn_array: can this
             # function be called with a NULL pointer?
             fn.args[0].add_attribute("noalias")
-            fn.args[0].add_attribute("nocapture")
+            fn.args[0].add_attribute("captures(none)")
 
             trace_str = ""
 

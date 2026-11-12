@@ -1253,6 +1253,24 @@ class TestMixedTupleUnroll(MemoryLeakMixin, TestCase):
         self.assertIn("found multiple definitions of variable",
                       str(raises.exception))
 
+    def test_35(self):
+        # See issue #10005
+        @njit
+        def foo(x, y):
+            v = x
+            temp_v = [0, 0]
+            for i in literal_unroll(y):
+                v = y
+                temp_v[i] += v[i]
+            return temp_v
+
+        with self.assertRaises(errors.UnsupportedError) as raises:
+            foo([6], (0,))
+
+        self.assertIn("Invalid use of literal_unroll", str(raises.exception))
+        self.assertIn('found multiple definitions of variable "v"',
+                      str(raises.exception))
+
 
 class TestConstListUnroll(MemoryLeakMixin, TestCase):
 

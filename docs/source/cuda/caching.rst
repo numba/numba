@@ -7,6 +7,12 @@ When the ``cache`` keyword argument of the :func:`@cuda.jit <numba.cuda.jit>`
 decorator is ``True``, a file-based cache is enabled. This shortens compilation
 times when the function was already compiled in a previous invocation.
 
+.. warning::
+
+   The cache is deserialized with :mod:`pickle`, so loading a
+   malicious cache file can execute arbitrary code. The cache
+   directory must be treated as trusted (see :ref:`cache-security`).
+
 The cache is maintained in the ``__pycache__`` subdirectory of the directory
 containing the source file; if the current user is not allowed to write to it,
 the cache implementation falls back to a platform-specific user-wide cache

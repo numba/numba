@@ -26,12 +26,18 @@ class TestExtendedArg(TestCase):
         consts = f.__code__.co_consts
         bytecode_format = "<BB"
         consts = consts + (None,) * self.bytecode_len + (42,)
-        if utils.PYVERSION >= (3, 11):
+        if utils.PYVERSION in ((3, 15),):
+            # on Python 3.15, RESUME is followed by a CACHE slot. Inject
+            # the EXTENDED_ARG after both.
+            offset = 4
+        elif utils.PYVERSION in ((3, 11), (3, 12), (3, 13), (3, 14)):
             # Python 3.11 has a RESUME op code at the start of a function, need
             # to inject the EXTENDED_ARG after this to influence the LOAD_CONST
             offset = 2 # 2 byte op code
-        else:
+        elif utils.PYVERSION in ((3, 10),):
             offset = 0
+        else:
+            raise NotImplementedError(utils.PYVERSION)
 
         packed_extend_arg = struct.pack(bytecode_format, dis.EXTENDED_ARG, 1)
         b[:] = b[:offset] + packed_extend_arg + b[offset:]

@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 from numba.tests.support import TestCase, run_in_subprocess
 from numba.core import utils
 import os
@@ -111,6 +112,40 @@ class TestNumbaImport(TestCase):
         # checks that "from numba import *" works.
         code = "from numba import *"
         run_in_subprocess(code)
+
+
+class TestEnsureCriticalDeps(TestCase):
+    def test_numpy_min(self):
+        import numpy as np
+        import numba
+        with mock.patch.object(numba, '_min_numpy_run_version', (1, 22, 3)):
+            with mock.patch.object(np, '__version__', '1.22.2'):
+                with self.assertRaises(ImportError):
+                    numba._ensure_critical_deps()
+            with mock.patch.object(np, '__version__', '1.22.3'):
+                numba._ensure_critical_deps()
+            with mock.patch.object(np, '__version__', '1.22.10'):
+                numba._ensure_critical_deps()
+            with mock.patch.object(np, '__version__', '1.9.9'):
+                with self.assertRaises(ImportError):
+                    numba._ensure_critical_deps()
+            with mock.patch.object(np, '__version__', '1.22.3rc1'):
+                with self.assertRaises(ImportError):
+                    numba._ensure_critical_deps()
+            with mock.patch.object(np, '__version__', '2.0.0rc1'):
+                numba._ensure_critical_deps()
+
+    def test_scipy_min(self):
+        import numba
+        try:
+            import scipy
+        except ImportError:
+            self.skipTest('scipy')
+        with mock.patch.object(scipy, '__version__', '0.19.1'):
+            with self.assertRaises(ImportError):
+                numba._ensure_critical_deps()
+        with mock.patch.object(scipy, '__version__', '1.0.0rc1'):
+            numba._ensure_critical_deps()
 
 
 if __name__ == '__main__':

@@ -585,7 +585,9 @@ class DeviceNDArray(DeviceNDArrayBase):
     def reshape(self, *newshape, **kws):
         """
         Reshape the array without changing its contents, similarly to
-        :meth:`numpy.ndarray.reshape`. Example::
+        :meth:`numpy.ndarray.reshape`.
+
+        Example::
 
             d_arr = d_arr.reshape(20, 50, order='F')
         """
@@ -876,7 +878,10 @@ def auto_device(obj, stream=0, copy=True, user_explicit=False):
             sentry_contiguous(obj)
             devobj = from_array_like(obj, stream=stream)
         if copy:
-            if config.CUDA_WARN_ON_IMPLICIT_COPY:
+            if (
+                config.CUDA_WARN_ON_IMPLICIT_COPY
+                and not config.DISABLE_PERFORMANCE_WARNINGS
+            ):
                 if (
                     not user_explicit and
                     (not isinstance(obj, DeviceNDArray)

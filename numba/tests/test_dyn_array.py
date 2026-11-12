@@ -11,6 +11,7 @@ from numba import njit
 from numba.core import types, utils, config
 from numba.tests.support import MemoryLeakMixin, TestCase, tag, skip_if_32bit
 from numba.core.utils import PYVERSION
+from numba.np.numpy_support import numpy_version
 import unittest
 
 
@@ -501,7 +502,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
         np.testing.assert_equal(expected_x, got_x)
         np.testing.assert_equal(expected_y, got_y)
 
-        if PYVERSION in ((3, 14), ):
+        if PYVERSION in ((3, 14), (3, 15)):
             expected_refcount = 1
         elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
             expected_refcount = 2
@@ -528,7 +529,7 @@ class TestDynArray(NrtRefCtTest, TestCase):
         arr = np.arange(10)
         old_refct = sys.getrefcount(arr)
 
-        if PYVERSION in ((3, 14), ):
+        if PYVERSION in ((3, 14), (3, 15)):
             self.assertEqual(2, sys.getrefcount(pyfunc(arr)))
             self.assertEqual(2, sys.getrefcount(cfunc(arr)))
         elif PYVERSION in ((3, 10), (3, 11), (3, 12), (3, 13)):
@@ -1774,7 +1775,10 @@ class TestNpStack(MemoryLeakMixin, TestCase):
         # Since np.row_stack is an alias for np.vstack, it does not need a
         # separate Numba implementation. For every test for np.vstack, the same
         # test for np.row_stack has been added.
-        functions = [np_vstack, np_row_stack]
+        functions = [np_vstack]
+        if numpy_version < (2, 5):
+            # Numpy 2.5 removed np.row_stack, so only test it if it's present.
+            functions.append(np_row_stack)
         for pyfunc in functions:
             cfunc = nrtjit(pyfunc)
 

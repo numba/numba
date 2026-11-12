@@ -1,0 +1,6 @@
+Fix return types of scalar ``np.cumsum`` and ``np.cumprod``
+-----------------------------------------------------------
+
+``np.cumsum`` of a scalar now returns a single-element array instead of a
+scalar, matching NumPy. ``np.cumprod`` of a scalar is now supported and
+likewise returns a single-element array.

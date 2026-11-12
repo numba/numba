@@ -8,8 +8,8 @@
 #include <string.h>
 
 
-// if python version is 3.13
-#if ((PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 13) || PY_MINOR_VERSION == 14))
+// if python version is 3.13+
+#if ((PY_MAJOR_VERSION == 3) && ((PY_MINOR_VERSION == 13) || (PY_MINOR_VERSION == 14) || (PY_MINOR_VERSION == 15)))
     #include "pythoncapi_compat.h"
     #define _Py_IsFinalizing Py_IsFinalizing
 #endif

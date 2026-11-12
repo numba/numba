@@ -1,5 +1,5 @@
 from collections.abc import Callable, Sequence
-from typing import Any, Protocol, type_check_only
+from typing import Any, Protocol, TypeAlias, type_check_only
 
 import numpy as np
 from llvmlite.ir import IRBuilder, Value
@@ -11,6 +11,8 @@ from numba.core.compiler import CompileResult
 from numba.core.types import Type
 from numba.core.typing.templates import Signature
 from numba.np import npyimpl
+
+_AnyArray: TypeAlias = np.ndarray[tuple[Any, ...], np.dtype[Any]]
 
 _AtT_co = TypeVar(
     "_AtT_co",
@@ -27,13 +29,13 @@ _ReduceT_co = TypeVar(
 _ReduceAtT_co = TypeVar(
     "_ReduceAtT_co",
     bound=Callable[Concatenate[Never, Never, ...], object],
-    default=Callable[Concatenate[Any, Any, ...], np.ndarray],
+    default=Callable[Concatenate[Any, Any, ...], _AnyArray],
     covariant=True,
 )
 _AccumulateT_co = TypeVar(
     "_AccumulateT_co",
     bound=Callable[Concatenate[Never, ...], object],
-    default=Callable[Concatenate[Any, ...], np.ndarray],
+    default=Callable[Concatenate[Any, ...], _AnyArray],
     covariant=True,
 )
 _OuterT_co = TypeVar(

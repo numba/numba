@@ -1,7 +1,0 @@
-Update contribution and coding convention guides
-------------------------------------------------
-
-Consolidated coding style and convention documentation into the contribution
-guide. Added a best practices section in the new
-``docs/source/developer/coding_guidelines.rst``, aimed at both contributors
-and code reviewers.
