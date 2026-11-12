@@ -21,7 +21,7 @@ from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
-                               _empty_nd_impl)
+                               _empty_nd_impl, _DeferredAxisError)
 from numba.np.linalg import ensure_blas
 
 from numba.core.extending import intrinsic
@@ -595,21 +595,23 @@ axis_bound_err = ValueError if numpy_version < (1, 25)\
     else np.exceptions.AxisError
 
 
+class _DeferredAxisBoundError(axis_bound_err):
+    """Format axis context in Python, preserving the public exception type."""
+
+    def __new__(cls, axis, ndim):
+        return axis_bound_err(f"axis {axis} is out of bounds for array of "
+                              f"dimension {ndim}")
+
+
 @register_jitable
 def check_axis_bounds(a, axis):
     if axis is not None:
         if isinstance(axis, tuple):
             for ax in axis:
                 if ax < -a.ndim or ax >= a.ndim:
-                    raise axis_bound_err(
-                        f"axis {ax} is out of bounds for "
-                        f"array of dimension {a.ndim}"
-                    )
+                    raise _DeferredAxisBoundError(ax, a.ndim)
         elif axis < -a.ndim or axis >= a.ndim:
-            raise axis_bound_err(
-                f"axis {axis} is out of bounds for "
-                f"array of dimension {a.ndim}"
-            )
+            raise _DeferredAxisBoundError(axis, a.ndim)
 
 
 @register_jitable
@@ -819,18 +821,12 @@ def array_cumsum(a, axis=None, dtype=None):
         if is_nonelike(axis) or a.ndim == axis_length:
             def array_cumsum_impl(a, axis=None, dtype=None):
                 if axis is not None and (axis < -a.ndim or axis >= a.ndim):
-                    raise ValueError(
-                        f"axis {axis} is out of bounds for "
-                        f"array of dimension {a.ndim}"
-                    )
+                    raise _DeferredAxisError(axis, a.ndim)
                 return _numpy_cumsum(a, axis, dtype).reshape(a.size)
         else:
             def array_cumsum_impl(a, axis=None, dtype=None):
                 if axis is not None and (axis < -a.ndim or axis >= a.ndim):
-                    raise ValueError(
-                        f"axis {axis} is out of bounds for "
-                        f"array of dimension {a.ndim}"
-                    )
+                    raise _DeferredAxisError(axis, a.ndim)
                 return _numpy_cumsum_axis(a, axis, dtype)
 
         return array_cumsum_impl

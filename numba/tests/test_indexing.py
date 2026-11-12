@@ -1033,6 +1033,8 @@ class TestSetItem(MemoryLeakMixin, TestCase):
         with self.assertRaises(ValueError) as raises:
             setitem_broadcast_usecase(dst, src)
         errmsg = str(raises.exception)
+        self.assertIs(type(raises.exception), ValueError)
+        self.assertEqual(raises.exception.args, (errmsg,))
         self.assertEqual('cannot assign slice of shape (5,) from input of' +
                          ' shape (2, 5)',
                          errmsg)

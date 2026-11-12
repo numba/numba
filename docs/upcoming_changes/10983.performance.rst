@@ -1,0 +1,6 @@
+Faster compilation through deferred error formatting
+----------------------------------------------------
+
+CPU compilation of array slice assignments, ``numpy.sum``, ``numpy.take``, and
+``numpy.cumsum`` is faster because error messages are formatted only when an
+exception reaches Python. Exception types and messages are unchanged.
