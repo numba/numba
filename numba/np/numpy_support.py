@@ -337,19 +337,30 @@ def _ufunc_loop_sig(out_tys, in_tys):
 
 def ufunc_can_cast(from_, to, has_mixed_inputs, casting='safe'):
     """
-    A variant of np.can_cast() that can allow casting any integer to
-    any real or complex type, in case the operation has mixed-kind
-    inputs.
+    A variant of np.can_cast() used for ufunc loop selection.
 
-    For example we want `np.power(float32, int32)` to be computed using
-    SP arithmetic and return `float32`.
-    However, `np.sqrt(int32)` should use DP arithmetic and return `float64`.
+    Under NEP 50, integer to float casting follows weak promotion rules
+    that account for bit-width precision.
+
+    When inputs are mixed integer/float, we allow the cast if the integer
+    value range fits within the float type's mantissa.  This preserves
+    float32 output for small-integer+float32 ufuncs while correctly
+    promoting int32/int64+float32 to float64.
     """
     from_ = np.dtype(from_)
     to = np.dtype(to)
     if has_mixed_inputs and from_.kind in 'iu' and to.kind in 'cf':
-        # Decide that all integers can cast to any real or complex type.
-        return True
+        # Determine the underlying floating-point width (complex types
+        # use the per-component float type).
+        if to.kind == 'c':
+            float_bits = to.itemsize * 4
+        else:
+            float_bits = to.itemsize * 8
+        # Mantissa widths: float32 = 24 bits, float64 = 53 bits.
+        # Integers wider than the mantissa cannot be safely cast.
+        mantissa_bits = 24 if float_bits == 32 else 53
+        if from_.itemsize * 8 <= mantissa_bits:
+            return True
     return np.can_cast(from_, to, casting)
 
 
