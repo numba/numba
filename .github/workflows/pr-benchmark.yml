@@ -1,0 +1,162 @@
+name: PR benchmark
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  BENCHMARK_REPO: numba/numba-benchmark
+  WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
+
+jobs:
+  prepare:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'benchmark')
+    runs-on: ubuntu-latest
+    outputs:
+      pr: ${{ steps.plan.outputs.pr }}
+      head_sha: ${{ steps.plan.outputs.head_sha }}
+      head_repo: ${{ steps.plan.outputs.head_repo }}
+      main_sha: ${{ steps.plan.outputs.main_sha }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.BENCHMARK_REPO }}
+          path: benchmark
+
+      - name: Plan
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number || inputs.pr }}
+        run: |
+          head=$(gh api "repos/${{ github.repository }}/pulls/$PR" --jq '.head.sha + " " + .head.repo.full_name')
+          matrix=$(PYTHONPATH=benchmark/src python -c 'import json; from env_matrix_constants import ENVIRONMENTS; print(json.dumps({"include": ENVIRONMENTS}))')
+          {
+            echo "pr=$PR"
+            echo "head_sha=${head% *}"
+            echo "head_repo=${head#* }"
+            echo "main_sha=$(git ls-remote https://github.com/numba/numba.git main | cut -f1)"
+            echo "matrix=$matrix"
+          } >> "$GITHUB_OUTPUT"
+
+  bench:
+    needs: prepare
+    strategy:
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    env:
+      MAIN_SHA: ${{ needs.prepare.outputs.main_sha }}
+      HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+      HEAD_REPO: ${{ needs.prepare.outputs.head_repo }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.BENCHMARK_REPO }}
+          path: benchmark
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install '${{ matrix.spec }}' scipy
+          python -m pip install --pre -i "$WHEELS_INDEX_URL" llvmlite
+
+      - name: Measure Numba main
+        run: |
+          python -m pip install --no-deps "git+https://github.com/numba/numba.git@$MAIN_SHA"
+          python benchmark/src/bench.py run \
+            --commit "$MAIN_SHA" \
+            --os "${{ matrix.os }}" \
+            --python "${{ matrix.python }}" \
+            --numpy "${{ matrix.numpy }}" \
+            --out "bench-out/baseline/$MAIN_SHA.json"
+
+      - name: Measure pull request
+        run: |
+          python -m pip install --force-reinstall --no-deps "git+https://github.com/$HEAD_REPO.git@$HEAD_SHA"
+          python benchmark/src/bench.py run \
+            --commit "$HEAD_SHA" \
+            --os "${{ matrix.os }}" \
+            --python "${{ matrix.python }}" \
+            --numpy "${{ matrix.numpy }}" \
+            --out "bench-out/pr/$HEAD_SHA.json"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: results-${{ matrix.runner }}-${{ matrix.python }}-${{ matrix.numpy }}
+          path: bench-out
+
+  report:
+    needs: [prepare, bench]
+    runs-on: ubuntu-latest
+    env:
+      PR: ${{ needs.prepare.outputs.pr }}
+      HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+      HEAD_REPO: ${{ needs.prepare.outputs.head_repo }}
+      MAIN_SHA: ${{ needs.prepare.outputs.main_sha }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.BENCHMARK_REPO }}
+          path: benchmark
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: results-*
+          path: artifacts
+
+      - name: Merge results
+        run: python benchmark/src/bench.py merge artifacts --out pr-results/
+
+      - name: Render comment
+        run: |
+          python .github/scripts/pr_benchmark_comment.py \
+            --results pr-results \
+            --head "$HEAD_SHA" \
+            --base "$MAIN_SHA" \
+            --pr "$PR" \
+            --head-repo "$HEAD_REPO" \
+            --run-url "$RUN_URL" \
+            --out comment.md
+          cat comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment on pull request
+        uses: actions/github-script@v9
+        env:
+          PR: ${{ needs.prepare.outputs.pr }}
+        with:
+          script: |
+            const fs = require('fs')
+            const body = fs.readFileSync('comment.md', 'utf8')
+            const { owner, repo } = context.repo
+            const issue_number = Number(process.env.PR)
+            const marker = '<!-- numba-pr-benchmark -->'
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+            })
+            const existing = comments.find(comment => comment.body.includes(marker))
+            const { data } = existing
+              ? await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body })
+              : await github.rest.issues.createComment({ owner, repo, issue_number, body })
+            core.info(`Updated ${data.html_url}`)
