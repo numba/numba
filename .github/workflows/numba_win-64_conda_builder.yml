@@ -29,6 +29,7 @@ permissions:
 
 jobs:
   load-matrix:
+    name: Evaluate build matrix
     runs-on: ubuntu-latest
     outputs:
       build-matrix-json: ${{ steps.parse_matrix.outputs.build-matrix-json }}

@@ -8,6 +8,7 @@ permissions:
 
 jobs:
   stale:
+    name: Mark stale issues and pull requests
     permissions:
       issues: write  # for actions/stale to close stale issues
       pull-requests: write  # for actions/stale to close stale PRs
