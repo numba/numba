@@ -132,12 +132,22 @@ The following built-in types support are inherited from CPU nopython mode.
 * None
 * tuple
 * Enum, IntEnum
+* NumPy scalars, including :class:`numpy.datetime64` and
+  :class:`numpy.timedelta64` of any unit
 
 See :ref:`nopython built-in types <pysupported-builtin-types>`.
 
 There is also some very limited support for character sequences (bytes and
 unicode strings) used in NumPy arrays. Note that this support can only be used
 with CUDA 11.2 onwards.
+
+``datetime64`` and ``timedelta64`` values and arrays can be used in kernels
+and device functions in the same way as on the CPU - arithmetic, comparison
+and viewing the underlying integer representation (via ``.view(np.int64)``)
+are all supported, as are ufuncs and generalized ufuncs (created with
+:func:`numba.vectorize` and :func:`numba.guvectorize`) with ``target='cuda'``
+over ``datetime64`` and ``timedelta64`` operands. See
+:ref:`cuda_numpy_support` for more on NumPy support in CUDA kernels.
 
 Built-in functions
 ==================
