@@ -1,0 +1,8 @@
+Clearer error for missing module attributes in ``raise`` statements.
+--------------------------------------------------------------------
+
+Raising an exception looked up through a module attribute that does not
+exist (for example ``raise np.exceptions.AxisError(...)`` with a NumPy
+version that has no ``np.exceptions``) now raises an ``AttributeError``
+pointing at the offending source line, instead of a confusing
+``ConstantInferenceError`` from the "rewrite dynamic raises" compiler pass.
