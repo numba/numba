@@ -103,7 +103,7 @@ jobs:
 
           # Run the build script inside Docker container
           docker run --rm \
-            -v ${GITHUB_WORKSPACE}:/io \
+            -v "${GITHUB_WORKSPACE}:/io" \
             quay.io/pypa/${MANYLINUX_IMAGE} \
             bash /io/buildscripts/github/build_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
@@ -128,7 +128,7 @@ jobs:
 
           # Run the repair script in Docker
           docker run --rm \
-            -v ${GITHUB_WORKSPACE}:/io \
+            -v "${GITHUB_WORKSPACE}:/io" \
             quay.io/pypa/${MANYLINUX_IMAGE} \
             bash /io/buildscripts/github/repair_wheel_linux.sh \
             "${PYTHON_EXECUTABLE}" \
