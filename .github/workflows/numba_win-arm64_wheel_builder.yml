@@ -25,6 +25,10 @@ env:
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
   NUMPY_VERSION: "2.3.5"
 
+permissions:
+  contents: read
+  actions: read  # required to download llvmlite artifacts from another workflow run
+
 jobs:
   win-arm64-build:
     name: win-arm64-build-wheel (py ${{ matrix.python_version }}, np 2.3.5)
@@ -44,6 +48,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
@@ -65,12 +70,14 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install build dependencies
+        env:
+          INPUTS_LLVMLITE_WHEEL_RUNID: ${{ inputs.llvmlite_wheel_runid }}
         run: |
           conda install -c main "python=${PYTHON_VERSION}" pip tbb-devel
-          if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
+          if [ "${INPUTS_LLVMLITE_WHEEL_RUNID}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install --pre -i ${WHEELS_INDEX_URL} llvmlite
           fi
           python -m pip install --pre numpy==${NUMPY_VERSION}
           python -m pip install build "setuptools>=69.0.0" wheel
@@ -137,13 +144,14 @@ jobs:
         env:
           NUMBA_CPU_NAME: generic
           _NUMBA_REDUCED_TESTING: 1
+          INPUTS_LLVMLITE_WHEEL_RUNID: ${{ inputs.llvmlite_wheel_runid }}
         run: |
           python -m pip install --upgrade pip twine
           python -m pip install numpy==${NUMPY_VERSION}
-          if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
+          if [ "${INPUTS_LLVMLITE_WHEEL_RUNID}" != "" ]; then
               python -m pip install llvmlite_wheels/*.whl
           else
-              python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              python -m pip install --pre -i ${WHEELS_INDEX_URL} llvmlite
           fi
           python -m twine check dist/*.whl
           python -m pip install dist/*.whl

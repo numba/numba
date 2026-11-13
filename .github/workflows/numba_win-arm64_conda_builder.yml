@@ -22,6 +22,10 @@ env:
   CONDA_CHANNEL_LLVMLITE: numba/label/dev
   NUMPY_VERSION: "2.3"
 
+permissions:
+  contents: read
+  actions: read  # required to download llvmlite artifacts from another workflow run
+
 jobs:
   win-arm64-build-conda:
     name: win-arm64-build-conda (py ${{ matrix.python_version }}, np 2.3)
@@ -42,6 +46,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
@@ -66,16 +71,18 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Numba conda package
+        env:
+          INPUTS_LLVMLITE_RUN_ID: ${{ inputs.llvmlite_run_id }}
         run: |
           CONDA_CHANNEL_DIR="conda_channel_dir"
           mkdir -p $CONDA_CHANNEL_DIR
 
-          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="${{ github.workspace }}/llvmlite_conda"
+          if [ "${INPUTS_LLVMLITE_RUN_ID}" != "" ]; then
+            LLVMLITE_CHANNEL="${GITHUB_WORKSPACE}/llvmlite_conda"
           elif [ -d ci_artifacts/llvmlite_channel/win-arm64 ]; then
-            LLVMLITE_CHANNEL="${{ github.workspace }}/ci_artifacts/llvmlite_channel"
+            LLVMLITE_CHANNEL="${GITHUB_WORKSPACE}/ci_artifacts/llvmlite_channel"
           else
-            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_LLVMLITE }}"
+            LLVMLITE_CHANNEL="${CONDA_CHANNEL_LLVMLITE}"
           fi
 
           if [ -n "${EXTRA_CHANNELS}" ]; then
@@ -123,6 +130,7 @@ jobs:
           # sparse checkout so the numba source tree cannot shadow the
           # installed package during tests
           sparse-checkout: ci_artifacts
+          persist-credentials: false
 
       - name: Setup Miniconda
         uses: conda-incubator/setup-miniconda@be893c923ea9cf1cf7cd510fbdde27c7e18cbdcb # v4.1.0
@@ -155,13 +163,14 @@ jobs:
         env:
           TESTS_TO_RUN: "numba.tests"
           NUMBA_ENABLE_CUDASIM: 1
+          INPUTS_LLVMLITE_RUN_ID: ${{ inputs.llvmlite_run_id }}
         run: |
-          if [ "${{ inputs.llvmlite_run_id }}" != "" ]; then
-            LLVMLITE_CHANNEL="${{ github.workspace }}/llvmlite_conda"
+          if [ "${INPUTS_LLVMLITE_RUN_ID}" != "" ]; then
+            LLVMLITE_CHANNEL="${GITHUB_WORKSPACE}/llvmlite_conda"
           elif [ -d ci_artifacts/llvmlite_channel/win-arm64 ]; then
-            LLVMLITE_CHANNEL="${{ github.workspace }}/ci_artifacts/llvmlite_channel"
+            LLVMLITE_CHANNEL="${GITHUB_WORKSPACE}/ci_artifacts/llvmlite_channel"
           else
-            LLVMLITE_CHANNEL="${{ env.CONDA_CHANNEL_LLVMLITE }}"
+            LLVMLITE_CHANNEL="${CONDA_CHANNEL_LLVMLITE}"
           fi
 
           if [ -n "${EXTRA_CHANNELS}" ]; then
