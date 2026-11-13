@@ -1,0 +1,16 @@
+Make the event system thread-safe
+---------------------------------
+
+The event system (:mod:`numba.core.event`) is now safe to use during
+concurrent compilation from multiple threads. Listeners installed via the
+scoped context managers (:func:`~numba.core.event.install_listener`,
+:func:`~numba.core.event.install_timer` and
+:func:`~numba.core.event.install_recorder`) now only receive events broadcast
+on the thread that installed them, so concurrent compilations no longer
+contaminate each other's lock-timing measurements. In addition,
+:class:`~numba.core.event.TimingListener` instances registered process-wide
+via :func:`~numba.core.event.register` can no longer crash with an
+``AttributeError`` when notified from multiple threads concurrently (which
+was observed under free-threaded Python), though durations measured that way
+remain meaningless. This fixes
+`#10564 <https://github.com/numba/numba/issues/10564>`_.
