@@ -18,7 +18,7 @@ import unittest
 from numba import njit
 from numba.core.codegen import JITCPUCodegen
 from numba.core.compiler_lock import global_compiler_lock
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, override_env_config
 
 
 asm_sum = r"""
@@ -110,6 +110,28 @@ class JITCPUCodegenTestCase(TestCase):
         pickle.dumps(tup)
         cg2 = JITCPUCodegen('xxx')
         self.assertEqual(cg2.magic_tuple(), tup)
+
+    def test_magic_tuple_config_settings(self):
+        # Configuration settings that change the generated code must be
+        # reflected in the magic tuple, as it forms part of the cache index
+        # key. See issue #10821.
+        default = self.codegen.magic_tuple()
+        settings = [('NUMBA_OPT', '0'),
+                    ('NUMBA_OPT', 'max'),
+                    ('NUMBA_LOOP_VECTORIZE', '0'),
+                    ('NUMBA_SLP_VECTORIZE', '1'),
+                    ('NUMBA_DEBUGINFO', '1'),
+                    ('NUMBA_BOUNDSCHECK', '1')]
+        seen = {default}
+        for name, value in settings:
+            with self.subTest(name=name, value=value):
+                with override_env_config(name, value):
+                    tup = self.codegen.magic_tuple()
+                pickle.dumps(tup)
+                self.assertNotIn(tup, seen)
+                seen.add(tup)
+        # Restoring the configuration restores the magic tuple
+        self.assertEqual(self.codegen.magic_tuple(), default)
 
     # Serialization tests.
 

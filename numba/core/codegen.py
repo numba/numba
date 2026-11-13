@@ -1300,7 +1300,20 @@ class CPUCodegen(Codegen):
         Return a tuple unambiguously describing the codegen behaviour.
         """
         return (self._llvm_module.triple, self._get_host_cpu_name(),
-                self._tm_features)
+                self._tm_features, self._config_settings())
+
+    def _config_settings(self):
+        """
+        Return a tuple of the configuration settings that alter the generated
+        code but are not reflected in the target triple, CPU name or features.
+        These must be part of the cache index key, otherwise a cached function
+        compiled under one setting would be silently reused under another.
+        """
+        # config.OPT is an _OptLevel; use its raw value so that "max" and 3
+        # are distinguished and the key contains only builtin types.
+        return (config.OPT._raw_value, config.LOOP_VECTORIZE,
+                config.SLP_VECTORIZE, config.DEBUGINFO_DEFAULT,
+                config.BOUNDSCHECK)
 
     def _scan_and_fix_unresolved_refs(self, module):
         self._rtlinker.scan_unresolved_symbols(module, self._engine)
