@@ -1,0 +1,7 @@
+Improve memory traversal for integer sums
+-----------------------------------------
+
+No-axis sums of integer or boolean arrays with integer accumulators now use
+memory-order traversal for contiguous arrays and supported strided layouts.
+This improves performance for several transposed and Fortran-layout cases.
+Floating-point reductions retain their existing execution path.
