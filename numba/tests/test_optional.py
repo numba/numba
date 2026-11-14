@@ -228,6 +228,35 @@ class TestOptional(TestCase):
         self.assertEqual(pyfunc(None), cfunc(None))
         self.assertEqual(pyfunc((1, 2)), cfunc((1, 2)))
 
+    def test_optional_getitem(self):
+        # Issue #10966
+        @njit
+        def make_optional(get_none):
+            if get_none:
+                return None
+            return (1.0, 2.0)
+
+        @njit
+        def pyfunc(get_none):
+            opt = make_optional(get_none)
+            if opt is None:
+                return -1.0
+            return opt[0] + opt[1]
+
+        self.assertEqual(pyfunc(True), -1.0)
+        self.assertEqual(pyfunc(False), 3.0)
+
+    def test_optional_getitem_none(self):
+        # Issue #10966
+        def pyfunc(opt):
+            return opt[0]
+
+        sig = (types.Optional(types.UniTuple(types.float64, 2)),)
+        cfunc = njit(sig)(pyfunc)
+        with self.assertRaises(TypeError) as raised:
+            cfunc(None)
+        self.assertIn('got None', str(raised.exception))
+
     def test_many_optional_none_returns(self):
         """
         Issue #4058
