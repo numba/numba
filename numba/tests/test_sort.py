@@ -1135,6 +1135,98 @@ class TestNumpySort(TestCase):
             cfunc(None)
 
 
+class TestNumpySortTemporalNaT(TestCase):
+    """Sorting of datetime64/timedelta64 arrays containing NaT.
+
+    NumPy sorts NaT after all valid values.
+    """
+
+    dtypes = ('M8[s]', 'M8[ms]', 'M8[D]', 'm8[s]', 'm8[ms]', 'm8[D]')
+    kinds = ('quicksort', 'mergesort', 'stable', 'heapsort')
+
+    def setUp(self):
+        self._sorters = {}
+        # The NaT bit pattern is the minimum int64 value.
+        self.nat = np.iinfo(np.int64).min
+        self.cases = (
+            [],
+            [self.nat],
+            [self.nat, self.nat],
+            [30, self.nat, 20],
+            [self.nat, 30, 10],
+            [30, 10, self.nat],
+            [30, 10, 20],
+            [self.nat, 3, 1, self.nat, 2, 1] * 10,
+        )
+
+    def make_array(self, values, dtype):
+        return np.array(values, dtype=np.int64).view(dtype)
+
+    def get_sorters(self, kind):
+        """Compiled sorting functions for the given kind (cached)."""
+        try:
+            return self._sorters[kind]
+        except KeyError:
+            pass
+
+        @jit(nopython=True)
+        def np_sort(a):
+            return np.sort(a)
+
+        @jit(nopython=True)
+        def array_sort(a):
+            a.sort(kind=kind)
+            return a
+
+        @jit(nopython=True)
+        def np_argsort(a):
+            return np.argsort(a, kind=kind)
+
+        @jit(nopython=True)
+        def array_argsort(a):
+            return a.argsort(kind=kind)
+
+        sorters = (np_sort, array_sort, np_argsort, array_argsort)
+        self._sorters[kind] = sorters
+        return sorters
+
+    def check_sort(self, kind, dtype, values):
+        arr = self.make_array(values, dtype)
+        expected = np.sort(arr, kind=kind)
+
+        np_sort, array_sort, _, _ = self.get_sorters(kind)
+        for cfunc in (np_sort, array_sort):
+            got = cfunc(arr.copy())
+            np.testing.assert_array_equal(got, expected)
+
+    def check_argsort(self, kind, dtype, values):
+        arr = self.make_array(values, dtype)
+        expected = np.argsort(arr, kind=kind)
+
+        _, _, np_argsort, array_argsort = self.get_sorters(kind)
+        for cfunc in (np_argsort, array_argsort):
+            got = cfunc(arr.copy())
+            # The indices must reproduce the sorted array.
+            np.testing.assert_array_equal(arr[got], np.sort(arr, kind=kind))
+            if kind in ('mergesort', 'stable'):
+                # A stable sort gives the same index order as NumPy.
+                np.testing.assert_array_equal(got, expected)
+
+    def test_sort(self):
+        for kind in self.kinds:
+            for dtype in self.dtypes:
+                for values in self.cases:
+                    with self.subTest(kind=kind, dtype=dtype, values=values):
+                        self.check_sort(kind, dtype, values)
+
+    def test_argsort(self):
+        for kind in self.kinds:
+            for dtype in self.dtypes:
+                for values in self.cases:
+                    with self.subTest(kind=kind, dtype=dtype, values=values):
+                        self.check_argsort(kind, dtype, values)
+
+
 class TestPythonSort(TestCase):
 
     def test_list_sort(self):

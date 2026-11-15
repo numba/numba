@@ -1685,6 +1685,11 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
         v = np.array(['2', '4'])
         check(a, v)
 
+        # `a` and `v` are datetime64, with NaT
+        a = np.array(['1999-01-01', 'NaT', '2000-01-01'], dtype='datetime64[D]')
+        for v in ('1998-01-01', 'NaT', '2000-01-01', '2001-01-01'):
+            check(a, np.datetime64(v, 'D'))
+
     def test_searchsorted_complex(self):
         pyfunc = searchsorted
         cfunc = jit(nopython=True)(pyfunc)
