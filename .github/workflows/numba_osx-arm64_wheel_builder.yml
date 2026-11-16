@@ -29,14 +29,21 @@ env:
   # dump Python tracebacks of all threads on fatal signals (segfaults)
   PYTHONFAULTHANDLER: "1"
 
+permissions:
+  contents: read   # least-privilege default; jobs add more if needed
+  actions: read    # for cross-run artifact download (llvmlite)
+
 jobs:
   load-matrix:
+    name: Evaluate build matrix
     runs-on: ubuntu-latest
     outputs:
       build-matrix-json: ${{ steps.load_matrix_json.outputs.build-matrix-json }}
       test-matrix-json: ${{ steps.load_matrix_json.outputs.test-matrix-json }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       - id: load_matrix_json
         name: Load Workflow Matrix JSON
@@ -65,6 +72,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Miniconda
         if: ${{ !endsWith(matrix.python_version_full, 't') }}
@@ -86,8 +94,9 @@ jobs:
 
       - name: Install free-threaded Python
         if: ${{ endsWith(matrix.python_version_full, 't') }}
+        env:
+          PYTHON_VERSION: ${{ matrix.python_version_full }}
         run: |
-          PYTHON_VERSION="${{ matrix.python_version_full }}"
           conda install -n test "python-freethreading=${PYTHON_VERSION%t}" pip
 
       - name: Download llvmlite wheel
@@ -101,13 +110,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install build dependencies
+        env:
+          INPUTS_LLVMLITE_WHEEL_RUNID: ${{ inputs.llvmlite_wheel_runid }}
+          MATRIX_NUMPY_BUILD: ${{ matrix.numpy_build }}
         run: |
-          if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
+          if [ "${INPUTS_LLVMLITE_WHEEL_RUNID}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
-              arch -arm64 python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              arch -arm64 python -m pip install --pre -i ${WHEELS_INDEX_URL} llvmlite
           fi
-          python -m pip install build numpy==${{ matrix.numpy_build }} "setuptools>=69.0.0" wheel
+          python -m pip install build numpy==${MATRIX_NUMPY_BUILD} "setuptools>=69.0.0" wheel
 
       - name: Setup llvm-openmp for build
         run: |
@@ -117,7 +129,7 @@ jobs:
 
           # Create symlinks for setup.py OpenMP detection
           mkdir -p omp/lib/clang/19/include
-          ln -s ${{ github.workspace }}/omp/include/omp.h omp/lib/clang/19/include/omp.h
+          ln -s ${GITHUB_WORKSPACE}/omp/include/omp.h omp/lib/clang/19/include/omp.h
 
           # Export environment vars for build to detect OpenMP
           echo "PREFIX=$PWD/omp" >> $GITHUB_ENV
@@ -181,8 +193,10 @@ jobs:
 
     steps:
       - name: Set Python versions
+        env:
+          MATRIX_PYTHON_VERSION_FULL: ${{ matrix.python_version_full }}
         run: |
-          FULL_VERSION="${{ matrix.python_version_full }}"
+          FULL_VERSION="${MATRIX_PYTHON_VERSION_FULL}"
           CANONICAL_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1,2)
 
           echo "PYTHON_INSTALL_VERSION=$FULL_VERSION" >> $GITHUB_ENV
@@ -220,20 +234,24 @@ jobs:
           echo "Set DYLD_FALLBACK_LIBRARY_PATH to: $(brew --prefix libomp)/lib"
 
       - name: Validate and test wheel
+        env:
+          INPUTS_LLVMLITE_WHEEL_RUNID: ${{ inputs.llvmlite_wheel_runid }}
+          MATRIX_PYTHON_MAJOR_MINOR: ${{ matrix.python_major_minor }}
+          MATRIX_NUMPY_TEST: ${{ matrix.numpy_test }}
         run: |
           # Pin to the setup-python interpreter: a login shell (bash -el) can
           # re-source profiles and reorder PATH, so bare `python` is unreliable.
-          PYTHON_PATH=$(which python${{ matrix.python_major_minor }})
+          PYTHON_PATH=$(which "python${MATRIX_PYTHON_MAJOR_MINOR}")
           "$PYTHON_PATH" -m venv .venv && source .venv/bin/activate
           arch -arm64 python -m pip install --upgrade pip twine
           ls -l dist
-          if [ "${{ inputs.llvmlite_wheel_runid }}" != "" ]; then
+          if [ "${INPUTS_LLVMLITE_WHEEL_RUNID}" != "" ]; then
               arch -arm64 python -m pip install llvmlite_wheels/*.whl
           else
-              arch -arm64 python -m pip install --pre -i ${{ env.WHEELS_INDEX_URL }} llvmlite
+              arch -arm64 python -m pip install --pre -i ${WHEELS_INDEX_URL} llvmlite
           fi
           arch -arm64 python -m twine check dist/*.whl
-          arch -arm64 python -m pip install dist/numba*.whl numpy==${{ matrix.numpy_test }}
+          arch -arm64 python -m pip install dist/numba*.whl numpy==${MATRIX_NUMPY_TEST}
 
           # print Numba system information
           arch -arm64 python -m numba -s
