@@ -228,8 +228,13 @@ def _box_class_instance(typ, val, c):
         casted = c.builder.bitcast(ptr, llvoidptr.as_pointer())
         c.builder.store(value, casted)
 
-    set_member(_box.box_meminfoptr_offset, addr_meminfo)
-    set_member(_box.box_dataptr_offset, addr_data)
+    with c.builder.if_else(cgutils.is_not_null(c.builder, box),
+                           likely=True) as (if_ok, if_error):
+        with if_ok:
+            set_member(_box.box_meminfoptr_offset, addr_meminfo)
+            set_member(_box.box_dataptr_offset, addr_data)
+        with if_error:
+            c.context.nrt.decref(c.builder, typ, val)
     return box
 
 
