@@ -344,7 +344,7 @@ that must be matched during type inference.
 - :ghfile:`numba/core/typing/ctypes_utils.py` - Typing ctypes-wrapped function
   pointers
 - :ghfile:`numba/core/typing/enumdecl.py` - Enum types
-- :ghfile:`numba/core/typing/cffi_utils.py` - Typing of CFFI objects
+- :ghfile:`numba/cffi/cffi_utils.py` - Typing of CFFI objects
 - :ghfile:`numba/core/typing/typeof.py` - Implementation of typeof operations
   (maps Python object to Numba type)
 - :ghfile:`numba/core/typing/asnumbatype.py` - Implementation of
