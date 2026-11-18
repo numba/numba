@@ -1,0 +1,7 @@
+Fix optional values in ``prange`` bodies and indexing an optional tuple
+-----------------------------------------------------------------------
+
+An optional value used inside a ``prange`` body was passed to the gufunc
+without its "is None" flag, which made the gufunc see the value as ``None``
+(or as a random value).  Indexing an optional tuple, e.g. ``opt[0]``, failed
+with an internal error.

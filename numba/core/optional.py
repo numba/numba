@@ -54,6 +54,21 @@ def optional_getattr(context, builder, typ, value, attr):
     return imp(context, builder, inner_type, val, attr)
 
 
+@lower_builtin("static_getitem", types.Optional, types.IntegerLiteral)
+@lower_builtin("static_getitem", types.Optional, types.SliceLiteral)
+def optional_static_getitem(context, builder, sig, args):
+    """
+    Optional.__getitem__ with a literal index => redirect to the wrapped type.
+    """
+    opt_type, idxty = sig.args
+    val, index = args
+    inner_type = opt_type.type
+    val = context.cast(builder, val, opt_type, inner_type)
+    inner_sig = sig.replace(args=(inner_type, idxty))
+    impl = context.get_function("static_getitem", inner_sig)
+    return impl(builder, (val, index))
+
+
 @lower_setattr_generic(types.Optional)
 def optional_setattr(context, builder, sig, args, attr):
     """
