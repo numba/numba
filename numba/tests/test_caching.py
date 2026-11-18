@@ -12,11 +12,13 @@ import traceback
 import unittest
 import warnings
 import zipfile
+from unittest.mock import patch
 from pathlib import Path
 
 import llvmlite.binding as ll
 import numpy as np
 
+import numba
 from numba import njit
 from numba.core import codegen
 from numba.core.caching import (
@@ -350,6 +352,17 @@ class TestCache(DispatcherCacheUsecasesTest):
 
         # Check the code runs ok from another process
         self.run_in_separate_process()
+
+    def test_numba_version_in_filename(self):
+        # Cache files include the numba version, so that caches produced by
+        # different numba versions coexist side by side.
+        impl = self.import_module().add_usecase._cache._impl
+        disambiguator = impl.locator.get_disambiguator()
+        py_version = '%d%d' % sys.version_info[:2]
+        with patch.object(numba, '__version__', '0.68.0'):
+            name = impl.get_filename_base('mod.func', '')
+        self.assertEqual(name, 'mod.func-%s.py%s.numba0.68.0'
+                         % (disambiguator, py_version))
 
     def test_caching_nrt_pruned(self):
         self.check_pycache(0)
