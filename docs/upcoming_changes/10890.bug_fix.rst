@@ -1,0 +1,6 @@
+Preserve mutations through dictionary method results
+----------------------------------------------------
+
+Fixes incorrect dead-code elimination of mutations through mutable values
+returned by typed dictionary ``get``, ``setdefault``, and ``pop`` methods when
+the dictionary or an explicit default remains observable after closure inlining.
