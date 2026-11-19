@@ -1,0 +1,8 @@
+Match Python 3.14 mixed real/complex arithmetic
+-----------------------------------------------
+
+On Python 3.14 and later, ``+``, ``-``, ``*`` and ``/`` between a real
+(``float`` or ``int``) and a ``complex`` operand no longer convert the real
+operand to ``complex`` first, matching CPython. For example,
+``complex(inf, 1) * 2.0`` now gives ``(inf+2j)`` instead of ``(inf+nanj)``,
+and ``2.0 - 0j`` gives ``(2-0j)``.
