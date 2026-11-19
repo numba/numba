@@ -2,6 +2,8 @@ import itertools
 import math
 import sys
 
+import numpy as np
+
 from numba import jit, types
 from numba.tests.support import TestCase, skip_unless_py314_or_later
 from .complex_usecases import *
@@ -148,6 +150,65 @@ class TestComplexNaNRecovery(BaseComplexTest, TestCase):
                       complex(0.0, -0.0), complex(-0.0, 0.0)]:
             with self.assertRaises(ZeroDivisionError):
                 cfunc(1+1j, denom)
+
+
+class TestComplexFastmath(TestCase):
+    """Check that fastmath does not leak between compilations of complex operations."""
+    # See https://github.com/numba/numba/issues/11001
+
+    def check_fastmath_isolation(self, fast_first):
+        import cmath
+
+        cases = [
+            (lambda z, w: z * w,
+             (complex(1e308, 1), complex(-math.inf, 1e308))),
+            (lambda z, w: z / w, (0j, complex(math.inf, math.inf))),
+            (lambda z, x: np.exp(-z * x), (1 + 1j, math.inf)),
+            (lambda z, w: np.exp(z / w),
+             (0j, complex(math.inf, math.inf))),
+            (lambda z: abs(z), (complex(math.inf, math.nan),)),
+        ]
+        warmups = [
+            (lambda z, w: z * w, (1 + 1j, 2 + 1j)),
+            (lambda z, w: z / w, (1 + 1j, 2 + 1j)),
+            (lambda z: abs(z), (1 + 1j,)),
+        ]
+
+        def warm_up():
+            # Populate caches with fastmath versions to expose leakage into later calls.
+            for pyfunc, args in warmups:
+                fast = jit(fastmath=True)(pyfunc)
+                fast(*args)
+                if len(args) == 2:
+                    fast(args[0], 2.0)
+
+        if fast_first:
+            warm_up()
+        results = []
+        for pyfunc, args in cases:
+            with np.errstate(all='ignore'):
+                expected = pyfunc(*args)
+                plain = jit(pyfunc)(*args)
+                got = jit(fastmath=False)(pyfunc)(*args)
+            self.assertPreciseEqual(plain, expected, ignore_sign_on_zero=True)
+            self.assertPreciseEqual(got, plain)
+            results.append(got)
+        if not fast_first:
+            warm_up()
+            for (pyfunc, args), expected in zip(cases, results):
+                with np.errstate(all='ignore'):
+                    got = jit(fastmath=False)(pyfunc)(*args)
+                self.assertPreciseEqual(got, expected)
+
+    @TestCase.run_test_in_subprocess()
+    def test_fast_first(self):
+        # Check results with fastmath disabled when fastmath=True is compiled first.
+        self.check_fastmath_isolation(fast_first=True)
+
+    @TestCase.run_test_in_subprocess()
+    def test_strict_first(self):
+        # Check results with fastmath disabled when fastmath=True is compiled later.
+        self.check_fastmath_isolation(fast_first=False)
 
 
 class TestCMath(BaseComplexTest, TestCase):
