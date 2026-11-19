@@ -1,0 +1,7 @@
+Fix fastmath leakage in complex operations
+------------------------------------------
+
+Complex multiplication, division, and absolute value now respect the
+caller's ``fastmath`` setting. Previously, an implementation compiled
+with ``fastmath=True`` could be reused by a later compilation with
+fastmath disabled, causing incorrect results.
