@@ -12,7 +12,8 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                     lower_constant, impl_ret_borrowed,
                                     impl_ret_untracked)
 from numba.core import typing, types, utils, errors, cgutils, optional
-from numba.core.extending import intrinsic, overload_method
+from numba.core.extending import (intrinsic, overload, overload_method,
+                                 register_jitable)
 from numba.cpython.unsafe.numbers import viewer
 
 def _int_arith_flags(rettype):
@@ -1066,7 +1067,22 @@ def complex_sub_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def complex_mul_impl(context, builder, sig, args):
+def _resolve_and_call(context, builder, func, outer_sig, args):
+    arg_types = outer_sig.args
+    disp_type = context.typing_context.resolve_value_type(func)
+    sig = disp_type.get_call_type(context.typing_context, arg_types, {})
+    call = context.get_function(disp_type, sig)
+    result = call(builder, args)
+    result = context.cast(builder, result, sig.return_type, outer_sig.return_type)
+    return impl_ret_untracked(context, builder, outer_sig.return_type, result)
+
+
+def _complex_mul(z, w):
+    return z * w
+
+
+@overload(_complex_mul)
+def _overload_complex_mul(z, w):
     """
     (a+bi)(c+di)=(ac-bd)+i(ad+bc)
     """
@@ -1122,13 +1138,22 @@ def complex_mul_impl(context, builder, sig, args):
 
         return complex(real, imag)
 
-    res = context.compile_internal(builder, complex_mul, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    return complex_mul
+
+
+def complex_mul_impl(context, builder, sig, args):
+    return _resolve_and_call(
+        context, builder, _complex_mul, sig, args)
 
 
 NAN = float('nan')
 
-def complex_div_impl(context, builder, sig, args):
+def _complex_div(a, b):
+    return a / b
+
+
+@overload(_complex_div)
+def _overload_complex_div(a, b):
     def complex_div(a, b):
         # This is CPython's algorithm (in _Py_c_quot()).
         areal = a.real
@@ -1177,8 +1202,12 @@ def complex_div_impl(context, builder, sig, args):
 
         return res
 
-    res = context.compile_internal(builder, complex_div, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    return complex_div
+
+
+def complex_div_impl(context, builder, sig, args):
+    return _resolve_and_call(
+        context, builder, _complex_div, sig, args)
 
 
 def complex_negate_impl(context, builder, sig, args):
@@ -1222,15 +1251,17 @@ def complex_ne_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+@register_jitable
+def _complex_abs(z):
+    return math.hypot(z.real, z.imag)
+
+
 def complex_abs_impl(context, builder, sig, args):
     """
     abs(z) := hypot(z.real, z.imag)
     """
-    def complex_abs(z):
-        return math.hypot(z.real, z.imag)
-
-    res = context.compile_internal(builder, complex_abs, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    return _resolve_and_call(
+        context, builder, _complex_abs, sig, args)
 
 
 ty = types.Complex
