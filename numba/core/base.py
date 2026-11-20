@@ -216,6 +216,9 @@ class BaseContext(object):
     # Fast math flags
     fastmath = False
 
+    # Vector library to use for vectorization.
+    veclib = None
+
     # python execution environment
     environment = None
 

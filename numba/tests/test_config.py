@@ -5,7 +5,7 @@ import unittest
 from unittest import mock
 from numba.tests.support import (TestCase, temp_directory, override_env_config,
                                  run_in_subprocess)
-from numba.core import config
+from numba.core import config, vector_library
 
 try:
     import yaml
@@ -173,7 +173,8 @@ class TestNumbaOptLevel(TestCase):
         expected = {'loop_vectorize': True,
                     'slp_vectorize': False,
                     'opt': 3,
-                    'cost': 'cheap'}
+                    'cost': 'cheap',
+                    'vector_library': None}
         self.check(expected, 3, 'max')
 
     @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': '3'})
@@ -182,7 +183,8 @@ class TestNumbaOptLevel(TestCase):
         expected = {'loop_vectorize': False,
                     'slp_vectorize': False,
                     'opt': 0,
-                    'cost': 'cheap'}
+                    'cost': 'cheap',
+                    'vector_library': None}
         self.check(expected, 3, 3)
 
     @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': '0'})
@@ -191,7 +193,8 @@ class TestNumbaOptLevel(TestCase):
         expected = {'loop_vectorize': False,
                     'slp_vectorize': False,
                     'opt': 0,
-                    'cost': 'cheap'}
+                    'cost': 'cheap',
+                    'vector_library': None}
         self.check(expected, 0, 0)
 
     @TestCase.run_test_in_subprocess()
@@ -201,7 +204,8 @@ class TestNumbaOptLevel(TestCase):
         expected = {'loop_vectorize': False,
                     'slp_vectorize': False,
                     'opt': 0,
-                    'cost': 'cheap'}
+                    'cost': 'cheap',
+                    'vector_library': None}
         self.check(expected, 3, 3)
 
     @TestCase.run_test_in_subprocess(envvars={'NUMBA_OPT': 'invalid'})
@@ -210,8 +214,98 @@ class TestNumbaOptLevel(TestCase):
         expected = {'loop_vectorize': False,
                     'slp_vectorize': False,
                     'opt': 0,
-                    'cost': 'cheap'}
+                    'cost': 'cheap',
+                    'vector_library': None}
         self.check(expected, 3, 3)
+
+
+class TestVectorLibrary(TestCase):
+    # Vector math libraries (e.g. Apple Accelerate, libmvec, Intel SVML) let
+    # LLVM replace scalar math calls in vectorized loops with SIMD math calls.
+    # At runtime, vector_library.resolve() maps a NUMBA_VECLIB setting to
+    # (llvm_provider_name, shared_lib_path): it locates the OS shared library,
+    # checks via ctypes that the SIMD symbols LLVM expects are present, and
+    # loads the library into LLVM's JIT runtime so compiled code can link them.
+
+    def setUp(self):
+        super().setUp()
+        # clear that cache around each test so mocked libraries and host libraries 
+        # stay isolated.
+        vector_library._load.cache_clear()
+        self.addCleanup(vector_library._load.cache_clear)
+
+    def test_config_and_validation(self):
+        # Setting the NUMBA_VECLIB environment variable updates config.VECLIB.
+        with override_env_config('NUMBA_VECLIB', 'auto'):
+            self.assertEqual(config.VECLIB, 'auto')
+
+        # 'none' disables vector math libraries: no OS library is searched for
+        # or loaded into LLVM, and resolve() should return ('none', None).
+        self.assertEqual(vector_library.resolve('none'), ('none', None))
+
+        # Non-string or unrecognized NUMBA_VECLIB names fail with ValueError.
+        for bad in (None, 123, 'invalid'):
+            with self.assertRaisesRegex(ValueError,
+                                        "Invalid NUMBA_VECLIB value"):
+                vector_library.resolve(bad)
+
+        # Every supported provider must declare the SIMD C symbol names that
+        # LLVM's vector-library pass emits, so _load() can verify the library.
+        for provider in vector_library._LIBRARIES:
+            self.assertTrue(vector_library._symbols(provider))
+
+    def test_resolve_fallback_and_errors(self):
+        # Borrow three registered provider keys from _LIBRARIES so resolve()
+        # accepts them without hardcoding provider names, and simulate:
+        # - missing: shared library is not installed (find_library -> None)
+        # - invalid: shared library opens, but lacks expected SIMD symbols
+        #            (bare object() makes getattr(lib, sym) raise)
+        # - valid:   shared library opens and exposes all expected symbols
+        valid, invalid, missing = tuple(vector_library._LIBRARIES)[:3]
+        paths = {
+            vector_library._LIBRARIES[invalid]: '/mock/bad.so',
+            vector_library._LIBRARIES[valid]: '/mock/ok.so',
+        }
+
+        def mock_cdll(path, **_):
+            return object() if path == '/mock/bad.so' else mock.MagicMock()
+
+        # On an OS/CPU with no supported vector libraries, 'auto' gracefully
+        # falls back to ('none', None), whereas asking for a specific library
+        # raises RuntimeError because the user explicitly requested it.
+        with mock.patch.object(vector_library, '_candidates', return_value=()):
+            self.assertEqual(vector_library.resolve('auto'), ('none', None))
+            with self.assertRaises(RuntimeError):
+                vector_library.resolve(valid)
+
+        with (
+            mock.patch.object(vector_library, '_candidates',
+                              return_value=(missing, invalid, valid)),
+            mock.patch.object(vector_library, 'find_library',
+                              side_effect=paths.get),
+            mock.patch.object(vector_library.ctypes, 'CDLL',
+                              side_effect=mock_cdll),
+            mock.patch.object(vector_library.llvm,
+                              'load_library_permanently') as mock_perm,
+        ):
+            # Explicitly requesting a missing shared library raises RuntimeError
+            with self.assertRaisesRegex(RuntimeError, "could not be found"):
+                vector_library.resolve(missing)
+
+            # Explicitly requesting a library without the expected SIMD symbols
+            # raises RuntimeError rather than letting LLVM fail at JIT link time
+            with self.assertRaisesRegex(RuntimeError,
+                                        "Cannot load vector library"):
+                vector_library.resolve(invalid)
+
+            # 'auto' tries candidates in order, skipping missing and invalid
+            # libraries until it loads the first working one ('/mock/ok.so').
+            self.assertEqual(vector_library.resolve('auto')[1], '/mock/ok.so')
+
+            # Resolving that working library again reuses the cached result and
+            # does not load the shared library into LLVM a second time.
+            self.assertEqual(vector_library.resolve(valid)[1], '/mock/ok.so')
+            mock_perm.assert_called_once_with('/mock/ok.so')
 
 
 if __name__ == '__main__':

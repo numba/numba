@@ -407,6 +407,8 @@ class _EnvReloader(object):
         DISABLE_INTEL_SVML = _readenv(
             "NUMBA_DISABLE_INTEL_SVML", int, IS_32BITS)
 
+        VECLIB = _readenv("NUMBA_VECLIB", str, None)
+
         # Disable jit for debugging
         DISABLE_JIT = _readenv("NUMBA_DISABLE_JIT", int, 0)
 
