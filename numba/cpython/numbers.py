@@ -12,7 +12,8 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                     lower_constant, impl_ret_borrowed,
                                     impl_ret_untracked)
 from numba.core import typing, types, utils, errors, cgutils, optional
-from numba.core.extending import intrinsic, overload_method
+from numba.core.extending import (intrinsic, overload_method,
+                                 register_jitable)
 from numba.cpython.unsafe.numbers import viewer
 
 def _int_arith_flags(rettype):
@@ -1066,119 +1067,134 @@ def complex_sub_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
-def complex_mul_impl(context, builder, sig, args):
+def _resolve_and_call(context, builder, func, outer_sig, args):
+    arg_types = outer_sig.args
+    disp_type = context.typing_context.resolve_value_type(func)
+    sig = disp_type.get_call_type(context.typing_context, arg_types, {})
+    call = context.get_function(disp_type, sig)
+    result = call(builder, args)
+    result = context.cast(builder, result, sig.return_type, outer_sig.return_type)
+    return impl_ret_untracked(context, builder, outer_sig.return_type, result)
+
+
+@register_jitable
+def _complex_mul(z, w):
     """
     (a+bi)(c+di)=(ac-bd)+i(ad+bc)
     """
-    def complex_mul(z, w):
-        # This is CPython's algorithm (in _Py_c_prod()).
-        # https://github.com/python/cpython/blob/1a0edb1fa899c067f19b09598b45cdb6e733c4ee/Objects/complexobject.c#L89-L148
-        a = z.real
-        b = z.imag
-        c = w.real
-        d = w.imag
-        ac = a * c
-        bd = b * d
-        ad = a * d
-        bc = b * c
-        real = ac - bd
-        imag = ad + bc
+    # This is CPython's algorithm (in _Py_c_prod()).
+    # https://github.com/python/cpython/blob/1a0edb1fa899c067f19b09598b45cdb6e733c4ee/Objects/complexobject.c#L89-L148
+    a = z.real
+    b = z.imag
+    c = w.real
+    d = w.imag
+    ac = a * c
+    bd = b * d
+    ad = a * d
+    bc = b * c
+    real = ac - bd
+    imag = ad + bc
 
-        # Recover infinities that computed as nan+nanj.
-        if (utils.PYVERSION >= (3, 14)
-                and math.isnan(real) and math.isnan(imag)):
-            recalc = False
-            if math.isinf(a) or math.isinf(b):  # z is infinite
-                a = math.copysign(1.0 if math.isinf(a) else 0.0, a)
-                b = math.copysign(1.0 if math.isinf(b) else 0.0, b)
-                if math.isnan(c):
-                    c = math.copysign(0.0, c)
-                if math.isnan(d):
-                    d = math.copysign(0.0, d)
-                recalc = True
-            if math.isinf(c) or math.isinf(d):  # w is infinite
-                c = math.copysign(1.0 if math.isinf(c) else 0.0, c)
-                d = math.copysign(1.0 if math.isinf(d) else 0.0, d)
-                if math.isnan(a):
-                    a = math.copysign(0.0, a)
-                if math.isnan(b):
-                    b = math.copysign(0.0, b)
-                recalc = True
-            if (not recalc
-                    and (math.isinf(ac) or math.isinf(bd)
-                         or math.isinf(ad) or math.isinf(bc))):
-                if math.isnan(a):
-                    a = math.copysign(0.0, a)
-                if math.isnan(b):
-                    b = math.copysign(0.0, b)
-                if math.isnan(c):
-                    c = math.copysign(0.0, c)
-                if math.isnan(d):
-                    d = math.copysign(0.0, d)
-                recalc = True
-            if recalc:
-                real = math.inf * (a * c - b * d)
-                imag = math.inf * (a * d + b * c)
+    # Recover infinities that computed as nan+nanj.
+    if (utils.PYVERSION >= (3, 14)
+            and math.isnan(real) and math.isnan(imag)):
+        recalc = False
+        if math.isinf(a) or math.isinf(b):  # z is infinite
+            a = math.copysign(1.0 if math.isinf(a) else 0.0, a)
+            b = math.copysign(1.0 if math.isinf(b) else 0.0, b)
+            if math.isnan(c):
+                c = math.copysign(0.0, c)
+            if math.isnan(d):
+                d = math.copysign(0.0, d)
+            recalc = True
+        if math.isinf(c) or math.isinf(d):  # w is infinite
+            c = math.copysign(1.0 if math.isinf(c) else 0.0, c)
+            d = math.copysign(1.0 if math.isinf(d) else 0.0, d)
+            if math.isnan(a):
+                a = math.copysign(0.0, a)
+            if math.isnan(b):
+                b = math.copysign(0.0, b)
+            recalc = True
+        if (not recalc
+                and (math.isinf(ac) or math.isinf(bd)
+                     or math.isinf(ad) or math.isinf(bc))):
+            if math.isnan(a):
+                a = math.copysign(0.0, a)
+            if math.isnan(b):
+                b = math.copysign(0.0, b)
+            if math.isnan(c):
+                c = math.copysign(0.0, c)
+            if math.isnan(d):
+                d = math.copysign(0.0, d)
+            recalc = True
+        if recalc:
+            real = math.inf * (a * c - b * d)
+            imag = math.inf * (a * d + b * c)
 
-        return complex(real, imag)
+    return complex(real, imag)
 
-    res = context.compile_internal(builder, complex_mul, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+def complex_mul_impl(context, builder, sig, args):
+    return _resolve_and_call(
+        context, builder, _complex_mul, sig, args)
 
 
 NAN = float('nan')
 
-def complex_div_impl(context, builder, sig, args):
-    def complex_div(a, b):
-        # This is CPython's algorithm (in _Py_c_quot()).
-        areal = a.real
-        aimag = a.imag
-        breal = b.real
-        bimag = b.imag
-        abs_breal = abs(breal)
-        abs_bimag = abs(bimag)
-        if abs_breal >= abs_bimag:
-            # divide tops and bottom by b.real
-            if abs_breal == 0.0:
-                raise ZeroDivisionError("complex division by zero")
-            else:
-                ratio = bimag / breal
-                denom = breal + bimag * ratio
-                res = complex(
-                    (areal + aimag * ratio) / denom,
-                    (aimag - areal * ratio) / denom)
-        elif abs_bimag >= abs_breal:
-            # divide tops and bottom by b.imag
-            ratio = breal / bimag
-            denom = breal * ratio + bimag
-            res = complex(
-                (areal * ratio + aimag) / denom,
-                (aimag * ratio - areal) / denom)
+
+@register_jitable
+def _complex_div(a, b):
+    # This is CPython's algorithm (in _Py_c_quot()).
+    areal = a.real
+    aimag = a.imag
+    breal = b.real
+    bimag = b.imag
+    abs_breal = abs(breal)
+    abs_bimag = abs(bimag)
+    if abs_breal >= abs_bimag:
+        # divide tops and bottom by b.real
+        if abs_breal == 0.0:
+            raise ZeroDivisionError("complex division by zero")
         else:
-            # At least one of b.real or b.imag is a NaN
-            res = complex(NAN, NAN)
+            ratio = bimag / breal
+            denom = breal + bimag * ratio
+            res = complex(
+                (areal + aimag * ratio) / denom,
+                (aimag - areal * ratio) / denom)
+    elif abs_bimag >= abs_breal:
+        # divide tops and bottom by b.imag
+        ratio = breal / bimag
+        denom = breal * ratio + bimag
+        res = complex(
+            (areal * ratio + aimag) / denom,
+            (aimag * ratio - areal) / denom)
+    else:
+        # At least one of b.real or b.imag is a NaN
+        res = complex(NAN, NAN)
 
-        if (utils.PYVERSION >= (3, 14)
-                and math.isnan(res.real) and math.isnan(res.imag)):
-            if ((math.isinf(areal) or math.isinf(aimag))
-                    and math.isfinite(breal) and math.isfinite(bimag)):
-                x = math.copysign(1.0 if math.isinf(areal) else 0.0, areal)
-                y = math.copysign(1.0 if math.isinf(aimag) else 0.0, aimag)
-                res = complex(
-                    math.inf * (x * breal + y * bimag),
-                    math.inf * (y * breal - x * bimag))
-            elif ((math.isinf(abs_breal) or math.isinf(abs_bimag))
-                  and math.isfinite(areal) and math.isfinite(aimag)):
-                x = math.copysign(1.0 if math.isinf(breal) else 0.0, breal)
-                y = math.copysign(1.0 if math.isinf(bimag) else 0.0, bimag)
-                res = complex(
-                    0.0 * (areal * x + aimag * y),
-                    0.0 * (aimag * x - areal * y))
+    if (utils.PYVERSION >= (3, 14)
+            and math.isnan(res.real) and math.isnan(res.imag)):
+        if ((math.isinf(areal) or math.isinf(aimag))
+                and math.isfinite(breal) and math.isfinite(bimag)):
+            x = math.copysign(1.0 if math.isinf(areal) else 0.0, areal)
+            y = math.copysign(1.0 if math.isinf(aimag) else 0.0, aimag)
+            res = complex(
+                math.inf * (x * breal + y * bimag),
+                math.inf * (y * breal - x * bimag))
+        elif ((math.isinf(abs_breal) or math.isinf(abs_bimag))
+                and math.isfinite(areal) and math.isfinite(aimag)):
+            x = math.copysign(1.0 if math.isinf(breal) else 0.0, breal)
+            y = math.copysign(1.0 if math.isinf(bimag) else 0.0, bimag)
+            res = complex(
+                0.0 * (areal * x + aimag * y),
+                0.0 * (aimag * x - areal * y))
 
-        return res
+    return res
 
-    res = context.compile_internal(builder, complex_div, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+
+def complex_div_impl(context, builder, sig, args):
+    return _resolve_and_call(
+        context, builder, _complex_div, sig, args)
 
 
 def complex_negate_impl(context, builder, sig, args):
@@ -1222,15 +1238,17 @@ def complex_ne_impl(context, builder, sig, args):
     return impl_ret_untracked(context, builder, sig.return_type, res)
 
 
+@register_jitable
+def _complex_abs(z):
+    return math.hypot(z.real, z.imag)
+
+
 def complex_abs_impl(context, builder, sig, args):
     """
     abs(z) := hypot(z.real, z.imag)
     """
-    def complex_abs(z):
-        return math.hypot(z.real, z.imag)
-
-    res = context.compile_internal(builder, complex_abs, sig, args)
-    return impl_ret_untracked(context, builder, sig.return_type, res)
+    return _resolve_and_call(
+        context, builder, _complex_abs, sig, args)
 
 
 ty = types.Complex
