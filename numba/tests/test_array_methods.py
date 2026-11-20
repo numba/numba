@@ -1438,6 +1438,84 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
                         self.assertPreciseEqual(pyfunc(arr, dtype=out_dtype),
                                                 cfunc(arr, dtype=out_dtype))
 
+    def test_sum_contiguous_axis(self):
+        cfunc = jit(array_sum_axis_kws)
+        dtypes = (np.bool_, np.int8, np.uint8, np.int32, np.uint64,
+                  np.float32, np.float64, np.complex64, np.complex128)
+        for shape in ((3, 7), (2, 3, 5), (2, 1, 3, 5)):
+            values = np.arange(np.prod(shape)).reshape(shape) % 7
+            for dtype in dtypes:
+                for order in ('C', 'F'):
+                    a = np.array(values, dtype=dtype, order=order)
+                    a.flags.writeable = False
+                    for axis in range(-a.ndim, a.ndim):
+                        with self.subTest(shape=shape, dtype=dtype,
+                                          order=order, axis=axis):
+                            expected = np.ascontiguousarray(a.sum(axis=axis))
+                            got = cfunc(a, axis)
+                            self.assertPreciseEqual(got, expected)
+                            self.assertEqual(got.dtype, expected.dtype)
+
+    def test_sum_contiguous_axis_empty(self):
+        cfunc = jit(array_sum_axis_kws)
+        for shape in ((0, 3), (3, 0), (2, 0, 3), (0, 2, 3), (2, 3, 0)):
+            for order in ('C', 'F'):
+                for dtype in (np.int32, np.float32, np.complex128):
+                    a = np.empty(shape, dtype=dtype, order=order)
+                    for axis in range(a.ndim):
+                        with self.subTest(shape=shape, order=order,
+                                          dtype=dtype, axis=axis):
+                            expected = np.ascontiguousarray(a.sum(axis=axis))
+                            self.assertPreciseEqual(cfunc(a, axis), expected)
+
+    def test_sum_contiguous_axis_accumulator(self):
+        cfunc = jit(array_sum_axis_dtype_kws)
+        cases = ((np.int64, np.int8), (np.int64, np.uint8),
+                 (np.float64, np.float32), (np.float32, np.float64),
+                 (np.complex128, np.complex64), (np.int32, np.bool_))
+        for source, dtype in cases:
+            for order in ('C', 'F'):
+                values = np.arange(120).reshape(3, 5, 8) + 100
+                a = np.array(values, dtype=source, order=order)
+                for axis in range(a.ndim):
+                    with self.subTest(source=source, dtype=dtype,
+                                      order=order, axis=axis):
+                        expected = np.ascontiguousarray(
+                            a.sum(axis=axis, dtype=dtype))
+                        got = cfunc(a, dtype, axis)
+                        self.assertPreciseEqual(got, expected)
+                        self.assertEqual(got.dtype, expected.dtype)
+
+    def test_sum_contiguous_axis_order(self):
+        cfunc = jit(array_sum_axis_kws)
+        for dtype in (np.float32, np.float64, np.complex64, np.complex128):
+            values = np.array([1e20, 1, -1e20, 3] * 8, dtype=dtype)
+            for order in ('C', 'F'):
+                shape = (2, 3, 32) if order == 'C' else (32, 2, 3)
+                axis = 2 if order == 'C' else 0
+                a = np.empty(shape, dtype=dtype, order=order)
+                moved = np.moveaxis(a, axis, -1)
+                moved[...] = values
+                moved[0, 0, 0] = np.nan
+                moved[0, 1, 0] = np.inf
+                moved[1, 0, :] = -0.0
+                expected = np.zeros(moved.shape[:-1], dtype=dtype)
+                for i in range(moved.shape[-1]):
+                    expected += moved[..., i]
+                with self.subTest(dtype=dtype, order=order):
+                    got = cfunc(a, axis)
+                    self.assertPreciseEqual(got, expected)
+                    self.assertPreciseEqual(cfunc(a, axis - a.ndim), expected)
+
+    def test_sum_contiguous_axis_fallbacks(self):
+        cfunc = jit(array_sum_axis_kws)
+        a = np.arange(120).reshape(3, 5, 8)
+        for arr in (a[:, ::2, :], a[..., ::-1], np.asfortranarray(a)):
+            for axis in (0, 1, 2, (0,), (2,), (0, 2)):
+                with self.subTest(strides=arr.strides, axis=axis):
+                    expected = np.ascontiguousarray(arr.sum(axis=axis))
+                    self.assertPreciseEqual(cfunc(arr, axis), expected)
+
     def test_sum_axis_dtype_kws(self):
         """ test sum with axis and dtype parameters over a whole range of dtypes """
         pyfunc = array_sum_axis_dtype_kws
