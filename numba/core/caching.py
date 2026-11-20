@@ -356,17 +356,22 @@ class IPythonCacheLocator(_CacheLocator):
 class ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     """
     A locator for functions backed by Python modules within a zip archive.
+
+    The cache lives in ``NUMBA_CACHE_DIR`` when that is set, otherwise in the
+    user-wide cache. ``from_function`` returns ``None`` when that directory
+    cannot be created, same as the other locators, so a read-only home fails
+    at import instead of on the first call.
     """
 
     def __init__(self, py_func, py_file):
         self._py_file = py_file
         self._lineno = py_func.__code__.co_firstlineno
         self._zip_path, self._internal_path = self._split_zip_path(py_file)
-        # We use AppDirs at the moment. A more advanced version of this could also allow
-        # a provided `cache_dir`, though that starts to create (cache location x source
-        # type) number of cache classes.
-        appdirs = AppDirs(appname="numba", appauthor=False)
-        cache_dir = appdirs.user_cache_dir
+        if config.CACHE_DIR:
+            cache_dir = config.CACHE_DIR
+        else:
+            appdirs = AppDirs(appname="numba", appauthor=False)
+            cache_dir = appdirs.user_cache_dir
         cache_subpath = self.get_suitable_cache_subpath(py_file)
         self._cache_path = os.path.join(cache_dir, cache_subpath)
 
@@ -393,7 +398,13 @@ class ZipCacheLocator(_SourceFileBackedLocatorMixin, _CacheLocator):
     def from_function(cls, py_func, py_file):
         if ".zip" not in py_file:
             return None
-        return cls(py_func, py_file)
+        try:
+            self = cls(py_func, py_file)
+            self.ensure_cache_path()
+        except OSError:
+            # Cannot ensure the cache directory exists or is writable
+            return None
+        return self
 
 class CacheImpl(metaclass=ABCMeta):
     """
