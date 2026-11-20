@@ -1,0 +1,6 @@
+Faster compiled typed-list operations
+-------------------------------------
+
+Compiled typed-list operations now read list metadata and items directly,
+with fewer calls to C helper functions. Lists of numbers also reuse existing
+space for common updates and copy items in blocks when extending or copying.

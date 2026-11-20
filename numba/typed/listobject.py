@@ -51,6 +51,48 @@ index_types = types.integer_domain
 DEFAULT_ALLOCATED = 0
 
 
+# LLVM mirror of the NB_List struct in numba/cext/listobject.h
+# (must be kept in sync with the C definition).
+_ll_list_methods = ir.LiteralStructType([
+    ll_voidptr_type,  # item incref
+    ll_voidptr_type,  # item decref
+])
+_ll_nb_list = ir.LiteralStructType([
+    ll_ssize_t,        # size
+    ll_ssize_t,        # item_size
+    ll_ssize_t,        # allocated
+    ll_status,         # is_mutable (int)
+    _ll_list_methods,  # methods
+    ll_voidptr_type,   # items
+])
+_LIST_SIZE = 0
+_LIST_ALLOCATED = 2
+_LIST_IS_MUTABLE = 3
+_LIST_ITEMS = 5
+
+
+def _list_field_ptr(builder, lp, idx):
+    hp = builder.bitcast(lp, _ll_nb_list.as_pointer())
+    return cgutils.gep_inbounds(builder, hp, 0, idx)
+
+
+def _list_load_size(builder, lp):
+    return builder.load(_list_field_ptr(builder, lp, _LIST_SIZE))
+
+
+def _list_item_ptr(context, builder, lp, itemty, index):
+    base = builder.load(_list_field_ptr(builder, lp, _LIST_ITEMS))
+    llty = context.get_data_type(itemty)
+    return cgutils.gep(builder, builder.bitcast(base, llty.as_pointer()),
+                       index)
+
+
+def _can_inline_item(context, itemty):
+    if isinstance(itemty, types.NoneType):
+        return False
+    return not context.data_model_manager[itemty].contains_nrt_meminfo()
+
+
 @register_model(ListType)
 class ListModel(models.StructModel):
     def __init__(self, dmm, fe_type):
@@ -421,19 +463,8 @@ def _list_length(typingctx, l):
     def codegen(context, builder, sig, args):
         [tl] = sig.args
         [l] = args
-        fnty = ir.FunctionType(
-            ll_ssize_t,
-            [ll_list_type],
-        )
-        fname = 'numba_list_size_address'
-        fn = cgutils.get_or_insert_function(builder.module, fnty, fname)
-        fn.attributes.add('alwaysinline')
-        fn.attributes.add('readonly')
-        fn.attributes.add('nounwind')
         lp = _container_get_data(context, builder, tl, l)
-        len_addr = builder.call(fn, [lp,],)
-        ptr = builder.inttoptr(len_addr, cgutils.intp_t.as_pointer())
-        return builder.load(ptr)
+        return _list_load_size(builder, lp)
 
     return sig, codegen
 
@@ -494,17 +525,10 @@ def _list_is_mutable(typingctx, l):
     sig = resty(l)
 
     def codegen(context, builder, sig, args):
-        fnty = ir.FunctionType(
-            ll_status,
-            [ll_list_type],
-        )
-        fn = cgutils.get_or_insert_function(builder.module, fnty,
-                                            'numba_list_is_mutable')
         [l] = args
         [tl] = sig.args
         lp = _container_get_data(context, builder, tl, l)
-        n = builder.call(fn, [lp])
-        return n
+        return builder.load(_list_field_ptr(builder, lp, _LIST_IS_MUTABLE))
 
     return sig, codegen
 
@@ -574,17 +598,46 @@ def _list_append(typingctx, l, item):
 
         data_item = dm_item.as_data(builder, item)
 
-        ptr_item = cgutils.alloca_once_value(builder, data_item)
-
         lp = _container_get_data(context, builder, tl, l)
-        status = builder.call(
-            fn,
-            [
-                lp,
-                _as_bytes(builder, ptr_item),
-            ],
+
+        if not _can_inline_item(context, titem):
+            ptr_item = cgutils.alloca_once_value(builder, data_item)
+            status = builder.call(
+                fn,
+                [
+                    lp,
+                    _as_bytes(builder, ptr_item),
+                ],
+            )
+            return status
+
+        # Fast path: same condition as numba_list_resize's "size-only" case.
+        status_ptr = cgutils.alloca_once(builder, ll_status)
+        size_ptr = _list_field_ptr(builder, lp, _LIST_SIZE)
+        size = builder.load(size_ptr)
+        allocated = builder.load(_list_field_ptr(builder, lp,
+                                                 _LIST_ALLOCATED))
+        mut = builder.load(_list_field_ptr(builder, lp, _LIST_IS_MUTABLE))
+        newsize = builder.add(size, ll_ssize_t(1))
+        fast = builder.and_(
+            builder.icmp_signed('!=', mut, ll_status(0)),
+            builder.and_(
+                builder.icmp_signed('>=', allocated, newsize),
+                builder.icmp_signed('>=', newsize,
+                                    builder.ashr(allocated, ll_ssize_t(1))),
+            ),
         )
-        return status
+        with builder.if_else(fast, likely=True) as (then, otherwise):
+            with then:
+                builder.store(newsize, size_ptr)
+                item_ptr = _list_item_ptr(context, builder, lp, titem, size)
+                builder.store(data_item, item_ptr)
+                builder.store(ll_status(0), status_ptr)
+            with otherwise:
+                ptr_item = cgutils.alloca_once_value(builder, data_item)
+                st = builder.call(fn, [lp, _as_bytes(builder, ptr_item)])
+                builder.store(st, status_ptr)
+        return builder.load(status_ptr)
 
     return sig, codegen
 
@@ -701,27 +754,10 @@ def _gen_getitem(borrowed):
         def codegen(context, builder, sig, args):
             [tl, tindex] = sig.args
             [l, index] = args
-            fnty = ir.FunctionType(
-                ll_voidptr_type,
-                [ll_list_type],
-            )
-            fname = 'numba_list_base_ptr'
-            fn = cgutils.get_or_insert_function(builder.module, fnty, fname)
-            fn.attributes.add('alwaysinline')
-            fn.attributes.add('nounwind')
-            fn.attributes.add('readonly')
 
             lp = _container_get_data(context, builder, tl, l)
-
-            base_ptr = builder.call(
-                fn,
-                [lp,],
-            )
-
-            llty = context.get_data_type(tl.item_type)
-            casted_base_ptr = builder.bitcast(base_ptr, llty.as_pointer())
-
-            item_ptr = cgutils.gep(builder, casted_base_ptr, index)
+            item_ptr = _list_item_ptr(context, builder, lp, tl.item_type,
+                                      index)
 
             if is_none:
                 out = builder.load(item_ptr)
@@ -752,6 +788,54 @@ _list_getitem = _gen_getitem(False)
 _list_getitem_borrowed = _gen_getitem(True)
 
 
+@intrinsic
+def _list_getitem_direct(typingctx, l_ty, index_ty):
+    """Load the item at an already-validated intp index, returning a new
+    reference (non-None item types only).
+    """
+    sig = l_ty.item_type(l_ty, index_ty)
+
+    def codegen(context, builder, sig, args):
+        [tl, tindex] = sig.args
+        [l, index] = args
+        lp = _container_get_data(context, builder, tl, l)
+        item_ptr = _list_item_ptr(context, builder, lp, tl.item_type, index)
+        dm_item = context.data_model_manager[tl.item_type]
+        item = dm_item.load_from_data_pointer(builder, item_ptr)
+        context.nrt.incref(builder, tl.item_type, item)
+        return item
+
+    return sig, codegen
+
+
+@intrinsic
+def _list_getitem_checked(typingctx, l_ty, index_ty):
+    """Fused wraparound + bounds check + load for an intp index, returning
+    a new reference (non-None item types only).
+    """
+    sig = l_ty.item_type(l_ty, index_ty)
+
+    def codegen(context, builder, sig, args):
+        [tl, tindex] = sig.args
+        [l, index] = args
+        lp = _container_get_data(context, builder, tl, l)
+        size = _list_load_size(builder, lp)
+        is_negative = builder.icmp_signed('<', index,
+                                          ir.Constant(index.type, 0))
+        idx = builder.select(is_negative, builder.add(index, size), index)
+        in_range = builder.icmp_unsigned('<', idx, size)
+        with builder.if_then(builder.not_(in_range), likely=False):
+            context.call_conv.return_user_exc(
+                builder, IndexError, ("list index out of range",))
+        item_ptr = _list_item_ptr(context, builder, lp, tl.item_type, idx)
+        dm_item = context.data_model_manager[tl.item_type]
+        item = dm_item.load_from_data_pointer(builder, item_ptr)
+        context.nrt.incref(builder, tl.item_type, item)
+        return item
+
+    return sig, codegen
+
+
 @overload(operator.getitem)
 def impl_getitem(l, index):
     if not isinstance(l, types.ListType):
@@ -765,12 +849,7 @@ def impl_getitem(l, index):
         if IS_NOT_NONE:
             def integer_non_none_impl(l, index):
                 castedindex = _cast(index, indexty)
-                handledindex = handle_index(l, castedindex)
-                status, item = _list_getitem(l, handledindex)
-                if status == ListStatus.LIST_OK:
-                    return _nonoptional(item)
-                else:
-                    raise AssertionError("internal list error during getitem")
+                return _list_getitem_checked(l, castedindex)
             return integer_non_none_impl
         else:
             def integer_none_impl(l, index):
@@ -810,18 +889,38 @@ def _list_setitem(typingctx, l, index, item):
 
         dm_item = context.data_model_manager[titem]
         data_item = dm_item.as_data(builder, item)
-        ptr_item = cgutils.alloca_once_value(builder, data_item)
 
         lp = _container_get_data(context, builder, tl, l)
-        status = builder.call(
-            fn,
-            [
-                lp,
-                index,
-                _as_bytes(builder, ptr_item),
-            ],
+
+        if (titem != tl.item_type
+                or not _can_inline_item(context, titem)
+                or index.type != ll_ssize_t):
+            ptr_item = cgutils.alloca_once_value(builder, data_item)
+            status = builder.call(
+                fn,
+                [
+                    lp,
+                    index,
+                    _as_bytes(builder, ptr_item),
+                ],
+            )
+            return status
+
+        # Inline equivalent of numba_list_setitem for plain items.
+        mut = builder.load(_list_field_ptr(builder, lp, _LIST_IS_MUTABLE))
+        is_mut = builder.icmp_signed('!=', mut, ll_status(0))
+        size = _list_load_size(builder, lp)
+        valid = builder.icmp_unsigned('<', index, size)
+        ok = builder.and_(is_mut, valid)
+        with builder.if_then(ok, likely=True):
+            item_ptr = _list_item_ptr(context, builder, lp, titem, index)
+            builder.store(data_item, item_ptr)
+        err = builder.select(
+            is_mut,
+            ll_status(int(ListStatus.LIST_ERR_INDEX)),
+            ll_status(int(ListStatus.LIST_ERR_IMMUTABLE)),
         )
-        return status
+        return builder.select(ok, ll_status(0), err)
 
     return sig, codegen
 
@@ -904,6 +1003,57 @@ def impl_setitem(l, index, item):
         raise TypingError("list indices must be integers or slices")
 
 
+@intrinsic
+def _list_pop_checked(typingctx, l_ty, index_ty):
+    """Fused pop for non-refcounted, non-None item types: empty check,
+    index wraparound, bounds check, load and delete.
+    """
+    index_ty = types.unliteral(index_ty)
+    sig = l_ty.item_type(l_ty, index_ty)
+
+    def codegen(context, builder, sig, args):
+        [tl, tindex] = sig.args
+        [l, index] = args
+        lp = _container_get_data(context, builder, tl, l)
+        size = _list_load_size(builder, lp)
+        is_empty = builder.icmp_signed('==', size, ll_ssize_t(0))
+        with builder.if_then(is_empty, likely=False):
+            context.call_conv.return_user_exc(
+                builder, IndexError, ("pop from empty list",))
+        # same wraparound semantics as fix_index
+        is_negative = builder.icmp_signed('<', index,
+                                          ir.Constant(index.type, 0))
+        st = 'sext' if index.type.width < size.type.width else 'trunc'
+        fixed = getattr(builder, st)(index, size.type)
+        idx = builder.select(is_negative, builder.add(fixed, size), fixed)
+        in_range = builder.icmp_unsigned('<', idx, size)
+        with builder.if_then(builder.not_(in_range), likely=False):
+            context.call_conv.return_user_exc(
+                builder, IndexError, ("list index out of range",))
+        item_ptr = _list_item_ptr(context, builder, lp, tl.item_type, idx)
+        dm_item = context.data_model_manager[tl.item_type]
+        item = dm_item.load_from_data_pointer(builder, item_ptr)
+        context.nrt.incref(builder, tl.item_type, item)
+        dsig, dfn = _list_delitem._defn(context.typing_context, tl,
+                                        types.intp)
+        status = dfn(context, builder, dsig, (l, idx))
+        not_ok = builder.icmp_signed('!=', status, ll_status(0))
+        with builder.if_then(not_ok, likely=False):
+            is_imm = builder.icmp_signed(
+                '==', status, ll_status(int(ListStatus.LIST_ERR_IMMUTABLE)))
+            with builder.if_else(is_imm) as (then, otherwise):
+                with then:
+                    context.call_conv.return_user_exc(
+                        builder, ValueError, ("list is immutable",))
+                with otherwise:
+                    context.call_conv.return_user_exc(
+                        builder, AssertionError,
+                        ("internal list error during delitem",))
+        return item
+
+    return sig, codegen
+
+
 @overload_method(types.ListType, 'pop')
 def impl_pop(l, index=-1):
     if not isinstance(l, types.ListType):
@@ -917,13 +1067,24 @@ def impl_pop(l, index=-1):
     if (isinstance(index, int)
             or index in index_types
             or isinstance(index, types.Omitted)):
+        from numba.core.registry import cpu_target
+        if _can_inline_item(cpu_target.target_context, l.item_type):
+            def fused_impl(l, index=-1):
+                return _list_pop_checked(l, index)
+            return fused_impl
+
         def impl(l, index=-1):
             if len(l) == 0:
                 raise IndexError("pop from empty list")
             cindex = _cast(handle_index(l, index), indexty)
-            item = l[cindex]
-            del l[cindex]
-            return item
+            item = _list_getitem_direct(l, cindex)
+            status = _list_delitem(l, cindex)
+            if status == ListStatus.LIST_OK:
+                return item
+            elif status == ListStatus.LIST_ERR_IMMUTABLE:
+                raise ValueError("list is immutable")
+            else:
+                raise AssertionError("internal list error during delitem")
         return impl
 
     else:
@@ -946,8 +1107,39 @@ def _list_delitem(typingctx, l, index):
                                             'numba_list_delitem')
 
         lp = _container_get_data(context, builder, tl, l)
-        status = builder.call(fn, [lp, index])
-        return status
+        if (not _can_inline_item(context, tl.item_type)
+                or index.type != ll_ssize_t):
+            status = builder.call(fn, [lp, index])
+            return status
+
+        # Fast path: deleting the last item when the resize rule only
+        # changes the size.
+        status_ptr = cgutils.alloca_once(builder, ll_status)
+        size_ptr = _list_field_ptr(builder, lp, _LIST_SIZE)
+        size = builder.load(size_ptr)
+        allocated = builder.load(_list_field_ptr(builder, lp,
+                                                 _LIST_ALLOCATED))
+        mut = builder.load(_list_field_ptr(builder, lp, _LIST_IS_MUTABLE))
+        newsize = builder.sub(size, ll_ssize_t(1))
+        fast = builder.and_(
+            builder.and_(
+                builder.icmp_signed('!=', mut, ll_status(0)),
+                builder.icmp_signed('==', index, newsize),
+            ),
+            builder.and_(
+                builder.icmp_signed('>=', allocated, newsize),
+                builder.icmp_signed('>=', newsize,
+                                    builder.ashr(allocated, ll_ssize_t(1))),
+            ),
+        )
+        with builder.if_else(fast, likely=True) as (then, otherwise):
+            with then:
+                builder.store(newsize, size_ptr)
+                builder.store(ll_status(0), status_ptr)
+            with otherwise:
+                st = builder.call(fn, [lp, index])
+                builder.store(st, status_ptr)
+        return builder.load(status_ptr)
 
     return sig, codegen
 
@@ -1057,6 +1249,66 @@ def impl_count(l, item):
     return impl
 
 
+@intrinsic
+def _list_extend_fast(typingctx, l_ty, src_ty, start_ty, stop_ty):
+    """Bulk-append items src[start:stop] to l for as long as each
+    individual append would only bump the size under the resize rule
+    of numba_list_resize (non-refcounted, identical item types only).
+    Returns the number of items appended (possibly zero).
+    """
+    if not (isinstance(l_ty, types.ListType)
+            and isinstance(src_ty, types.ListType)):
+        return
+    sig = types.intp(l_ty, src_ty, start_ty, stop_ty)
+
+    def codegen(context, builder, sig, args):
+        [tl, tsrc, tstart, tstop] = sig.args
+        [l, src, start, stop] = args
+        start = context.cast(builder, start, tstart, types.intp)
+        stop = context.cast(builder, stop, tstop, types.intp)
+        itemty = tl.item_type
+        lp = _container_get_data(context, builder, tl, l)
+        sp = _container_get_data(context, builder, tsrc, src)
+        size_ptr = _list_field_ptr(builder, lp, _LIST_SIZE)
+        size = builder.load(size_ptr)
+        allocated = builder.load(_list_field_ptr(builder, lp,
+                                                 _LIST_ALLOCATED))
+        mut = builder.load(_list_field_ptr(builder, lp, _LIST_IS_MUTABLE))
+        remaining = builder.sub(stop, start)
+        room = builder.sub(allocated, size)
+        k = builder.select(builder.icmp_signed('<', room, remaining),
+                           room, remaining)
+        newsize = builder.add(size, ll_ssize_t(1))
+        ok = builder.and_(
+            builder.and_(
+                builder.icmp_signed('!=', mut, ll_status(0)),
+                builder.icmp_signed('>=', newsize,
+                                    builder.ashr(allocated, ll_ssize_t(1))),
+            ),
+            builder.icmp_signed('>', k, ll_ssize_t(0)),
+        )
+        k = builder.select(ok, k, ll_ssize_t(0))
+        with builder.if_then(ok, likely=True):
+            dst_ptr = _list_item_ptr(context, builder, lp, itemty, size)
+            src_ptr = _list_item_ptr(context, builder, sp, itemty, start)
+            itemsize = context.get_abi_sizeof(context.get_data_type(itemty))
+            cgutils.raw_memcpy(builder, dst_ptr, src_ptr, k, itemsize)
+            builder.store(builder.add(size, k), size_ptr)
+        return k
+
+    return sig, codegen
+
+
+def _can_bulk_extend(dst_ty, src_ty):
+    from numba.core.registry import cpu_target
+    return (isinstance(dst_ty, types.ListType)
+            and isinstance(src_ty, types.ListType)
+            and dst_ty.is_precise()
+            and dst_ty.item_type == src_ty.item_type
+            and _can_inline_item(cpu_target.target_context,
+                                 dst_ty.item_type))
+
+
 @overload_method(types.ListType, 'extend')
 def impl_extend(l, iterable):
     if not isinstance(l, types.ListType):
@@ -1068,14 +1320,39 @@ def impl_extend(l, iterable):
 
     def select_impl():
         if isinstance(iterable, types.ListType):
-            def impl(l, iterable):
-                if not l._is_mutable():
-                    raise ValueError("list is immutable")
-                # guard against l.extend(l)
-                if l is iterable:
-                    iterable = iterable.copy()
-                for i in iterable:
-                    l.append(i)
+            if isinstance(iterable.item_type, types.NoneType):
+                def impl(l, iterable):
+                    if not l._is_mutable():
+                        raise ValueError("list is immutable")
+                    # guard against l.extend(l)
+                    if l is iterable:
+                        iterable = iterable.copy()
+                    for i in iterable:
+                        l.append(i)
+            elif _can_bulk_extend(l, iterable):
+                def impl(l, iterable):
+                    if not l._is_mutable():
+                        raise ValueError("list is immutable")
+                    # guard against l.extend(l)
+                    if l is iterable:
+                        iterable = iterable.copy()
+                    n = len(iterable)
+                    i = 0
+                    while i < n:
+                        i += _list_extend_fast(l, iterable, i, n)
+                        if i < n:
+                            # may resize, exactly as a single append
+                            l.append(_list_getitem_direct(iterable, i))
+                            i += 1
+            else:
+                def impl(l, iterable):
+                    if not l._is_mutable():
+                        raise ValueError("list is immutable")
+                    # guard against l.extend(l)
+                    if l is iterable:
+                        iterable = iterable.copy()
+                    for idx in range(len(iterable)):
+                        l.append(_list_getitem_direct(iterable, idx))
 
             return impl
         else:
@@ -1216,10 +1493,24 @@ def impl_copy(l):
     itemty = l.item_type
 
     if isinstance(l, types.ListType):
+        if _can_bulk_extend(l, l):
+            def bulk_impl(l):
+                newl = new_list(itemty, len(l))
+                n = len(l)
+                i = 0
+                while i < n:
+                    i += _list_extend_fast(newl, l, i, n)
+                    if i < n:
+                        newl.append(_list_getitem_direct(l, i))
+                        i += 1
+                return newl
+
+            return bulk_impl
+
         def impl(l):
             newl = new_list(itemty, len(l))
-            for i in l:
-                newl.append(i)
+            for idx in range(len(l)):
+                newl.append(_list_getitem_direct(l, idx))
             return newl
 
         return impl
@@ -1464,26 +1755,29 @@ class ListIterInstance(object):
 
     @classmethod
     def _size_of_list(cls, context, builder, list_ty, ll_list):
-        tyctx = context.typing_context
-        fnty = tyctx.resolve_value_type(len)
-        sig = fnty.get_call_type(tyctx, (list_ty,), {})
-        impl = context.get_function(fnty, sig)
-        return impl(builder, (ll_list,))
+        lp = _container_get_data(context, builder, list_ty, ll_list)
+        return _list_load_size(builder, lp)
 
     @property
     def size(self):
-        tyctx = self._context.typing_context
-        fnty = tyctx.resolve_value_type(len)
-        ty = self._list_ty
-        sig = fnty.get_call_type(tyctx, (ty,), {})
-        impl = self._context.get_function(fnty, sig)
-        return impl(self._builder, (self._iter.parent,))
+        return self._size_of_list(self._context, self._builder,
+                                  self._list_ty, self._iter.parent)
 
     @property
     def value(self):
         return self._iter._getvalue()
 
     def getitem(self, index):
+        if not isinstance(self._list_ty.dtype, types.NoneType):
+            context = self._context
+            builder = self._builder
+            itemty = self._list_ty.item_type
+            lp = _container_get_data(context, builder, self._list_ty,
+                                     self._iter.parent)
+            item_ptr = _list_item_ptr(context, builder, lp, itemty, index)
+            dm_item = context.data_model_manager[itemty]
+            return dm_item.load_from_data_pointer(builder, item_ptr)
+
         tyctx = self._context.typing_context
         ty = self._list_ty
         sig, fn = _list_getitem_borrowed._defn(tyctx, ty, types.intp)
