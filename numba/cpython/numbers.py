@@ -12,7 +12,7 @@ from numba.core.imputils import (lower_builtin, lower_getattr,
                                     lower_constant, impl_ret_borrowed,
                                     impl_ret_untracked)
 from numba.core import typing, types, utils, errors, cgutils, optional
-from numba.core.extending import (intrinsic, overload, overload_method,
+from numba.core.extending import (intrinsic, overload_method,
                                  register_jitable)
 from numba.cpython.unsafe.numbers import viewer
 
