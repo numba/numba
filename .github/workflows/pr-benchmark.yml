@@ -16,6 +16,10 @@ env:
   BENCHMARK_REPO: numba/numba-benchmark
   WHEELS_INDEX_URL: https://pypi.anaconda.org/numba/label/dev/simple
 
+concurrency:
+  group: pr-benchmark-${{ github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' || github.event.action == 'synchronize' || (github.event.action == 'labeled' && github.event.label.name == 'benchmark') }}
+
 jobs:
   prepare:
     if: >-
