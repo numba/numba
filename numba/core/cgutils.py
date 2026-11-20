@@ -419,7 +419,8 @@ def insert_pure_function(module, fnty, name):
 def get_or_insert_function(module, fnty, name):
     """
     Get the function named *name* with type *fnty* from *module*, or insert it
-    if it doesn't exist.
+    if it doesn't exist, then apply target-specific ABI attributes via
+    context.apply_target_attributes().
     """
     fn = module.globals.get(name, None)
     if fn is None:
