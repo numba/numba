@@ -129,6 +129,16 @@ detail""",
         default=cpu.FastMathOptions(False),
         doc="TODO",
     )
+    enable_veclib = Option(
+        type=bool,
+        default=False,
+        doc="Enable vector math library calls",
+    )
+    veclib = Option(
+        type=str,
+        default=None,
+        doc="LLVM vector math library name",
+    )
     noalias = Option(
         type=bool,
         default=False,
@@ -377,6 +387,8 @@ def _make_subtarget(targetctx, flags):
         subtargetoptions['auto_parallel'] = flags.auto_parallel
     if flags.fastmath:
         subtargetoptions['fastmath'] = flags.fastmath
+    if flags.veclib is not None:
+        subtargetoptions['veclib'] = flags.veclib
     error_model = callconv.create_error_model(flags.error_model, targetctx)
     subtargetoptions['error_model'] = error_model
 

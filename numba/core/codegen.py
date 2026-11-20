@@ -649,6 +649,7 @@ class CPUCodeLibrary(CodeLibrary):
             str(self._codegen._create_empty_module(self.name)))
         self._final_module.name = cgutils.normalize_ir_text(self.name)
         self._shared_module = None
+        self._vector_library = None
 
     def _optimize_functions(self, ll_module):
         """
@@ -674,9 +675,11 @@ class CPUCodeLibrary(CodeLibrary):
                                            loop_vectorize=self._codegen._loopvect,
                                            slp_vectorize=False,
                                            opt=self._codegen._opt_level,
-                                           cost="cheap")
+                                           cost="cheap",
+                                           vector_library=self._vector_library)
 
-        mpm_full, mpb_full = self._codegen._module_pass_manager()
+        mpm_full, mpb_full = self._codegen._module_pass_manager(
+            vector_library=self._vector_library)
         cheap_name = "Module passes (cheap optimization for refprune)"
         with self._recorded_timings.record(cheap_name, mpb_cheap):
             # A cheaper optimisation pass is run first to try and get as many
