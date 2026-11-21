@@ -16,7 +16,8 @@ from numba.core import utils, types, serialize, compiler, sigutils
 from numba.np.numpy_support import as_dtype
 from numba.np.ufunc import _internal
 from numba.np.ufunc.sigparse import parse_signature
-from numba.np.ufunc.wrappers import build_ufunc_wrapper, build_gufunc_wrapper
+from numba.np.ufunc.wrappers import (build_ufunc_wrapper, build_gufunc_wrapper,
+                                     UfWrapperCache)
 from numba.core.caching import FunctionCache, NullCache
 from numba.core.compiler_lock import global_compiler_lock
 
@@ -218,7 +219,13 @@ def _pointer_to_wrapper(info):
     return ptr
 
 
-def _build_element_wise_ufunc_wrapper(cres, signature):
+def _ufunc_wrapper_cache(nb_func, cres):
+    if isinstance(nb_func.cache, NullCache):
+        return None
+    return UfWrapperCache(nb_func.py_func, cres.fndesc.mangled_name)
+
+
+def _build_element_wise_ufunc_wrapper(cres, signature, cache=None):
     '''Build a wrapper for the ufunc loop entry point given by the
     compilation result object, using the element-wise signature.
     '''
@@ -228,7 +235,7 @@ def _build_element_wise_ufunc_wrapper(cres, signature):
 
     with global_compiler_lock:
         info = build_ufunc_wrapper(library, ctx, fname, signature,
-                                   cres.objectmode, cres)
+                                   cres.objectmode, cres, cache=cache)
         ptr = _pointer_to_wrapper(info)
     # Get dtypes
     dtypenums = [as_dtype(a).num for a in signature.args]
@@ -358,7 +365,8 @@ class UFuncBuilder(_BaseUFuncBuilder):
         '''Slated for deprecation, use
         ufuncbuilder._build_element_wise_ufunc_wrapper().
         '''
-        return _build_element_wise_ufunc_wrapper(cres, signature)
+        return _build_element_wise_ufunc_wrapper(
+            cres, signature, _ufunc_wrapper_cache(self.nb_func, cres))
 
 
 class GUFuncBuilder(_BaseUFuncBuilder):
