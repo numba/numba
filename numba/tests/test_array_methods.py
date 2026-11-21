@@ -323,6 +323,26 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
     def test_around_scalar(self):
         self.check_round_scalar(np_around_unary, np_around_binary)
 
+    def test_around_decimals_overflow(self):
+        # See issue #10025
+        @njit
+        def around(x, decimals):
+            return np.around(x, decimals)
+
+        self.assertPreciseEqual(around(1.0, 308), np.around(1.0, 308))
+
+        for value, decimals in [(12345.6789, 308), (1e308, 308),
+                                (1.5, 320), (1e-300, 309), (-0.5, 400)]:
+            expected = np.around(value, decimals)
+            got = around(value, decimals)
+            if np.isnan(expected):
+                self.assertTrue(np.isnan(got))
+            else:
+                self.assertPreciseEqual(got, expected)
+
+        # integers are not affected by scaling
+        self.assertPreciseEqual(around(5, 308), np.around(5, 308))
+
     def check_round_array(self, pyfunc):
         def check_round(cfunc, values, inty, outty, decimals):
             # Create input and output arrays of the right type
