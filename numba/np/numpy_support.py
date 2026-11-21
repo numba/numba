@@ -738,6 +738,13 @@ def lt_floats(a, b):
     return a < b or (np.isnan(b) and not np.isnan(a))
 
 
+def lt_temporal(a, b):
+    # Analogous to lt_floats, but for datetime64/timedelta64, where NaT is
+    # sorted after all valid values. See DATETIME_LT and TIMEDELTA_LT in
+    # numpy/core/src/npysort/npysort_common.h
+    return a < b or (np.isnat(b) and not np.isnat(a))
+
+
 def lt_complex(a, b):
     if np.isnan(a.real):
         if np.isnan(b.real):
@@ -769,3 +776,40 @@ def lt_complex(a, b):
                     elif a.real == b.real:
                         return a.imag < b.imag
                     return False
+
+
+def le_complex(a, b):
+    if np.isnan(a.real):
+        if np.isnan(b.real):
+            if np.isnan(a.imag):
+                return np.isnan(b.imag)
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    return a.imag <= b.imag
+        else:
+            return False
+
+    else:
+        if np.isnan(b.real):
+            return True
+        else:
+            if np.isnan(a.imag):
+                if np.isnan(b.imag):
+                    return a.real <= b.real
+                else:
+                    return False
+            else:
+                if np.isnan(b.imag):
+                    return True
+                else:
+                    if a.real < b.real:
+                        return True
+                    elif a.real == b.real:
+                        return a.imag <= b.imag
+                    return False
+
+
+def le_temporal(a, b):
+    return not lt_temporal(b, a)

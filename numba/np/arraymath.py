@@ -17,7 +17,8 @@ from numba.core.config import IS_WIN32
 from numba.core.extending import overload, overload_method, register_jitable
 from numba.np.numpy_support import (as_dtype, type_can_asarray, type_is_scalar,
                                     numpy_version, is_nonelike,
-                                    check_is_integer, lt_floats, lt_complex)
+                                    check_is_integer, lt_floats, lt_complex,
+                                    lt_temporal, le_complex, le_temporal)
 from numba.core.imputils import (lower_builtin, impl_ret_borrowed,
                                  impl_ret_new_ref, impl_ret_untracked)
 from numba.np.arrayobj import (make_array, load_item, store_item,
@@ -4485,48 +4486,21 @@ def np_bincount(a, weights=None, minlength=0):
     return bincount_impl
 
 
-less_than_float = register_jitable(lt_floats)
-less_than_complex = register_jitable(lt_complex)
-
-
-@register_jitable
-def less_than_or_equal_complex(a, b):
-    if np.isnan(a.real):
-        if np.isnan(b.real):
-            if np.isnan(a.imag):
-                return np.isnan(b.imag)
-            else:
-                if np.isnan(b.imag):
-                    return True
-                else:
-                    return a.imag <= b.imag
-        else:
-            return False
-
-    else:
-        if np.isnan(b.real):
-            return True
-        else:
-            if np.isnan(a.imag):
-                if np.isnan(b.imag):
-                    return a.real <= b.real
-                else:
-                    return False
-            else:
-                if np.isnan(b.imag):
-                    return True
-                else:
-                    if a.real < b.real:
-                        return True
-                    elif a.real == b.real:
-                        return a.imag <= b.imag
-                    return False
+_less_than_float = register_jitable(lt_floats)
+_less_than_complex = register_jitable(lt_complex)
+_less_than_temporal = register_jitable(lt_temporal)
+_less_than_or_equal_complex = register_jitable(le_complex)
+_less_than_or_equal_temporal = register_jitable(le_temporal)
 
 
 @register_jitable
 def _less_than_or_equal(a, b):
     if isinstance(a, complex) or isinstance(b, complex):
-        return less_than_or_equal_complex(a, b)
+        return _less_than_or_equal_complex(a, b)
+
+    elif isinstance(a, (np.datetime64, np.timedelta64)) or \
+            isinstance(b, (np.datetime64, np.timedelta64)):
+        return _less_than_or_equal_temporal(a, b)
 
     elif isinstance(b, (float, types.float32, types.float64)):
         if np.isnan(b):
@@ -4538,30 +4512,16 @@ def _less_than_or_equal(a, b):
 @register_jitable
 def _less_than(a, b):
     if isinstance(a, complex) or isinstance(b, complex):
-        return less_than_complex(a, b)
+        return _less_than_complex(a, b)
+
+    elif isinstance(a, (np.datetime64, np.timedelta64)) or \
+            isinstance(b, (np.datetime64, np.timedelta64)):
+        return _less_than_temporal(a, b)
 
     elif isinstance(b, (float, types.float32, types.float64)):
-        return less_than_float(a, b)
+        return _less_than_float(a, b)
 
     return a < b
-
-
-@register_jitable
-def _less_then_datetime64(a, b):
-    # Original numpy code is at:
-    # https://github.com/numpy/numpy/blob/3dad50936a8dc534a81a545365f69ee9ab162ffe/numpy/_core/src/npysort/npysort_common.h#L334-L346
-    if np.isnat(a):
-        return 0
-
-    if np.isnat(b):
-        return 1
-
-    return a < b
-
-
-@register_jitable
-def _less_then_or_equal_datetime64(a, b):
-    return not _less_then_datetime64(b, a)
 
 
 def _searchsorted(cmp):
@@ -4588,13 +4548,8 @@ VALID_SEARCHSORTED_SIDES = frozenset({'left', 'right'})
 def make_searchsorted_implementation(np_dtype, side):
     assert side in VALID_SEARCHSORTED_SIDES
 
-    if np_dtype.char in 'mM':
-        # is datetime
-        lt = _less_then_datetime64
-        le = _less_then_or_equal_datetime64
-    else:
-        lt = _less_than
-        le = _less_than_or_equal
+    lt = _less_than
+    le = _less_than_or_equal
 
     if side == 'left':
         _impl = _searchsorted(lt)

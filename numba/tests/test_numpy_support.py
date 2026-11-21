@@ -9,8 +9,10 @@ from itertools import product
 import numpy as np
 
 import unittest
+from numba import njit
 from numba.core import types
 from numba.core.errors import NumbaNotImplementedError
+from numba.core.extending import register_jitable
 from numba.tests.support import TestCase
 from numba.tests.enum_usecases import Shake, RequestError
 from numba.np import numpy_support
@@ -442,6 +444,149 @@ class TestUFuncs(TestCase):
         # outer zero dims
         check_arr(arr.reshape((2, 2, 3, 2))[::5, ::2, ::3])
         check_arr(arr.reshape((2, 2, 3, 2)).T[:, ::3, ::2, ::5])
+
+
+class TestLessThan(TestCase):
+    """
+    Test the comparison functions used for sorting.
+    """
+
+    def check_lt(self, lt, cases):
+        """
+        Check that *lt* returns the expected result for each (a, b, expected)
+        case.
+        """
+        for a, b, expected in cases:
+            with self.subTest(a=a, b=b):
+                self.assertEqual(lt(a, b), expected)
+
+    def test_lt_temporal(self):
+        """
+        NaT sorts after all valid datetime64/timedelta64 values.
+        """
+        lt = numpy_support.lt_temporal
+
+        nat = np.datetime64('NaT', 'D')
+        valid = np.datetime64('2000-01-01', 'D')
+        # NaT is the largest value, but is not less than itself.
+        cases = [
+            (nat, nat, False),
+            (nat, valid, False),
+            (valid, nat, True),
+            (valid, valid, False),
+        ]
+        self.check_lt(lt, cases)
+
+        nat = np.timedelta64('NaT', 'D')
+        valid = np.timedelta64(1, 'D')
+        cases = [
+            (nat, nat, False),
+            (nat, valid, False),
+            (valid, nat, True),
+            (valid, valid, False),
+        ]
+        self.check_lt(lt, cases)
+
+    def test_lt_temporal_differs_from_comparison(self):
+        """
+        The sorting comparator differs from the "<" operator, for which any
+        comparison involving NaT is false.
+        """
+        lt = numpy_support.lt_temporal
+
+        nat = np.datetime64('NaT', 'D')
+        valid = np.datetime64('2000-01-01', 'D')
+
+        # The operator says "valid < NaT" is false, but the comparator used
+        # for sorting says it is true, so that NaT ends up after all valid
+        # values. The same holds for NaN and floats.
+        self.assertFalse(valid < nat)
+        self.assertTrue(lt(valid, nat))
+        self.assertFalse(1.0 < float('nan'))
+        self.assertTrue(numpy_support.lt_floats(1.0, float('nan')))
+
+    def test_lt_temporal_jit(self):
+        """
+        The comparator must also work when compiled, as it is used inside
+        the jitted sorting implementations.
+        """
+        lt = register_jitable(numpy_support.lt_temporal)
+
+        @njit
+        def compare(a, b):
+            return lt(a, b)
+
+        nat = np.datetime64('NaT', 'D')
+        valid = np.datetime64('2000-01-01', 'D')
+        self.assertFalse(compare(nat, nat))
+        self.assertFalse(compare(nat, valid))
+        self.assertTrue(compare(valid, nat))
+        self.assertFalse(compare(valid, valid))
+
+        nat = np.timedelta64('NaT', 'D')
+        valid = np.timedelta64(1, 'D')
+        self.assertFalse(compare(nat, nat))
+        self.assertFalse(compare(nat, valid))
+        self.assertTrue(compare(valid, nat))
+        self.assertFalse(compare(valid, valid))
+
+    def test_lt_floats(self):
+        """
+        NaN sorts after all valid float values.
+        """
+        lt = numpy_support.lt_floats
+
+        nan = float('nan')
+        valid = 1.0
+        cases = [
+            (nan, nan, False),
+            (nan, valid, False),
+            (valid, nan, True),
+            (valid, valid, False),
+        ]
+        self.check_lt(lt, cases)
+
+    def test_le_temporal(self):
+        """
+        The "<=" counterpart of lt_temporal.
+        """
+        le = numpy_support.le_temporal
+
+        nat = np.datetime64('NaT', 'D')
+        valid = np.datetime64('2000-01-01', 'D')
+        cases = [
+            (nat, nat, True),
+            (nat, valid, False),
+            (valid, nat, True),
+            (valid, valid, True),
+        ]
+        self.check_lt(le, cases)
+
+        nat = np.timedelta64('NaT', 'D')
+        valid = np.timedelta64(1, 'D')
+        cases = [
+            (nat, nat, True),
+            (nat, valid, False),
+            (valid, nat, True),
+            (valid, valid, True),
+        ]
+        self.check_lt(le, cases)
+
+    def test_le_complex(self):
+        """
+        The "<=" counterpart of lt_complex.
+        """
+        le = numpy_support.le_complex
+
+        nan = complex(float('nan'), 0.0)
+        valid = complex(1.0, 2.0)
+        cases = [
+            (nan, nan, True),
+            (nan, valid, False),
+            (valid, nan, True),
+            (valid, valid, True),
+        ]
+        self.check_lt(le, cases)
 
 
 if __name__ == '__main__':

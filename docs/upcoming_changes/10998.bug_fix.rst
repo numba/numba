@@ -1,0 +1,8 @@
+Fix sorting of ``datetime64`` and ``timedelta64`` arrays containing ``NaT``
+---------------------------------------------------------------------------
+
+Sorting a ``datetime64`` or ``timedelta64`` array that contains ``NaT``
+values gave an unspecified order, as comparisons involving ``NaT`` are always
+false.  ``np.sort()``, ``np.argsort()``, ``ndarray.sort()`` and
+``ndarray.argsort()`` now place ``NaT`` after all valid values, matching
+NumPy.
