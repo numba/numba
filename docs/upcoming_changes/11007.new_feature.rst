@@ -1,0 +1,8 @@
+Add ``NUMBA_DISABLE_CACHE`` to turn off on-disk caching
+-------------------------------------------------------
+
+Setting the ``NUMBA_DISABLE_CACHE`` environment variable to a non-zero value
+makes ``cache=True`` a no-op for ``jit``, ``cfunc``, ``vectorize`` and
+``guvectorize``. Nothing is loaded from or saved to the on-disk cache. This
+helps when Numba is used through a dependency on a read-only or serverless
+filesystem, or to work around cache loading problems.
