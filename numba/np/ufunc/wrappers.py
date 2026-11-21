@@ -135,15 +135,37 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
                                   env=env)
 
 
-def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
+UfWrapperCache = make_library_cache('uf')
+
+
+def build_ufunc_wrapper(library, context, fname, signature, objmode, cres,
+                        cache=None):
     """
-    Wrap the scalar function with a loop that iterates over the arguments
+    Wrap the scalar function with a loop that iterates over the arguments.
+    If *cache* is given, the wrapper library is loaded from / saved to it.
 
     Returns
     -------
     (library, env, name)
     """
     assert isinstance(fname, str)
+    name = "__ufunc__." + fname
+    wrapperlib = None
+    if cache is not None:
+        wrapperlib = cache.load_overload(signature, context)
+    if wrapperlib is None:
+        wrapperlib = context.codegen().create_library('ufunc_wrapper')
+        if cache is not None:
+            wrapperlib.enable_object_caching()
+        _build_ufunc_wrapper(wrapperlib, library, context, fname, name,
+                             signature, objmode, cres)
+        if cache is not None:
+            cache.save_overload(signature, wrapperlib)
+    return _wrapper_info(library=wrapperlib, env=cres.environment, name=name)
+
+
+def _build_ufunc_wrapper(wrapperlib, library, context, fname, name, signature,
+                         objmode, cres):
     byte_t = ir.IntType(8)
     byte_ptr_t = ir.PointerType(byte_t)
     byte_ptr_ptr_t = ir.PointerType(byte_ptr_t)
@@ -153,7 +175,6 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     fnty = ir.FunctionType(ir.VoidType(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
 
-    wrapperlib = context.codegen().create_library('ufunc_wrapper')
     wrapper_module = wrapperlib.create_ir_module('')
     if objmode:
         func_type = context.call_conv.get_function_type(
@@ -165,7 +186,7 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     func = ir.Function(wrapper_module, func_type, name=fname)
     func.attributes.add("alwaysinline")
 
-    wrapper = ir.Function(wrapper_module, fnty, "__ufunc__." + func.name)
+    wrapper = ir.Function(wrapper_module, fnty, name)
     arg_args, arg_dims, arg_steps, arg_data = wrapper.args
     arg_args.name = "args"
     arg_dims.name = "dims"
@@ -243,7 +264,6 @@ def build_ufunc_wrapper(library, context, fname, signature, objmode, cres):
     # Link and finalize
     wrapperlib.add_ir_module(wrapper_module)
     wrapperlib.add_linking_library(library)
-    return _wrapper_info(library=wrapperlib, env=env, name=wrapper.name)
 
 
 class UArrayArg(object):
