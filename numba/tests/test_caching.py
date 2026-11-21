@@ -833,6 +833,27 @@ class TestCache(DispatcherCacheUsecasesTest):
         self.assertIn("cache hits = 1", err.strip())
 
 
+class TestDisableCache(DispatcherCacheUsecasesTest):
+
+    def test_disable_cache(self):
+        with override_config('DISABLE_CACHE', 1):
+            mod = self.import_module()
+            self.assertPreciseEqual(mod.add_usecase(2, 3),
+                                    mod.add_usecase.py_func(2, 3))
+            self.check_hits(mod.add_usecase, 0)
+        self.check_pycache(0)
+
+    def test_disable_cache_zero_still_caches(self):
+        with override_config('DISABLE_CACHE', 0):
+            mod = self.import_module()
+            mod.add_usecase(2, 3)
+        self.check_pycache(2)
+
+    def test_disable_cache_envvar(self):
+        self.run_in_separate_process(envvars={'NUMBA_DISABLE_CACHE': '1'})
+        self.check_pycache(0)
+
+
 class TestCacheZip(DispatcherCacheUsecasesTest):
 
     def setUp(self):
@@ -1419,6 +1440,13 @@ class TestCFuncCache(BaseCacheTest):
         self.check_module(mod)
 
         self.run_in_separate_process()
+
+    def test_disable_cache(self):
+        with override_config('DISABLE_CACHE', 1):
+            mod = self.import_module()
+            self.check_module(mod)
+            self.assertEqual(mod.add_usecase.cache_hits, 0)
+        self.check_pycache(0)
 
 
 class TestLocator(InTreeCacheLocator):

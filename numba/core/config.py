@@ -287,6 +287,9 @@ class _EnvReloader(object):
         # Contains path to the directory
         CACHE_DIR = _readenv("NUMBA_CACHE_DIR", str, "")
 
+        # Disable the on-disk cache, overriding cache=True
+        DISABLE_CACHE = _readenv("NUMBA_DISABLE_CACHE", int, 0)
+
         # Override default cache locators list including their order
         # Comma separated list of locator class names,
         # see _locator_classes in caching submodule

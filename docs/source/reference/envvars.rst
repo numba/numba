@@ -494,6 +494,15 @@ Options for the compilation cache.
         ``NUMBA_CACHE_DIR`` to a shared, world-writable, or otherwise
         untrusted location (see :ref:`cache-security`).
 
+.. envvar:: NUMBA_DISABLE_CACHE
+
+    If set to non-zero, disable the on-disk cache. ``cache=True`` is ignored
+    by :func:`~numba.jit`, :func:`~numba.cfunc`, :func:`~numba.vectorize` and
+    :func:`~numba.guvectorize`, so nothing is loaded from or saved to the
+    cache.
+
+    *Default value:* 0
+
 .. envvar:: NUMBA_CACHE_LOCATOR_CLASSES
 
     Override the default cache locator classes and their order. If defined,
