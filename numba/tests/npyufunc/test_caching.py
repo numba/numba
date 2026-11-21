@@ -5,7 +5,7 @@ import subprocess
 
 import numpy as np
 
-from numba.tests.support import capture_cache_log
+from numba.tests.support import capture_cache_log, override_config
 from numba.tests.test_caching import BaseCacheTest
 from numba.core import config
 import unittest
@@ -181,6 +181,48 @@ class TestGUfuncCacheTest(UfuncCacheTest):
 
     def test_indirect_gufunc_cache_parallel(self, **kwargs):
         self.test_indirect_gufunc_cache(target='parallel')
+
+
+class TestUfuncDisableCache(UfuncCacheTest):
+
+    def check_disabled(self, usecase_name, **kwargs):
+        inp = np.arange(10, dtype=np.intp)
+        with override_config('DISABLE_CACHE', 1):
+            mod = self.import_module()
+            with capture_cache_log() as out:
+                ufunc = getattr(mod, usecase_name)(**kwargs)
+                np.testing.assert_equal(ufunc(inp), inp * 2)
+            cachelog = out.getvalue()
+        self.check_cache_saved(cachelog, count=0)
+        self.check_cache_loaded(cachelog, count=0)
+        self.check_pycache(0)
+
+    def test_ufunc(self):
+        self.check_disabled("direct_ufunc_cache_usecase")
+
+    def test_ufunc_parallel(self):
+        self.check_disabled("direct_ufunc_cache_usecase", target='parallel')
+
+    def test_dufunc(self):
+        self.check_disabled("direct_dufunc_cache_usecase")
+
+    def test_gufunc(self):
+        self.check_disabled("direct_gufunc_cache_usecase")
+
+    def test_gufunc_parallel(self):
+        self.check_disabled("direct_gufunc_cache_usecase", target='parallel')
+
+    def test_gufunc_rebuilt_with_cache(self):
+        # Unpickling a gufunc pickled where caching was on passes cache=True
+        # straight to the constructor.
+        inp = np.arange(10, dtype=np.intp)
+        with override_config('DISABLE_CACHE', 1):
+            mod = self.import_module()
+            gufunc = mod.direct_gufunc_cache_usecase()
+            states = dict(gufunc._reduce_states(), cache=True)
+            rebuilt = type(gufunc)._rebuild(**states)
+            np.testing.assert_equal(rebuilt(inp), inp * 2)
+        self.check_pycache(0)
 
 
 class TestCacheSpecificIssue(UfuncCacheTest):

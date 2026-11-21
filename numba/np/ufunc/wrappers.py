@@ -5,7 +5,7 @@ import numpy as np
 from llvmlite.ir import Constant, IRBuilder
 from llvmlite import ir
 
-from numba.core import types, cgutils
+from numba.core import config, types, cgutils
 from numba.core.compiler_lock import global_compiler_lock
 from numba.core.caching import make_library_cache, NullCache
 
@@ -304,7 +304,7 @@ class _GufuncWrapper(object):
         self.sout = sout
         self.is_objectmode = self.signature.return_type == types.pyobject
         self.cache = (GufWrapperCache(self.py_func, self.fndesc.mangled_name)
-                      if cache else NullCache())
+                      if cache and not config.DISABLE_CACHE else NullCache())
         self.is_parfors = bool(is_parfors)
 
     @property
