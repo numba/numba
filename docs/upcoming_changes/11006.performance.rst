@@ -1,0 +1,7 @@
+Cache the ufunc loop wrapper for ``@vectorize(cache=True)``
+-----------------------------------------------------------
+
+The loop wrapper generated for ufuncs created with ``@vectorize(cache=True)``
+is now cached on disk alongside the element-wise kernel, instead of being
+regenerated and compiled on every process start. This substantially reduces
+warm start time for modules defining many cached vectorized functions.
