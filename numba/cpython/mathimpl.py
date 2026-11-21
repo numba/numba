@@ -93,8 +93,7 @@ def negate_real(builder, val):
     """
     Negate real number *val*, with proper handling of zeros.
     """
-    # The negative zero forces LLVM to handle signed zeros properly.
-    return builder.fsub(Constant(val.type, -0.0), val)
+    return builder.fneg(val)
 
 def call_fp_intrinsic(builder, name, args):
     """

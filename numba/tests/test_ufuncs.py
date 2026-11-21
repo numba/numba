@@ -8,7 +8,7 @@ import operator
 import numpy as np
 
 import unittest
-from numba import guvectorize, njit, typeof, vectorize
+from numba import guvectorize, jit, njit, typeof, vectorize
 from numba.core import types
 from numba.np.numpy_support import from_dtype
 from numba.core.errors import LoweringError, TypingError
@@ -629,6 +629,19 @@ class TestUFuncs(BasicUFuncTest, TestCase):
 
     def test_signbit_ufunc(self):
         self.basic_ufunc_test(np.signbit)
+
+    def test_signbit_negative_nan_constant(self):
+        def check():
+            return np.signbit(np.array([np.nan, -np.nan, np.inf, -np.inf]))
+
+        np.testing.assert_array_equal(jit(check)(), check())
+
+        def negate(x):
+            return np.signbit(-x)
+
+        compiled = jit(negate)
+        for value in (0.0, -0.0, np.inf, -np.inf, np.nan, -np.nan):
+            self.assertEqual(compiled(value), negate(value))
 
     def test_copysign_ufunc(self):
         self.basic_ufunc_test(np.copysign, kinds='f')
