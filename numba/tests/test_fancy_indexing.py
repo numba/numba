@@ -6,13 +6,19 @@ import re
 import numpy as np
 
 import unittest
-from numba import jit, njit
-from numba.core.errors import TypingError
+from numba import jit, njit, typeof
+from numba.core.errors import TypingError, NumbaNotImplementedError
+from numba.core.typing.arraydecl import get_array_index_type
 from numba.tests.support import MemoryLeakMixin, TestCase
 
 
 def set_two_masks(x, r, c):
     x[r, c] = 99
+    return x
+
+
+def set_mask_scalar(x, m):
+    x[m] = 0
     return x
 
 
@@ -591,6 +597,26 @@ class TestBooleanMaskErrors(MemoryLeakMixin, TestCase):
         self.assert_matches_numpy(lambda a, i, m: a[i, m],
                                   np.arange(24).reshape(2, 3, 4), np.array(1),
                                   np.array([True, False, True]))
+
+    def test_nd_mask_not_full_rank(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        msg = "more than one dimension must be the only index"
+        for f in (lambda a, m: a[m], lambda a, m: a[0, m],
+                  lambda a, m: a[..., m]):
+            self.assert_rejected(f, (a, a[0] > 2), msg)
+
+    def test_nd_mask_full_rank_result_type(self):
+        x = np.arange(6).reshape(2, 3)
+        out = get_array_index_type(typeof(x), typeof(x > 2))
+        self.assertEqual(out.result.ndim, 1)
+
+    def test_nd_mask_serial_lowering_error(self):
+        x = np.arange(6.).reshape(2, 3)
+        msg = "only supported in masked assignment with parallel=True"
+        self.assert_rejected(lambda x, m: x[m], (x, x > 2), msg,
+                             exc=NumbaNotImplementedError)
+        self.assert_rejected(set_mask_scalar, (x, x > 2), msg,
+                             exc=NumbaNotImplementedError)
 
 
 if __name__ == '__main__':

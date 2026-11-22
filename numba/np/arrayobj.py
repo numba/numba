@@ -1384,8 +1384,19 @@ def get_subspace_shape(context, builder, array_indices):
     return subspace_shape
 
 
+def _reject_nd_bool_index(index_types):
+    for ty in index_types:
+        if (isinstance(ty, types.Array) and isinstance(ty.dtype, types.Boolean)
+                and ty.ndim > 1):
+            raise errors.NumbaNotImplementedError(
+                "Boolean array indices with more than one dimension are only "
+                "supported in masked assignment with parallel=True; use "
+                "x[np.nonzero(mask)] instead")
+
+
 def fancy_getitem(context, builder, sig, args,
                   aryty, ary, index_types, indices):
+    _reject_nd_bool_index(index_types)
 
     shapes = cgutils.unpack_tuple(builder, ary.shape)
     strides = cgutils.unpack_tuple(builder, ary.strides)
@@ -1982,6 +1993,7 @@ def fancy_setslice(context, builder, sig, args, index_types, indices):
     basic as well as fancy indexing, since there's no functional difference
     between the two for indexed assignment.
     """
+    _reject_nd_bool_index(index_types)
     aryty, _, srcty = sig.args
     ary, _, src = args
 

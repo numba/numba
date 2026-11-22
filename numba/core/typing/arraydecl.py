@@ -97,9 +97,14 @@ def get_array_index_type(ary, idx):
                         "0-d boolean array indices are not supported "
                         "(got %s)" % (idx,))
                 num_masks += 1
-            array_indices.append(ty.ndim)
+                mask_ndim = ty.ndim
+                # A k-d mask consumes k dimensions and yields one
+                array_indices.append(1)
+                ndim -= ty.ndim
+            else:
+                array_indices.append(ty.ndim)
+                ndim -= 1
             advanced = True
-            ndim -= 1
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
@@ -116,6 +121,12 @@ def get_array_index_type(ary, idx):
             "A boolean array index cannot be combined with another array "
             "index; convert the mask with np.nonzero(mask)[0] (got %s)"
             % (idx,))
+    if num_masks and mask_ndim > 1 and (len(idx) > 1
+                                        or mask_ndim != ary.ndim):
+        raise NumbaTypeError(
+            "A boolean array index with more than one dimension must be the "
+            "only index and have the same number of dimensions as the array "
+            "(got %s)" % (idx,))
 
     if advanced:
         ndim += max(array_indices)
@@ -131,6 +142,8 @@ def get_array_index_type(ary, idx):
         del right_indices[0]
 
     n_indices = len(all_indices) - ellipsis_met - num_newaxis
+    if num_masks:
+        n_indices += mask_ndim - 1
     if n_indices > ary.ndim:
         raise NumbaTypeError("cannot index %s with %d indices: %s"
                              % (ary, n_indices, idx))
