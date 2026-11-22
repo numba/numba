@@ -1,0 +1,8 @@
+Reject unsupported boolean array indices
+----------------------------------------
+
+Some uses of boolean array indices gave results that differed from NumPy
+or failed with internal errors: two masks or a mask with an integer array
+in one index, masks with more than one dimension, 0-d masks, and masks
+whose axis NumPy moves to the front (``a[1, :, mask]``). These now raise
+a clear compile-time error.
