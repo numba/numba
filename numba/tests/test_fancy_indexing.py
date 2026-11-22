@@ -1,5 +1,7 @@
 import collections
+import copy
 import itertools
+import re
 
 import numpy as np
 
@@ -7,6 +9,11 @@ import unittest
 from numba import jit, njit
 from numba.core.errors import TypingError
 from numba.tests.support import MemoryLeakMixin, TestCase
+
+
+def set_two_masks(x, r, c):
+    x[r, c] = 99
+    return x
 
 
 class TestFancyIndexing(MemoryLeakMixin, TestCase):
@@ -544,6 +551,47 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         for idx in indices:
             with self.subTest(idx=idx):
                 self.check_setitem_indices(self.shape, idx)
+
+
+class TestBooleanMaskErrors(MemoryLeakMixin, TestCase):
+
+    def assert_rejected(self, pyfunc, args, msg, exc=TypingError):
+        with self.assertRaisesRegex(exc, re.escape(msg)):
+            jit(pyfunc)(*args)
+
+    def assert_matches_numpy(self, pyfunc, *args):
+        expected_args = copy.deepcopy(args)
+        got_args = copy.deepcopy(args)
+        expected = pyfunc(*expected_args)
+        got = jit(pyfunc)(*got_args)
+        np.testing.assert_equal(got, expected)
+        np.testing.assert_equal(got_args[0], expected_args[0])
+
+    def test_0d_bool_index(self):
+        self.assert_rejected(lambda a, m: a[m], (np.arange(3), np.array(True)),
+                             "0-d boolean array indices are not supported")
+
+    def test_two_masks(self):
+        x = np.arange(9).reshape(3, 3)
+        r, c = np.array([True, False, True]), np.array([False, True, True])
+        msg = "cannot be combined with another array index"
+        self.assert_rejected(lambda x, r, c: x[r, c], (x, r, c), msg)
+        self.assert_rejected(set_two_masks, (x, r, c), msg)
+
+    def test_mask_with_int_array(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        m = np.array([True, False, False, True])
+        msg = "cannot be combined with another array index"
+        self.assert_rejected(lambda a, m: a[np.array([0, 1]), :, m], (a, m),
+                             msg)
+        self.assert_rejected(lambda a, m: a[0, np.array([0, 2]), m], (a, m),
+                             msg)
+
+    def test_mask_with_0d_int_array(self):
+        self.assert_matches_numpy(lambda a, i, m: a[i, m],
+                                  np.arange(24).reshape(2, 3, 4), np.array(1),
+                                  np.array([True, False, True]))
+
 
 if __name__ == '__main__':
     unittest.main()

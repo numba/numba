@@ -47,6 +47,7 @@ def get_array_index_type(ary, idx):
     in_subspace = False
     num_subspaces = 0
     array_indices = []
+    num_masks = 0
 
     # Walk indices
     for ty in idx:
@@ -90,6 +91,12 @@ def get_array_index_type(ary, idx):
                 in_subspace = True
         elif (isinstance(ty, types.Array)
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
+            if isinstance(ty.dtype, types.Boolean):
+                if ty.ndim == 0:
+                    raise NumbaTypeError(
+                        "0-d boolean array indices are not supported "
+                        "(got %s)" % (idx,))
+                num_masks += 1
             array_indices.append(ty.ndim)
             advanced = True
             ndim -= 1
@@ -103,6 +110,12 @@ def get_array_index_type(ary, idx):
             raise NumbaTypeError("Unsupported array index type %s in %s"
                                  % (ty, idx))
         (right_indices if ellipsis_met else left_indices).append(ty)
+
+    if num_masks and len(array_indices) > 1:
+        raise NumbaTypeError(
+            "A boolean array index cannot be combined with another array "
+            "index; convert the mask with np.nonzero(mask)[0] (got %s)"
+            % (idx,))
 
     if advanced:
         ndim += max(array_indices)
