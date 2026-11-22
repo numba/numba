@@ -20,12 +20,38 @@ numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
 
-def get_array_index_type(ary, idx):
+def _mask_moved_to_front(indices, ellipsis_ndim):
+    """
+    Whether NumPy would move the axis of the boolean array index in
+    ``indices`` to the front of the result, where Numba would not.
+    NumPy does so when the advanced indices are not adjacent, i.e. a slice,
+    ellipsis or newaxis separates them.
+    """
+    groups = 0
+    in_group = False
+    dims_before_mask = None
+    dims = 0
+    for ty in indices:
+        if isinstance(ty, (types.Integer, types.Array)):
+            if not in_group:
+                groups += 1
+                in_group = True
+            if (dims_before_mask is None and isinstance(ty, types.Array)
+                    and isinstance(ty.dtype, types.Boolean)):
+                dims_before_mask = dims
+        else:
+            in_group = False
+            dims += ellipsis_ndim if ty is types.ellipsis else 1
+    return groups > 1 and dims_before_mask > 0
+
+
+def get_array_index_type(ary, idx, scalar_setitem=False):
     """
     Returns None or a tuple-3 for the types of the input array, index, and
     resulting type of ``array[index]``.
 
     Note: This is shared logic for ndarray getitem and setitem.
+    ``scalar_setitem`` is true when a scalar is assigned to ``array[index]``.
     """
     if not isinstance(ary, types.Buffer):
         return
@@ -147,6 +173,12 @@ def get_array_index_type(ary, idx):
     if n_indices > ary.ndim:
         raise NumbaTypeError("cannot index %s with %d indices: %s"
                              % (ary, n_indices, idx))
+    if (num_masks and not scalar_setitem
+            and _mask_moved_to_front(all_indices, ary.ndim - n_indices)):
+        raise NumbaTypeError(
+            "A boolean array index that NumPy would move to the front of the "
+            "result is not supported; use np.nonzero(mask)[0] instead "
+            "(got %s)" % (idx,))
     if n_indices == ary.ndim and ndim == 0 and not ellipsis_met:
         # Full integer indexing => scalar result
         # (note if ellipsis is present, a 0-d view is returned instead)
@@ -250,7 +282,8 @@ class SetItemBuffer(AbstractTemplate):
         if not ary.mutable:
             msg = f"Cannot modify readonly array of type: {ary}"
             raise NumbaTypeError(msg)
-        out = get_array_index_type(ary, idx)
+        scalar_setitem = not isinstance(val, (types.Buffer, types.Sequence))
+        out = get_array_index_type(ary, idx, scalar_setitem=scalar_setitem)
         if out is None:
             return
 

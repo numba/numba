@@ -22,6 +22,16 @@ def set_mask_scalar(x, m):
     return x
 
 
+def set_1_slice_m_scalar(a, m):
+    a[1, :, m] = 0
+    return a
+
+
+def set_1_slice_m_array(a, m, v):
+    a[1, :, m] = v
+    return a
+
+
 class TestFancyIndexing(MemoryLeakMixin, TestCase):
     # Every case has exactly one array,
     # Otherwise it's not fancy indexing
@@ -617,6 +627,33 @@ class TestBooleanMaskErrors(MemoryLeakMixin, TestCase):
                              exc=NumbaNotImplementedError)
         self.assert_rejected(set_mask_scalar, (x, x > 2), msg,
                              exc=NumbaNotImplementedError)
+
+    def test_mask_moved_to_front(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        m3 = np.array([True, False, True])
+        m4 = np.array([True, False, False, True])
+        msg = "NumPy would move to the front"
+        self.assert_rejected(lambda a, m: a[1, :, m], (a, m4), msg)
+        self.assert_rejected(lambda a, m: a[0, ..., m], (a, m4), msg)
+        self.assert_rejected(lambda a, m: a[None, 1, :, m], (a, m4), msg)
+        self.assert_rejected(lambda a, m: a[1, None, m], (a, m3), msg)
+        self.assert_rejected(set_1_slice_m_array,
+                             (a, m4, np.zeros((2, 3), np.int64)), msg)
+
+    def test_mask_placement_matches_numpy(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        m2 = np.array([False, True])
+        m3 = np.array([True, False, True])
+        m4 = np.array([True, False, False, True])
+        self.assert_matches_numpy(lambda a, m: a[m, :, 1], a, m2)
+        self.assert_matches_numpy(lambda a, m: a[m, None, 1], a, m2)
+        self.assert_matches_numpy(lambda a, m: a[:, 1, m], a, m4)
+        self.assert_matches_numpy(lambda a, m: a[..., m], a, m4)
+        self.assert_matches_numpy(lambda a, m: a[m, 1], a, m2)
+        self.assert_matches_numpy(lambda a, m: a[:, m, 0], a, m3)
+        self.assert_matches_numpy(lambda b, m: b[1, ..., m],
+                                  np.arange(12).reshape(3, 4), m4)
+        self.assert_matches_numpy(set_1_slice_m_scalar, a, m4)
 
 
 if __name__ == '__main__':
