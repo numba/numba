@@ -622,7 +622,8 @@ class TestBooleanMaskErrors(MemoryLeakMixin, TestCase):
 
     def test_nd_mask_serial_lowering_error(self):
         x = np.arange(6.).reshape(2, 3)
-        msg = "only supported in masked assignment with parallel=True"
+        msg = ("only supported with parallel=True as x[mask] = scalar or "
+               "x[mask] = y[mask]")
         self.assert_rejected(lambda x, m: x[m], (x, x > 2), msg,
                              exc=NumbaNotImplementedError)
         self.assert_rejected(set_mask_scalar, (x, x > 2), msg,
@@ -654,6 +655,15 @@ class TestBooleanMaskErrors(MemoryLeakMixin, TestCase):
         self.assert_matches_numpy(lambda b, m: b[1, ..., m],
                                   np.arange(12).reshape(3, 4), m4)
         self.assert_matches_numpy(set_1_slice_m_scalar, a, m4)
+        self.assert_matches_numpy(set_1_slice_m_array, a, m4, np.array(9))
+
+    def test_mask_split_by_none_no_nonzero_hint(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        m = np.array([True, False, True])
+        with self.assertRaises(TypingError) as raises:
+            jit(lambda a, m: a[1, None, m])(a, m)
+        self.assertIn("NumPy would move to the front", str(raises.exception))
+        self.assertNotIn("np.nonzero", str(raises.exception))
 
 
 if __name__ == '__main__':

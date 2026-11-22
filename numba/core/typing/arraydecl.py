@@ -175,10 +175,12 @@ def get_array_index_type(ary, idx, scalar_setitem=False):
                              % (ary, n_indices, idx))
     if (num_masks and not scalar_setitem
             and _mask_moved_to_front(all_indices, ary.ndim - n_indices)):
+        # np.nonzero(mask)[0] has the same problem when None splits the groups
+        hint = ("" if any(is_nonelike(ty) for ty in all_indices)
+                else "; use np.nonzero(mask)[0] instead")
         raise NumbaTypeError(
             "A boolean array index that NumPy would move to the front of the "
-            "result is not supported; use np.nonzero(mask)[0] instead "
-            "(got %s)" % (idx,))
+            "result is not supported%s (got %s)" % (hint, idx))
     if n_indices == ary.ndim and ndim == 0 and not ellipsis_met:
         # Full integer indexing => scalar result
         # (note if ellipsis is present, a 0-d view is returned instead)
@@ -282,7 +284,9 @@ class SetItemBuffer(AbstractTemplate):
         if not ary.mutable:
             msg = f"Cannot modify readonly array of type: {ary}"
             raise NumbaTypeError(msg)
-        scalar_setitem = not isinstance(val, (types.Buffer, types.Sequence))
+        scalar_setitem = (
+            not isinstance(val, (types.Buffer, types.Sequence))
+            or (isinstance(val, types.Array) and val.ndim == 0))
         out = get_array_index_type(ary, idx, scalar_setitem=scalar_setitem)
         if out is None:
             return

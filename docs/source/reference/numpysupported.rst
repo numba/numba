@@ -377,10 +377,11 @@ exceed the number of dimensions in the array being indexed as well as the indice
 to a common shape.
 
 A boolean array index is supported when it is 1-D and the only array index, unless NumPy would
-move its axis to the front of the result (e.g. ``a[1, :, mask]``). A boolean array index with more
-than one dimension is only supported as the sole index, with the same number of dimensions as the
-array, in a masked assignment compiled with ``parallel=True``. Other uses raise a compile-time
-error; convert the mask to integer indices with ``np.nonzero(mask)`` instead.
+move its axis to the front of the result (e.g. ``a[1, :, mask]``, where only assigning a scalar is
+supported). A boolean array index with more than one dimension is only supported as the sole index,
+with the same number of dimensions as the array, in ``x[mask] = scalar`` or ``x[mask] = y[mask]``
+compiled with ``parallel=True``. Other uses raise a compile-time error; convert the mask to integer
+indices with ``np.nonzero(mask)`` instead.
 
 .. seealso::
    `NumPy indexing <https://numpy.org/doc/stable/user/basics.indexing.html>`_

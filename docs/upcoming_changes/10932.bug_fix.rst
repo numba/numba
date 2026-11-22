@@ -5,4 +5,7 @@ Some uses of boolean array indices gave results that differed from NumPy
 or failed with internal errors: two masks or a mask with an integer array
 in one index, masks with more than one dimension, 0-d masks, and masks
 whose axis NumPy moves to the front (``a[1, :, mask]``). These now raise
-a clear compile-time error.
+a clear compile-time error. This includes some code that gave correct
+results because the axis order did not matter, such as
+``a[1, :, mask] += 1`` or ``a[1, :, mask].sum()``; assigning a scalar to
+such an index is still supported.

@@ -1390,8 +1390,8 @@ def _reject_nd_bool_index(index_types):
                 and ty.ndim > 1):
             raise errors.NumbaNotImplementedError(
                 "Boolean array indices with more than one dimension are only "
-                "supported in masked assignment with parallel=True; use "
-                "x[np.nonzero(mask)] instead")
+                "supported with parallel=True as x[mask] = scalar or "
+                "x[mask] = y[mask]; use x[np.nonzero(mask)] instead")
 
 
 def fancy_getitem(context, builder, sig, args,
