@@ -1,0 +1,6 @@
+Fix JIT coverage support with coverage 7.17.5
+---------------------------------------------
+
+Compiling functions with ``NUMBA_JIT_COVERAGE`` enabled under coverage 7.17.5
+or later no longer raises ``AttributeError: 'Collector' object has no attribute
+'lock_data'``.
