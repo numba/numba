@@ -1,3 +1,4 @@
+import threading
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -91,6 +92,65 @@ class TestNumbaTracerToolId(TestCase):
         collector.tracers = []
 
         NotifyCompilerCoverage(collector)
+
+
+@unittest.skipUnless(coverage_available, "coverage not installed")
+class TestNumbaTracerLockData(TestCase):
+    # Regression tests for coverage >= 7.17.5, which removed
+    # Collector.lock_data and Collector.unlock_data.
+
+    def make_collector(self, data_lock):
+        collector = MagicMock()
+        collector.core.tracer_kwargs = {'packed_arcs': False}
+        collector.branch = False
+        collector.should_start_context = None
+        collector.switch_context = None
+        collector.tracers = []
+        collector.data_lock = data_lock
+        del collector.lock_data
+        del collector.unlock_data
+        return collector
+
+    def test_data_lock_methods_used(self):
+        from numba.misc.coverage_support import NotifyCompilerCoverage
+
+        lock = threading.Lock()
+        tracer = NotifyCompilerCoverage(self.make_collector(lock))._tracer
+
+        tracer.lock_data()
+        self.assertTrue(lock.locked())
+        tracer.unlock_data()
+        self.assertFalse(lock.locked())
+
+    def test_no_data_lock(self):
+        from numba.misc.coverage_support import NotifyCompilerCoverage
+
+        tracer = NotifyCompilerCoverage(self.make_collector(None))._tracer
+
+        tracer.lock_data()
+        tracer.unlock_data()
+
+    @TestCase.run_test_in_subprocess(envvars={"NUMBA_JIT_COVERAGE": "1"})
+    def test_compiled_lines_recorded(self):
+        import coverage
+
+        # Measure this file even when Numba is installed in site-packages.
+        cov = coverage.Coverage(data_file=None, include=[__file__])
+        cov.start()
+        try:
+            @njit
+            def foo():
+                return 123
+
+            res = foo()
+        finally:
+            cov.stop()
+
+        self.assertEqual(res, 123)
+        # The body only runs as compiled code, so it is recorded only if
+        # Numba's tracer reported it.
+        body = foo.__code__.co_firstlineno + 2
+        self.assertIn(body, cov.get_data().lines(__file__) or [])
 
 
 if __name__ == "__main__":
