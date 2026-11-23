@@ -23,6 +23,7 @@ numba\.core\.typing\..*
 numba\.core\.unsafe\..*
 numba\.core\.untyped_passes\..*
 numba\.core\.utils\..*
+numba\.core\.vector_library\._load
 numba\.cpython\..*
 numba\.cuda\..*
 numba\.experimental\.structref
