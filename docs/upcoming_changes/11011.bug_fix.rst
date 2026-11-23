@@ -1,0 +1,7 @@
+Fix ``objmode`` in a ``cfunc`` loaded from the cache
+----------------------------------------------------
+
+A ``cfunc`` loaded from the cache did not keep its environments alive, so
+calling a function that uses ``objmode`` from it failed and the ``cfunc``
+returned ``0``. The environments are now kept alive for the lifetime of the
+``cfunc``.
