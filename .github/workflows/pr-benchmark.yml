@@ -18,7 +18,7 @@ env:
 
 concurrency:
   group: pr-benchmark-${{ github.event.pull_request.number || inputs.pr }}
-  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' || github.event.action == 'synchronize' || (github.event.action == 'labeled' && github.event.label.name == 'benchmark') }}
+  cancel-in-progress: true
 
 jobs:
   prepare:
