@@ -229,8 +229,8 @@ class TestVectorLibrary(TestCase):
 
     def setUp(self):
         super().setUp()
-        # clear that cache around each test so mocked libraries and host libraries 
-        # stay isolated.
+        # clear that cache around each test so mocked libraries and host
+        # libraries stay isolated.
         vector_library._load.cache_clear()
         self.addCleanup(vector_library._load.cache_clear)
 
