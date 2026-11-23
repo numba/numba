@@ -37,6 +37,7 @@ numba\.misc\.numba_gdbinfo
 numba\.misc\.numba_sysinfo
 numba\.misc\.timsort
 numba\.mviewbuf
+numba\.np\.boxing
 numba\.np\.(arraymath|arrayobj|linalg|npdatetime|npyimpl|numpy_support|random|ufunc_db|unsafe)\..*
 numba\.np\.extensions
 numba\.np\.polynomial\.polynomial_core\.type_polynomial

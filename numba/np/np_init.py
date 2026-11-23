@@ -1,6 +1,7 @@
 
 from numba.np.npyimpl import registry as npyimpl_registry
 
+
 def np_init():
     """Install the ``npyimpl`` registry on the default target context.
     Additionally registers NumPy-specific boxing/unboxing implementations.
