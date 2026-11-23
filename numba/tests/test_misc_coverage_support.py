@@ -134,8 +134,11 @@ class TestNumbaTracerLockData(TestCase):
     def test_compiled_lines_recorded(self):
         import coverage
 
-        # Measure this file even when Numba is installed in site-packages.
-        cov = coverage.Coverage(data_file=None, include=[__file__])
+        # Ignore any coverage configuration (e.g. `source`, `branch`) and
+        # measure this file even when Numba is installed in site-packages.
+        cov = coverage.Coverage(
+            data_file=None, config_file=False, include=[__file__], branch=False
+        )
         cov.start()
         try:
             @njit
