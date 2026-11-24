@@ -504,21 +504,20 @@ def box_tuple(typ, val, c):
     """
     Convert native array or structure *val* to a tuple object.
     """
-    dtypes = list(typ)
     res = cgutils.alloca_once_value(c.builder, c.pyapi.get_null_object())
 
     def decref_unboxed(start):
         if c.context.enable_nrt:
-            for j in range(start, len(dtypes)):
+            for j in range(start, len(typ)):
                 item = c.builder.extract_value(val, j)
-                c.context.nrt.decref(c.builder, dtypes[j], item)
+                c.context.nrt.decref(c.builder, typ[j], item)
 
     with ExitStack() as stack:
         tuple_val = c.pyapi.tuple_new(typ.count)
         with cgutils.early_exit_if_null(c.builder, stack, tuple_val):
             decref_unboxed(0)
 
-        for i, dtype in enumerate(dtypes):
+        for i, dtype in enumerate(typ):
             item = c.builder.extract_value(val, i)
             obj = c.box(dtype, item)
             with cgutils.early_exit_if_null(c.builder, stack, obj):
