@@ -12,6 +12,7 @@ import sys
 from llvmlite import binding as llvm
 
 
+# Map vector library names to spellings used for library discovery.
 _LIBRARIES = {
     'libsystem': 'System',
     'accelerate': 'Accelerate',
@@ -41,12 +42,13 @@ def _candidates():
         (sys.platform, platform.machine().lower()), ())
 
 
-def _symbols(provider):
-    if provider == 'svml':
+def _symbols(vector_library):
+    """Return the expected LLVM vector ABI symbols for a vector_library."""
+    if vector_library == 'svml':
         functions = 'sin cos tan pow exp exp2 log log2 log10 sqrt'.split()
         return tuple(f'__svml_{name}{suffix}' for name in functions
                      for suffix in ('2', '4', '8', 'f4', 'f8', 'f16'))
-    if provider == 'accelerate':
+    if vector_library == 'accelerate':
         functions = ('ceil fabs floor sqrt exp expm1 log log1p log10 logb '
                      'sin cos tan asin acos atan atan2 sinh cosh tanh '
                      'asinh acosh atanh').split()
@@ -58,27 +60,31 @@ def _symbols(provider):
 
 
 @functools.lru_cache(maxsize=None)
-def _load(provider):
-    name = _LIBRARIES[provider]
-    if provider == 'svml' and sys.platform == 'win32':
+def _load(vector_library):
+    """Load the runtime shared library for LLVM JIT symbol resolution."""
+    name = _LIBRARIES[vector_library]
+    if vector_library == 'svml' and sys.platform == 'win32':
         name = 'svml_dispmd'
     path = find_library(name)
     if path is None:
-        raise RuntimeError(f"Vector library {provider!r} could not be found")
+        raise RuntimeError(
+            f"Vector library {vector_library!r} could not be found"
+        )
     try:
         library = ctypes.CDLL(path, mode=ctypes.RTLD_LOCAL)
-        for symbol in _symbols(provider):
+        for symbol in _symbols(vector_library):
             getattr(library, symbol)
         llvm.load_library_permanently(path)
     except (OSError, AttributeError, RuntimeError) as exc:
         raise RuntimeError(
-            f"Cannot load vector library {provider!r} from {path!r}: {exc}"
+            f"Cannot load vector library {vector_library!r} "
+            f"from {path!r}: {exc}"
         ) from exc
     return path
 
 
 def resolve(requested='auto'):
-    """Load a compatible runtime and return ``(provider, runtime_path)``."""
+    """Resolve the given vector library and return its LLVM name and runtime path."""
     choices = ('auto', 'none', *_LIBRARIES)
     if not isinstance(requested, str) or requested not in choices:
         raise ValueError(
@@ -93,13 +99,13 @@ def resolve(requested='auto'):
             f"Vector library {requested!r} is unsupported on "
             f"{sys.platform}/{platform.machine()}"
         )
-    for provider in candidates if requested == 'auto' else (requested,):
+    for vector_library in candidates if requested == 'auto' else (requested,):
         try:
-            runtime = _load(provider)
+            runtime = _load(vector_library)
         except RuntimeError:
             if requested == 'auto':
                 continue
             raise
-        return ('darwin_libsystem_m' if provider == 'libsystem' else provider,
-                runtime)
+        return ('darwin_libsystem_m' if vector_library == 'libsystem'
+                else vector_library, runtime)
     return ('none', None)
