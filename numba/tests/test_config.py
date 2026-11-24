@@ -223,7 +223,7 @@ class TestVectorLibrary(TestCase):
     # Vector math libraries (e.g. Apple Accelerate, libmvec, Intel SVML) let
     # LLVM replace scalar math calls in vectorized loops with SIMD math calls.
     # At runtime, vector_library.resolve() maps a NUMBA_VECLIB setting to
-    # (llvm_provider_name, shared_lib_path): it locates the OS shared library,
+    # (llvm_library_name, shared_lib_path): it locates the OS shared library,
     # checks via ctypes that the SIMD symbols LLVM expects are present, and
     # loads the library into LLVM's JIT runtime so compiled code can link them.
 
@@ -233,6 +233,39 @@ class TestVectorLibrary(TestCase):
         # libraries stay isolated.
         vector_library._load.cache_clear()
         self.addCleanup(vector_library._load.cache_clear)
+
+    def test_candidates(self):
+        cases = (
+            ('darwin', 'arm64', ('darwin_libsystem_m', 'accelerate')),
+            ('darwin', 'x86_64', ()),
+            ('linux', 'x86_64', ()),
+            ('linux2', 'AMD64', ()),
+            ('win32', 'AMD64', ()),
+            ('win32', 'x86_64', ()),
+            ('darwin', 'amd64', ()),
+            ('linux', 'aarch64', ()),
+            ('freebsd', 'x86_64', ()),
+        )
+        for system, machine, expected in cases:
+            with self.subTest(system=system, machine=machine):
+                with (mock.patch.object(vector_library.sys, 'platform', system),
+                      mock.patch.object(vector_library.platform, 'machine',
+                                        return_value=machine)):
+                    self.assertEqual(vector_library._candidates(), expected)
+
+    def test_llvm_library_name(self):
+        name = 'darwin_libsystem_m'
+        with (mock.patch.object(vector_library, '_candidates',
+                                return_value=(name,)),
+              mock.patch.object(vector_library, '_load',
+                                return_value='/mock/System') as load):
+            self.assertEqual(vector_library.resolve(name),
+                             (name, '/mock/System'))
+            self.assertEqual(vector_library.resolve('auto'),
+                             (name, '/mock/System'))
+            self.assertEqual(load.call_count, 2)
+        with self.assertRaises(ValueError):
+            vector_library.resolve('libsystem')
 
     def test_config_and_validation(self):
         # Setting the NUMBA_VECLIB environment variable updates config.VECLIB.
@@ -249,14 +282,14 @@ class TestVectorLibrary(TestCase):
                                         "Invalid NUMBA_VECLIB value"):
                 vector_library.resolve(bad)
 
-        # Every supported provider must declare the SIMD C symbol names that
-        # LLVM's vector-library pass emits, so _load() can verify the library.
-        for provider in vector_library._LIBRARIES:
-            self.assertTrue(vector_library._symbols(provider))
+        # Every supported vector library must declare the SIMD C symbol names
+        # that LLVM's vector-library pass emits, so _load() can verify them.
+        for name in vector_library._LIBRARIES:
+            self.assertTrue(vector_library._symbols(name))
 
     def test_resolve_fallback_and_errors(self):
-        # Borrow three registered provider keys from _LIBRARIES so resolve()
-        # accepts them without hardcoding provider names, and simulate:
+        # Borrow three registered keys from _LIBRARIES so resolve() accepts
+        # them without hardcoding library names, and simulate:
         # - missing: shared library is not installed (find_library -> None)
         # - invalid: shared library opens, but lacks expected SIMD symbols
         #            (bare object() makes getattr(lib, sym) raise)
