@@ -272,8 +272,13 @@ class TestJitClass(TestCase, MemoryLeakMixin):
         def as_namedtuple(obj):
             return ObjAndInt(obj, 1)
 
+        @jit
+        def as_tuple_with_trailing_refs(obj):
+            return 1, obj, obj, np.zeros(3)
+
         obj = Vector2(1, 2)
-        funcs = (identity, as_tuple, as_namedtuple)
+        funcs = (identity, as_tuple, as_namedtuple,
+                 as_tuple_with_trailing_refs)
         for fn in funcs:
             fn(obj)
 
