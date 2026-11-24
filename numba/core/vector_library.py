@@ -14,7 +14,7 @@ from llvmlite import binding as llvm
 
 # Map vector library names to spellings used for library discovery.
 _LIBRARIES = {
-    'libsystem': 'System',
+    'darwin_libsystem_m': 'System',
     'accelerate': 'Accelerate',
     'svml': 'svml',
 }
@@ -25,7 +25,7 @@ _LIBRARIES = {
 # 'none' is selected. Explicitly requested libraries must also be listed here
 # for the current platform.
 _PLATFORM_VECTOR_LIBRARIES = {
-    ('darwin', 'arm64'): ('libsystem', 'accelerate'),
+    ('darwin', 'arm64'): ('darwin_libsystem_m', 'accelerate'),
     # TODO: add support for other supported platform libraries and test.
     # ('linux', 'x86_64'): ('libmvec', 'svml', 'amdlibm'),
     # ('linux', 'amd64'): ('libmvec', 'svml', 'amdlibm'),
@@ -106,6 +106,5 @@ def resolve(requested='auto'):
             if requested == 'auto':
                 continue
             raise
-        return ('darwin_libsystem_m' if vector_library == 'libsystem'
-                else vector_library, runtime)
+        return vector_library, runtime
     return ('none', None)
