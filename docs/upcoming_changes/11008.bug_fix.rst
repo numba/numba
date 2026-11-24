@@ -1,0 +1,6 @@
+Fix ``np.histogram`` counting ``NaN`` values when ``range`` is given
+--------------------------------------------------------------------
+
+``np.histogram`` with an explicit ``range`` could count ``NaN`` values in a
+bin on some platforms (observed on arm64), unlike NumPy, which ignores them.
+``NaN`` values are now ignored in this case.
