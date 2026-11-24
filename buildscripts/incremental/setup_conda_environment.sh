@@ -91,7 +91,9 @@ $CONDA_INSTALL -c numba/label/dev llvmlite=0.51
 if [ "$BUILD_DOC" == "yes" ]; then $CONDA_INSTALL sphinx sphinx_rtd_theme pygments numpydoc; fi
 if [ "$BUILD_DOC" == "yes" ]; then $PIP_INSTALL rstcheck; fi
 # Install dependencies for code coverage
-if [ "$RUN_COVERAGE" == "yes" ]; then $CONDA_INSTALL coverage; fi
+# coverage>=7.17.5 removed Collector.lock_data, which Numba's JIT coverage
+# support used; install from PyPI to test against recent releases.
+if [ "$RUN_COVERAGE" == "yes" ]; then $PIP_INSTALL "coverage>=7.17.5"; fi
 # Install SVML
 if [ "$TEST_SVML" == "yes" ]; then $CONDA_INSTALL -c numba icc_rt; fi
 # Install Intel TBB parallel backend
