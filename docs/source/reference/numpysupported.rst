@@ -153,6 +153,7 @@ Calculation:
 * :meth:`~numpy.ndarray.sum` (with or without the ``axis`` and/or ``dtype``
   arguments.)
 
+
   * ``axis`` only supports ``integer`` values.
   * If the ``axis`` argument is a compile-time constant, all valid values
     are supported.
