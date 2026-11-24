@@ -19,15 +19,26 @@ _LIBRARIES = {
 }
 
 
+# Map platform and architecture pairs to compatible vector math libraries. For
+# 'auto', libraries are tried in order until one of them loads. Otherwise,
+# 'none' is selected. Explicitly requested libraries must also be listed here
+# for the current platform.
+_PLATFORM_VECTOR_LIBRARIES = {
+    ('darwin', 'arm64'): ('libsystem', 'accelerate'),
+    # TODO: add support for other supported platform libraries and test.
+    # ('linux', 'x86_64'): ('libmvec', 'svml', 'amdlibm'),
+    # ('linux', 'amd64'): ('libmvec', 'svml', 'amdlibm'),
+    # ('linux', 'aarch64'): ('libmvec', 'sleefgnuabi', 'armpl'),
+    # ('linux', 'riscv64'): ('sleefgnuabi',),
+    # ('linux', 'ppc64le'): ('massv',),
+    # ('win32', 'x86_64'): ('svml',),
+    # ('win32', 'amd64'): ('svml',),
+}
+
+
 def _candidates():
-    machine = platform.machine().lower()
-    if sys.platform == 'darwin' and machine in ('arm64', 'x86_64'):
-        return ('libsystem', 'accelerate') + (
-            ('svml',) if machine == 'x86_64' else ())
-    if (sys.platform.startswith(('linux', 'win')) and
-            machine in ('x86_64', 'amd64')):
-        return ('svml',)
-    return ()
+    return _PLATFORM_VECTOR_LIBRARIES.get(
+        (sys.platform, platform.machine().lower()), ())
 
 
 def _symbols(provider):
