@@ -2,9 +2,9 @@ import platform
 import numpy as np
 from numba import types
 import unittest
-from numba import njit
+from numba import jit, njit
 from numba.core import config
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, macos_arm64_only
 
 _DEBUG = False
 if _DEBUG:
@@ -81,6 +81,46 @@ class TestVectorization(TestCase):
                               fastmath=True)
         self.assertIn("vector.body", llvm_ir)
         self.assertIn("llvm.loop.isvectorized", llvm_ir)
+
+
+class TestVectorLibraryIntegration(TestCase):
+    # Each test runs in a fresh process because LLVM loads runtimes.
+    # Verify emitted calls and results with vector library use on and off.
+    def _check_vector_library_call(self, dtypes):
+        def sine(x):
+            out = np.empty_like(x)
+            for i in range(x.size):
+                out[i] = np.sin(x[i])
+            return out
+
+        for dtype, expected_symbol in dtypes:
+            with self.subTest(dtype=dtype):
+                x = np.linspace(-2, 2, 1027, dtype=dtype)
+                expected = np.sin(x)
+                call = rf'\bcall\b[^\n]*@{expected_symbol}\('
+                for enabled in (True, False):
+                    with self.subTest(enable_veclib=enabled):
+                        compiled = jit(enable_veclib=enabled)(sine)
+                        np.testing.assert_array_max_ulp(compiled(x), expected,
+                                                        maxulp=4)
+                        ir = compiled.inspect_llvm(compiled.signatures[0])
+                        if enabled:
+                            self.assertRegex(ir, call)
+                        else:
+                            self.assertNotRegex(ir, call)
+
+    @macos_arm64_only
+    @TestCase.run_test_in_subprocess(
+        envvars={'NUMBA_VECLIB': 'darwin_libsystem_m'})
+    def test_libsystem_vector_library_call(self):
+        self._check_vector_library_call(
+            ((np.float32, '_simd_sin_f4'), (np.float64, '_simd_sin_d2')),
+        )
+
+    @macos_arm64_only
+    @TestCase.run_test_in_subprocess(envvars={'NUMBA_VECLIB': 'accelerate'})
+    def test_accelerate_vector_library_call(self):
+        self._check_vector_library_call(((np.float32, 'vsinf'),))
 
 
 if __name__ == '__main__':
