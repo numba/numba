@@ -84,12 +84,13 @@ def _load(vector_library):
 
 
 def resolve(requested='auto'):
-    """Resolve the given vector library and return its LLVM name and runtime path."""
+    """Resolve a vector library and return its LLVM name and runtime path."""
     choices = ('auto', 'none', *_LIBRARIES)
     if not isinstance(requested, str) or requested not in choices:
+        available = ('auto', 'none', *_candidates())
         raise ValueError(
             f"Invalid NUMBA_VECLIB value {requested!r}; "
-            f"expected one of {choices}"
+            f"expected one of {available}"
         )
     if requested == 'none':
         return ('none', None)
