@@ -135,11 +135,9 @@ functions. The following cache locators are available:
     similar to how Python stores ``.pyc`` files.
 
 **InTreeCacheLocatorFsAgnostic**
-    A variant of ``InTreeCacheLocator`` that is agnostic to filesystem
-    differences, particularly timestamp precision. This locator floors
-    timestamps to seconds, making it suitable for environments where
-    filesystem timestamp precision may vary (e.g., when sharing cache across
-    different filesystems or systems).
+    Deprecated. Source freshness is now checked with a hash of the file
+    contents, which is already independent of filesystem timestamps. Use
+    ``InTreeCacheLocator`` instead.
 
 **UserWideCacheLocator**
     Stores cache files in a user-wide application directory using the

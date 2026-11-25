@@ -1,0 +1,6 @@
+Update ``InTreeCacheLocatorFsAgnostic`` documentation
+-----------------------------------------------------
+
+The cache locator documentation no longer describes timestamp flooring for
+``InTreeCacheLocatorFsAgnostic`` and instead states that it is deprecated, since
+source freshness is now checked with a hash of the file contents.
