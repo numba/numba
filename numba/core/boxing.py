@@ -504,14 +504,29 @@ def box_tuple(typ, val, c):
     """
     Convert native array or structure *val* to a tuple object.
     """
-    tuple_val = c.pyapi.tuple_new(typ.count)
+    res = cgutils.alloca_once_value(c.builder, c.pyapi.get_null_object())
 
-    for i, dtype in enumerate(typ):
-        item = c.builder.extract_value(val, i)
-        obj = c.box(dtype, item)
-        c.pyapi.tuple_setitem(tuple_val, i, obj)
+    def decref_unboxed(start):
+        if c.context.enable_nrt:
+            for j in range(start, len(typ)):
+                item = c.builder.extract_value(val, j)
+                c.context.nrt.decref(c.builder, typ[j], item)
 
-    return tuple_val
+    with ExitStack() as stack:
+        tuple_val = c.pyapi.tuple_new(typ.count)
+        with cgutils.early_exit_if_null(c.builder, stack, tuple_val):
+            decref_unboxed(0)
+
+        for i, dtype in enumerate(typ):
+            item = c.builder.extract_value(val, i)
+            obj = c.box(dtype, item)
+            with cgutils.early_exit_if_null(c.builder, stack, obj):
+                c.pyapi.decref(tuple_val)
+                decref_unboxed(i + 1)
+            c.pyapi.tuple_setitem(tuple_val, i, obj)
+
+        c.builder.store(tuple_val, res)
+    return c.builder.load(res)
 
 @box(types.NamedTuple)
 @box(types.NamedUniTuple)
@@ -519,12 +534,21 @@ def box_namedtuple(typ, val, c):
     """
     Convert native array or structure *val* to a namedtuple object.
     """
-    cls_obj = c.pyapi.unserialize(c.pyapi.serialize_object(typ.instance_class))
-    tuple_obj = box_tuple(typ, val, c)
-    obj = c.pyapi.call(cls_obj, tuple_obj)
-    c.pyapi.decref(cls_obj)
-    c.pyapi.decref(tuple_obj)
-    return obj
+    res = cgutils.alloca_once_value(c.builder, c.pyapi.get_null_object())
+    with ExitStack() as stack:
+        tuple_obj = box_tuple(typ, val, c)
+        with cgutils.early_exit_if_null(c.builder, stack, tuple_obj):
+            pass
+
+        cls_obj = c.pyapi.unserialize(
+            c.pyapi.serialize_object(typ.instance_class))
+        with cgutils.early_exit_if_null(c.builder, stack, cls_obj):
+            c.pyapi.decref(tuple_obj)
+
+        c.builder.store(c.pyapi.call(cls_obj, tuple_obj), res)
+        c.pyapi.decref(cls_obj)
+        c.pyapi.decref(tuple_obj)
+    return c.builder.load(res)
 
 
 @unbox(types.BaseTuple)
