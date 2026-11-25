@@ -1,7 +1,6 @@
-Document cache reuse in containers and CI
------------------------------------------
+Update ``InTreeCacheLocatorFsAgnostic`` documentation
+-----------------------------------------------------
 
-A new section in the caching documentation describes what must match between
-the environment that warms the on-disk cache (e.g. a Docker build) and the
-environment that uses it, with a ``Dockerfile`` example and how to verify cache
-hits with ``NUMBA_DEBUG_CACHE``.
+The cache locator documentation no longer describes timestamp flooring for
+``InTreeCacheLocatorFsAgnostic`` and instead states that it is deprecated, since
+source freshness is now checked with a hash of the file contents.

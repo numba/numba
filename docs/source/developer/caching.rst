@@ -104,61 +104,6 @@ for the filesystem. Numba always writes to a unique temporary file first, it
 then replaces the target cache file path with the temporary file. Numba is
 tolerant against lost or corrupt cache files and cache entries.
 
-.. _cache-containers:
-
-Caching in Containers and CI
-----------------------------
-
-A common pattern is to warm the cache at build time (for example in a
-``Dockerfile`` ``RUN`` step or a CI job) and reuse it at run time. A cache
-miss is silent, so it helps to know what has to stay identical between the
-two environments.
-
-A cached entry is used only if all of the following match:
-
-- **The cache location.** With the default in-tree locator the cache lives in
-  ``__pycache__`` next to the source file, so it moves with the source. With
-  :envvar:`NUMBA_CACHE_DIR` or the user-wide locator, the subdirectory is
-  derived from the *absolute path* of the source file's directory, so the
-  source must be at the same path at build and run time.
-- **Writability of the cache directory.** Numba checks that the cache
-  directory is writable before using it, even just to read from it. If the
-  in-tree ``__pycache__`` is read-only at run time (e.g. a read-only root
-  filesystem or a different user), Numba falls back to the user-wide
-  directory and the warmed cache is not found.
-- **The source file contents.** The index stores a hash of the source file's
-  contents. File timestamps are not part of the check, so copying files
-  (e.g. ``COPY`` in a ``Dockerfile``) does not invalidate the cache.
-- **The Numba and Python versions**, which are part of the cache file names.
-- **The platform and CPU** (see :ref:`cache-sharing`): the operating system
-  and architecture (e.g. ``x86_64-unknown-linux-gnu``), the CPU model
-  (e.g. ``skylake``) and the instruction sets it supports (e.g. AVX2).
-  Compiled code is optimised for the CPU it was built on, so building on one
-  machine and running on another with a different CPU causes a miss. Set
-  :envvar:`NUMBA_CPU_NAME` to ``generic`` in both environments to produce
-  portable, but potentially slower, code.
-- **The function signature**, i.e. the argument types used at run time must
-  have been compiled during the warm-up.
-
-A minimal ``Dockerfile`` that satisfies these constraints::
-
-    FROM python:3.12-slim
-    ENV NUMBA_CACHE_DIR=/opt/numba_cache \
-        NUMBA_CPU_NAME=generic
-    RUN pip install numba
-    COPY app/ /app/
-    RUN python /app/warmup.py && chmod -R a+rwX /opt/numba_cache
-    WORKDIR /app
-    CMD ["python", "/app/main.py"]
-
-Here ``warmup.py`` imports the application and calls each cached function
-with the argument types used in production. Source files stay at ``/app`` and
-the cache directory stays writable for whichever user runs the container.
-
-To check whether the cache is used, run with :envvar:`NUMBA_DEBUG_CACHE` set
-to ``1``. A hit prints ``index loaded from`` followed by ``data loaded from``
-lines. A miss followed by compilation prints ``data saved to`` lines instead.
-
 .. _cache-clearing:
 
 Cache Clearing

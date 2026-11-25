@@ -484,8 +484,7 @@ Options for the compilation cache.
        Stores are made under the ``numba_cache`` in the directory returned by
        ``IPython.paths.get_ipython_cache_dir()``.
 
-    Also see :ref:`docs on cache sharing <cache-sharing>`,
-    :ref:`docs on caching in containers <cache-containers>` and
+    Also see :ref:`docs on cache sharing <cache-sharing>` and
     :ref:`docs on cache clearing <cache-clearing>`
 
     .. warning::

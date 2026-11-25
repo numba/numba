@@ -205,10 +205,6 @@ a file-based cache.  This is done by passing ``cache=True``::
       of the global variable at compilation time. On cache load, the cached
       function will not rebind to the new value of the global variable.
 
-.. tip::
-    To warm the cache in one environment (e.g. a Docker build) and reuse it in
-    another, see :ref:`cache-containers`.
-
 .. _parallel_jit_option:
 
 ``parallel``
