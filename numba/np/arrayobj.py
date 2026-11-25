@@ -2644,53 +2644,77 @@ def array_flatten(context, builder, sig, args):
     return res
 
 
-def _np_clip_prepare_out(a, shape, out):
-    pass  # overloaded below
-
-
-@overload(_np_clip_prepare_out)
-def ol_np_clip_prepare_out(a, shape, out):
+@register_jitable
+def _np_clip_prepare_out_c(a, shape, out):
     # Returns the array the result is written into. NumPy broadcasts the
     # inputs onto a caller-provided output but never stretches the output
     # itself, so its shape has to match the shape of the result exactly.
     # Without this check the callers loop over the result shape and write
     # past the end of a too-small `out` (issue #10682).
-    #
-    # Dispatch at the type level so that F-contiguous inputs produce
-    # F-contiguous outputs (issue #10760 / PR #10767).  np.empty() always
-    # returns C-order, so F-order inputs need the extra asfortranarray step.
-    if isinstance(a, types.Array) and a.layout == 'F':
-        def impl(a, shape, out):
-            if out is None:
-                return np.asfortranarray(np.empty(shape, a.dtype))
-            if out.shape != shape:
-                raise ValueError("clip: the shape of the 'out' array does not "
-                                 "match the shape of the result")
-            return out
-        return impl
-    else:
-        def impl(a, shape, out):
-            if out is None:
-                return np.empty(shape, a.dtype)
-            if out.shape != shape:
-                raise ValueError("clip: the shape of the 'out' array does not "
-                                 "match the shape of the result")
-            return out
-        return impl
+    if out is None:
+        return np.empty(shape, a.dtype)
+    if out.shape != shape:
+        raise ValueError("clip: the shape of the 'out' array does not "
+                         "match the shape of the result")
+    return out
 
 
 @register_jitable
-def _np_clip_impl(a, a_min, a_max, out):
-    # Both a_min and a_max are numpy arrays
-    a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
-    ret = _np_clip_prepare_out(a, a_b.shape, out)
-    for index in np.ndindex(a_b.shape):
-        val_a = a_b[index]
-        val_a_min = a_min_b[index]
-        val_a_max = a_max_b[index]
-        ret[index] = min(max(val_a, val_a_min), val_a_max)
+def _np_clip_prepare_out_f(a, shape, out):
+    # Same as _np_clip_prepare_out_c, but allocates F-contiguous. np.empty()
+    # always returns C-order, so the F-order case needs the extra
+    # asfortranarray step.
+    if out is None:
+        return np.asfortranarray(np.empty(shape, a.dtype))
+    if out.shape != shape:
+        raise ValueError("clip: the shape of the 'out' array does not "
+                         "match the shape of the result")
+    return out
 
-    return ret
+
+def _np_clip_result_is_f_order(a, *bounds):
+    """Whether np.clip's output should be allocated F-contiguous for inputs
+    typed `a` and `bounds` (a_min/a_max, which may be arrays, scalars, or
+    None).
+
+    Mirrors NumPy's NPY_KEEPORDER: the ufunc keeps F order only when every
+    *array* operand is F-contiguous; a non-array operand (a plain number,
+    None, or a value already broadcast from one via np.full_like, which
+    inherits `a`'s own layout) doesn't affect the decision. This is a
+    plain-Python helper evaluated while the @overload is resolving types,
+    not something that runs in jitted code.
+    """
+    if not (isinstance(a, types.Array) and a.layout == 'F'):
+        return False
+    return all(t.layout == 'F' for t in bounds if isinstance(t, types.Array))
+
+
+def _np_clip_impl(a, a_min, a_max, out):
+    pass  # overloaded below
+
+
+@overload(_np_clip_impl)
+def ol_np_clip_impl(a, a_min, a_max, out):
+    # Both a_min and a_max are numpy arrays (or np.full_like broadcasts of
+    # what were originally scalars, which inherit `a`'s layout and so never
+    # change the decision below).
+    prepare_out = (
+        _np_clip_prepare_out_f
+        if _np_clip_result_is_f_order(a, a_min, a_max) else
+        _np_clip_prepare_out_c
+    )
+
+    def impl(a, a_min, a_max, out):
+        a_b, a_min_b, a_max_b = np.broadcast_arrays(a, a_min, a_max)
+        ret = prepare_out(a, a_b.shape, out)
+        for index in np.ndindex(a_b.shape):
+            val_a = a_b[index]
+            val_a_min = a_min_b[index]
+            val_a_max = a_max_b[index]
+            ret[index] = min(max(val_a, val_a_min), val_a_max)
+
+        return ret
+    return impl
 
 
 @register_jitable
@@ -2747,11 +2771,18 @@ def np_clip(a, a_min, a_max, out=None):
     a_max_is_scalar = isinstance(a_max, types.Number)
 
     if a_min_is_scalar and a_max_is_scalar:
+        # Neither bound is an array, so the result's layout follows `a` alone.
+        prepare_out = (
+            _np_clip_prepare_out_f
+            if _np_clip_result_is_f_order(a) else
+            _np_clip_prepare_out_c
+        )
+
         def np_clip_ss(a, a_min, a_max, out=None):
             # a_min and a_max are scalars
             # since their shape will be empty
             # so broadcasting is not needed at all
-            ret = _np_clip_prepare_out(a, a.shape, out)
+            ret = prepare_out(a, a.shape, out)
             for index in np.ndindex(a.shape):
                 val_a = a[index]
                 ret[index] = min(max(val_a, a_min), a_max)
@@ -2761,11 +2792,17 @@ def np_clip(a, a_min, a_max, out=None):
         return np_clip_ss
     elif a_min_is_scalar and not a_max_is_scalar:
         if a_max_is_none:
+            prepare_out = (
+                _np_clip_prepare_out_f
+                if _np_clip_result_is_f_order(a) else
+                _np_clip_prepare_out_c
+            )
+
             def np_clip_sn(a, a_min, a_max, out=None):
                 # a_min is a scalar
                 # since its shape will be empty
                 # so broadcasting is not needed at all
-                ret = _np_clip_prepare_out(a, a.shape, out)
+                ret = prepare_out(a, a.shape, out)
                 for index in np.ndindex(a.shape):
                     val_a = a[index]
                     ret[index] = max(val_a, a_min)
@@ -2785,11 +2822,17 @@ def np_clip(a, a_min, a_max, out=None):
             return np_clip_sa
     elif not a_min_is_scalar and a_max_is_scalar:
         if a_min_is_none:
+            prepare_out = (
+                _np_clip_prepare_out_f
+                if _np_clip_result_is_f_order(a) else
+                _np_clip_prepare_out_c
+            )
+
             def np_clip_ns(a, a_min, a_max, out=None):
                 # a_max is a scalar
                 # since its shape will be empty
                 # so broadcasting is not needed at all
-                ret = _np_clip_prepare_out(a, a.shape, out)
+                ret = prepare_out(a, a.shape, out)
                 for index in np.ndindex(a.shape):
                     val_a = a[index]
                     ret[index] = min(val_a, a_max)
@@ -2810,18 +2853,30 @@ def np_clip(a, a_min, a_max, out=None):
     else:
         # Case where exactly one of a_min or a_max is None
         if a_min_is_none:
+            prepare_out = (
+                _np_clip_prepare_out_f
+                if _np_clip_result_is_f_order(a, a_max) else
+                _np_clip_prepare_out_c
+            )
+
             def np_clip_na(a, a_min, a_max, out=None):
                 # a_max is a numpy array but a_min is None
                 a_b, a_max_b = np.broadcast_arrays(a, a_max)
-                ret = _np_clip_prepare_out(a, a_b.shape, out)
+                ret = prepare_out(a, a_b.shape, out)
                 return _np_clip_impl_none(a_b, a_max_b, True, ret)
 
             return np_clip_na
         elif a_max_is_none:
+            prepare_out = (
+                _np_clip_prepare_out_f
+                if _np_clip_result_is_f_order(a, a_min) else
+                _np_clip_prepare_out_c
+            )
+
             def np_clip_an(a, a_min, a_max, out=None):
                 # a_min is a numpy array but a_max is None
                 a_b, a_min_b = np.broadcast_arrays(a, a_min)
-                ret = _np_clip_prepare_out(a, a_b.shape, out)
+                ret = prepare_out(a, a_b.shape, out)
                 return _np_clip_impl_none(a_b, a_min_b, False, ret)
 
             return np_clip_an

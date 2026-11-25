@@ -2049,6 +2049,48 @@ class TestArrayMethods(MemoryLeakMixin, TestCase):
         self.assertTrue(result.flags.f_contiguous,
                         "broadcast clip lost F-contiguous layout")
 
+    def test_clip_mixed_order_bounds(self):
+        # Regression test for #10767: NumPy's np.clip keeps F order only when
+        # every array operand (not just `a`) is F-contiguous; a C-order bound
+        # must force a C-order result even though `a` itself is F-contiguous.
+        a = np.asfortranarray(np.arange(6.0).reshape(2, 3))
+        c_order_bound = np.zeros((2, 3))
+        self.assertFalse(c_order_bound.flags.f_contiguous)
+
+        cfunc = jit(nopython=True)(np_clip_no_out)
+
+        # one array bound is C-order, same shape as `a`, no broadcasting
+        result = cfunc(a, c_order_bound, 10.0)
+        expected = np.clip(a, c_order_bound, 10.0)
+        np.testing.assert_array_equal(result, expected)
+        self.assertEqual(result.flags.f_contiguous, expected.flags.f_contiguous)
+        self.assertFalse(result.flags.f_contiguous,
+                         "a C-order bound should force a C-order result")
+
+        # same, but with a_min/a_max swapped (np_clip_an path vs np_clip_na)
+        result = cfunc(a, None, c_order_bound)
+        expected = np.clip(a, None, c_order_bound)
+        np.testing.assert_array_equal(result, expected)
+        self.assertEqual(result.flags.f_contiguous, expected.flags.f_contiguous)
+
+        # one C-order bound, one F-order bound: still must be C-order overall
+        f_order_bound = np.asfortranarray(np.full((2, 3), 10.0))
+        result = cfunc(a, c_order_bound, f_order_bound)
+        expected = np.clip(a, c_order_bound, f_order_bound)
+        np.testing.assert_array_equal(result, expected)
+        self.assertEqual(result.flags.f_contiguous, expected.flags.f_contiguous)
+        self.assertFalse(result.flags.f_contiguous,
+                         "a mix of C- and F-order bounds should force C-order")
+
+        # both bounds F-order: result stays F-order
+        f_order_bound_2 = np.asfortranarray(np.zeros((2, 3)))
+        result = cfunc(a, f_order_bound_2, f_order_bound)
+        expected = np.clip(a, f_order_bound_2, f_order_bound)
+        np.testing.assert_array_equal(result, expected)
+        self.assertEqual(result.flags.f_contiguous, expected.flags.f_contiguous)
+        self.assertTrue(result.flags.f_contiguous,
+                        "all-F-order operands should produce an F-order result")
+
     def test_conj(self):
         for pyfunc in [array_conj, array_conjugate]:
             cfunc = jit(nopython=True)(pyfunc)
