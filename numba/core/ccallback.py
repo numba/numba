@@ -71,6 +71,7 @@ class CFunc(object):
             self._cache_hits += 1
 
         self._library = cres.library
+        self._referenced_envs = cres.referenced_envs
         self._wrapper_name = cres.fndesc.llvm_cfunc_wrapper_name
         self._wrapper_address = self._library.get_pointer_to_function(
             self._wrapper_name)

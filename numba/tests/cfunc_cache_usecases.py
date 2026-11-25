@@ -7,7 +7,9 @@ See test_cfunc.py.
 
 import sys
 
-from numba import cfunc, jit
+import numpy as np
+
+from numba import cfunc, jit, objmode
 from numba.tests.support import TestCase, captured_stderr
 
 
@@ -38,6 +40,21 @@ def inner(x, y):
 @cfunc(add_sig, cache=True, nopython=True)
 def outer(x, y):
     return inner(-y, x)
+
+
+def py_double(x):
+    return x * 2
+
+
+@jit(cache=True)
+def double_objmode(x):
+    with objmode(r="float64[:]"):
+        r = py_double(x)
+    return r
+
+
+def objmode_usecase(n):
+    return double_objmode(np.arange(n, dtype=np.float64)).sum()
 
 
 class _TestModule(TestCase):

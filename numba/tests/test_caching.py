@@ -1370,6 +1370,27 @@ class TestCFuncCache(BaseCacheTest):
     usecases_file = os.path.join(here, "cfunc_cache_usecases.py")
     modname = "cfunc_caching_test_fodder"
 
+    def test_objmode_caching(self):
+        for cache_hits in (0, 1):
+            code = f"""if 1:
+                import gc
+                import sys
+
+                sys.path.insert(0, {self.tempdir!r})
+                mod = __import__({self.modname!r})
+                f = mod.cfunc("float64(int64)", cache=True)(mod.objmode_usecase)
+                assert f.cache_hits == {cache_hits}
+                gc.collect()
+                for n in (0, 1, 4):
+                    result = f.ctypes(n)
+                    assert result == n * (n - 1), (n, result)
+                """
+            proc = subprocess.run([sys.executable, "-c", code],
+                                  stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE)
+            self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+            self.assertEqual(proc.stderr, b"")
+
     def run_in_separate_process(self):
         # Cached functions can be run from a distinct process.
         code = """if 1:
