@@ -1,12 +1,35 @@
 import collections
+import copy
 import itertools
+import re
 
 import numpy as np
 
 import unittest
-from numba import jit, njit
-from numba.core.errors import TypingError
+from numba import jit, njit, typeof
+from numba.core.errors import TypingError, NumbaNotImplementedError
+from numba.core.typing.arraydecl import get_array_index_type
 from numba.tests.support import MemoryLeakMixin, TestCase
+
+
+def set_two_masks(x, r, c):
+    x[r, c] = 99
+    return x
+
+
+def set_mask_scalar(x, m):
+    x[m] = 0
+    return x
+
+
+def set_1_slice_m_scalar(a, m):
+    a[1, :, m] = 0
+    return a
+
+
+def set_1_slice_m_array(a, m, v):
+    a[1, :, m] = v
+    return a
 
 
 class TestFancyIndexing(MemoryLeakMixin, TestCase):
@@ -544,6 +567,104 @@ class TestFancyIndexingMultiDim(MemoryLeakMixin, TestCase):
         for idx in indices:
             with self.subTest(idx=idx):
                 self.check_setitem_indices(self.shape, idx)
+
+
+class TestBooleanMaskErrors(MemoryLeakMixin, TestCase):
+
+    def assert_rejected(self, pyfunc, args, msg, exc=TypingError):
+        with self.assertRaisesRegex(exc, re.escape(msg)):
+            jit(pyfunc)(*args)
+
+    def assert_matches_numpy(self, pyfunc, *args):
+        expected_args = copy.deepcopy(args)
+        got_args = copy.deepcopy(args)
+        expected = pyfunc(*expected_args)
+        got = jit(pyfunc)(*got_args)
+        np.testing.assert_equal(got, expected)
+        np.testing.assert_equal(got_args[0], expected_args[0])
+
+    def test_0d_bool_index(self):
+        self.assert_rejected(lambda a, m: a[m], (np.arange(3), np.array(True)),
+                             "0-d boolean array indices are not supported")
+
+    def test_two_masks(self):
+        x = np.arange(9).reshape(3, 3)
+        r, c = np.array([True, False, True]), np.array([False, True, True])
+        msg = "cannot be combined with another array index"
+        self.assert_rejected(lambda x, r, c: x[r, c], (x, r, c), msg)
+        self.assert_rejected(set_two_masks, (x, r, c), msg)
+
+    def test_mask_with_int_array(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        m = np.array([True, False, False, True])
+        msg = "cannot be combined with another array index"
+        self.assert_rejected(lambda a, m: a[np.array([0, 1]), :, m], (a, m),
+                             msg)
+        self.assert_rejected(lambda a, m: a[0, np.array([0, 2]), m], (a, m),
+                             msg)
+
+    def test_mask_with_0d_int_array(self):
+        self.assert_matches_numpy(lambda a, i, m: a[i, m],
+                                  np.arange(24).reshape(2, 3, 4), np.array(1),
+                                  np.array([True, False, True]))
+
+    def test_nd_mask_not_full_rank(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        msg = "more than one dimension must be the only index"
+        for f in (lambda a, m: a[m], lambda a, m: a[0, m],
+                  lambda a, m: a[..., m]):
+            self.assert_rejected(f, (a, a[0] > 2), msg)
+
+    def test_nd_mask_full_rank_result_type(self):
+        x = np.arange(6).reshape(2, 3)
+        out = get_array_index_type(typeof(x), typeof(x > 2))
+        self.assertEqual(out.result.ndim, 1)
+
+    def test_nd_mask_serial_lowering_error(self):
+        x = np.arange(6.).reshape(2, 3)
+        msg = ("only supported with parallel=True as x[mask] = scalar or "
+               "x[mask] = y[mask]")
+        self.assert_rejected(lambda x, m: x[m], (x, x > 2), msg,
+                             exc=NumbaNotImplementedError)
+        self.assert_rejected(set_mask_scalar, (x, x > 2), msg,
+                             exc=NumbaNotImplementedError)
+
+    def test_mask_moved_to_front(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        m3 = np.array([True, False, True])
+        m4 = np.array([True, False, False, True])
+        msg = "NumPy would move to the front"
+        self.assert_rejected(lambda a, m: a[1, :, m], (a, m4), msg)
+        self.assert_rejected(lambda a, m: a[0, ..., m], (a, m4), msg)
+        self.assert_rejected(lambda a, m: a[None, 1, :, m], (a, m4), msg)
+        self.assert_rejected(lambda a, m: a[1, None, m], (a, m3), msg)
+        self.assert_rejected(set_1_slice_m_array,
+                             (a, m4, np.zeros((2, 3), np.int64)), msg)
+
+    def test_mask_placement_matches_numpy(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        m2 = np.array([False, True])
+        m3 = np.array([True, False, True])
+        m4 = np.array([True, False, False, True])
+        self.assert_matches_numpy(lambda a, m: a[m, :, 1], a, m2)
+        self.assert_matches_numpy(lambda a, m: a[m, None, 1], a, m2)
+        self.assert_matches_numpy(lambda a, m: a[:, 1, m], a, m4)
+        self.assert_matches_numpy(lambda a, m: a[..., m], a, m4)
+        self.assert_matches_numpy(lambda a, m: a[m, 1], a, m2)
+        self.assert_matches_numpy(lambda a, m: a[:, m, 0], a, m3)
+        self.assert_matches_numpy(lambda b, m: b[1, ..., m],
+                                  np.arange(12).reshape(3, 4), m4)
+        self.assert_matches_numpy(set_1_slice_m_scalar, a, m4)
+        self.assert_matches_numpy(set_1_slice_m_array, a, m4, np.array(9))
+
+    def test_mask_split_by_none_no_nonzero_hint(self):
+        a = np.arange(24).reshape(2, 3, 4)
+        m = np.array([True, False, True])
+        with self.assertRaises(TypingError) as raises:
+            jit(lambda a, m: a[1, None, m])(a, m)
+        self.assertIn("NumPy would move to the front", str(raises.exception))
+        self.assertNotIn("np.nonzero", str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

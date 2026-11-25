@@ -20,12 +20,38 @@ numpy_version = tuple(map(int, np.__version__.split('.')[:2]))
 Indexing = namedtuple("Indexing", ("index", "result", "advanced"))
 
 
-def get_array_index_type(ary, idx):
+def _mask_moved_to_front(indices, ellipsis_ndim):
+    """
+    Whether NumPy would move the axis of the boolean array index in
+    ``indices`` to the front of the result, where Numba would not.
+    NumPy does so when the advanced indices are not adjacent, i.e. a slice,
+    ellipsis or newaxis separates them.
+    """
+    groups = 0
+    in_group = False
+    dims_before_mask = None
+    dims = 0
+    for ty in indices:
+        if isinstance(ty, (types.Integer, types.Array)):
+            if not in_group:
+                groups += 1
+                in_group = True
+            if (dims_before_mask is None and isinstance(ty, types.Array)
+                    and isinstance(ty.dtype, types.Boolean)):
+                dims_before_mask = dims
+        else:
+            in_group = False
+            dims += ellipsis_ndim if ty is types.ellipsis else 1
+    return groups > 1 and dims_before_mask > 0
+
+
+def get_array_index_type(ary, idx, scalar_setitem=False):
     """
     Returns None or a tuple-3 for the types of the input array, index, and
     resulting type of ``array[index]``.
 
     Note: This is shared logic for ndarray getitem and setitem.
+    ``scalar_setitem`` is true when a scalar is assigned to ``array[index]``.
     """
     if not isinstance(ary, types.Buffer):
         return
@@ -47,6 +73,7 @@ def get_array_index_type(ary, idx):
     in_subspace = False
     num_subspaces = 0
     array_indices = []
+    num_masks = 0
 
     # Walk indices
     for ty in idx:
@@ -90,9 +117,20 @@ def get_array_index_type(ary, idx):
                 in_subspace = True
         elif (isinstance(ty, types.Array)
               and isinstance(ty.dtype, (types.Integer, types.Boolean))):
-            array_indices.append(ty.ndim)
+            if isinstance(ty.dtype, types.Boolean):
+                if ty.ndim == 0:
+                    raise NumbaTypeError(
+                        "0-d boolean array indices are not supported "
+                        "(got %s)" % (idx,))
+                num_masks += 1
+                mask_ndim = ty.ndim
+                # A k-d mask consumes k dimensions and yields one
+                array_indices.append(1)
+                ndim -= ty.ndim
+            else:
+                array_indices.append(ty.ndim)
+                ndim -= 1
             advanced = True
-            ndim -= 1
             if not in_subspace:
                 num_subspaces += 1
                 in_subspace = True
@@ -103,6 +141,18 @@ def get_array_index_type(ary, idx):
             raise NumbaTypeError("Unsupported array index type %s in %s"
                                  % (ty, idx))
         (right_indices if ellipsis_met else left_indices).append(ty)
+
+    if num_masks and len(array_indices) > 1:
+        raise NumbaTypeError(
+            "A boolean array index cannot be combined with another array "
+            "index; convert the mask with np.nonzero(mask)[0] (got %s)"
+            % (idx,))
+    if num_masks and mask_ndim > 1 and (len(idx) > 1
+                                        or mask_ndim != ary.ndim):
+        raise NumbaTypeError(
+            "A boolean array index with more than one dimension must be the "
+            "only index and have the same number of dimensions as the array "
+            "(got %s)" % (idx,))
 
     if advanced:
         ndim += max(array_indices)
@@ -118,9 +168,19 @@ def get_array_index_type(ary, idx):
         del right_indices[0]
 
     n_indices = len(all_indices) - ellipsis_met - num_newaxis
+    if num_masks:
+        n_indices += mask_ndim - 1
     if n_indices > ary.ndim:
         raise NumbaTypeError("cannot index %s with %d indices: %s"
                              % (ary, n_indices, idx))
+    if (num_masks and not scalar_setitem
+            and _mask_moved_to_front(all_indices, ary.ndim - n_indices)):
+        # np.nonzero(mask)[0] has the same problem when None splits the groups
+        hint = ("" if any(is_nonelike(ty) for ty in all_indices)
+                else "; use np.nonzero(mask)[0] instead")
+        raise NumbaTypeError(
+            "A boolean array index that NumPy would move to the front of the "
+            "result is not supported%s (got %s)" % (hint, idx))
     if n_indices == ary.ndim and ndim == 0 and not ellipsis_met:
         # Full integer indexing => scalar result
         # (note if ellipsis is present, a 0-d view is returned instead)
@@ -224,7 +284,10 @@ class SetItemBuffer(AbstractTemplate):
         if not ary.mutable:
             msg = f"Cannot modify readonly array of type: {ary}"
             raise NumbaTypeError(msg)
-        out = get_array_index_type(ary, idx)
+        scalar_setitem = (
+            not isinstance(val, (types.Buffer, types.Sequence))
+            or (isinstance(val, types.Array) and val.ndim == 0))
+        out = get_array_index_type(ary, idx, scalar_setitem=scalar_setitem)
         if out is None:
             return
 

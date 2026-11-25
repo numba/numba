@@ -24,7 +24,7 @@ from itertools import cycle, chain
 import subprocess as subp
 
 import numba.parfors.parfor
-from numba import (njit, prange, parallel_chunksize,
+from numba import (jit, njit, prange, parallel_chunksize,
                    get_parallel_chunksize, set_parallel_chunksize,
                    set_num_threads, get_num_threads, typeof)
 from numba.core import (types, errors, ir, rewrites,
@@ -2838,6 +2838,26 @@ class TestParforsBitMask(TestParforsBase):
         a = np.arange(10)
         b = a > 5
         self.check(test_impl, a, b)
+
+    def test_parfor_bitmask_2d_scalar(self):
+        def test_impl(a):
+            a[a > 2] = 0
+            return a
+
+        a = np.arange(6.).reshape(2, 3)
+        np.testing.assert_equal(jit(parallel=True)(test_impl)(a.copy()),
+                                test_impl(a.copy()))
+
+    def test_parfor_bitmask_2d_array(self):
+        def test_impl(a, b, c):
+            a[b] = c[b]
+            return a
+
+        c = np.arange(6.).reshape(2, 3)
+        b = c > 2
+        np.testing.assert_equal(
+            jit(parallel=True)(test_impl)(np.zeros((2, 3)), b, c),
+            test_impl(np.zeros((2, 3)), b, c))
 
     def test_parfor_bitmask4(self):
         def test_impl(a, b):
