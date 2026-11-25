@@ -4786,8 +4786,10 @@ def _parse_empty_args(context, builder, sig, args):
 
 def _parse_empty_like_args(context, builder, sig, args):
     """
-    Parse the arguments of a np.empty_like(), np.zeros_like() or
-    np.ones_like() call.
+    Parse the prototype argument of a np.empty_like(), np.zeros_like() or
+    np.ones_like() call, i.e. take the shape from the prototype. Used when
+    no shape kwarg was given (or by callers like array_imag_part that pass
+    only the prototype).
     """
     arytype = sig.args[0]
     if isinstance(arytype, types.Array):
@@ -4796,6 +4798,19 @@ def _parse_empty_like_args(context, builder, sig, args):
         return sig.return_type, shapes
     else:
         return sig.return_type, ()
+
+
+def _parse_empty_like_args_with_shape(context, builder, sig, args):
+    """
+    Parse the arguments of a np.empty_like() call with the shape kwarg
+    present in the signature: take the shape from the kwarg unless it is
+    None, in which case fall back to the prototype's shape.
+    """
+    ty_shape = sig.args[2]
+    if is_nonelike(ty_shape):
+        return _parse_empty_like_args(context, builder, sig, args)
+    shapes = _parse_shape(context, builder, ty_shape, args[2])
+    return sig.return_type, shapes
 
 
 def _check_const_str_dtype(fname, dtype):
@@ -4839,39 +4854,67 @@ def ol_np_empty(shape, dtype=float):
 
 
 @intrinsic
-def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_retty_ref):
+def numpy_empty_like_nd(tyctx, ty_prototype, ty_dtype, ty_shape,
+                        ty_retty_ref):
     ty_retty = ty_retty_ref.instance_type
-    sig = ty_retty(ty_prototype, ty_dtype, ty_retty_ref)
+    sig = ty_retty(ty_prototype, ty_dtype, ty_shape, ty_retty_ref)
 
     def codegen(cgctx, builder, sig, llargs):
-        arrtype, shapes = _parse_empty_like_args(cgctx, builder, sig, llargs)
+        arrtype, shapes = _parse_empty_like_args_with_shape(cgctx, builder,
+                                                            sig, llargs)
         ary = _empty_nd_impl(cgctx, builder, arrtype, shapes)
         return ary._getvalue()
     return sig, codegen
 
 
 @overload(np.empty_like)
-def ol_np_empty_like(arr, dtype=None):
+def ol_np_empty_like(prototype, dtype=None, order=None, subok=None,
+                     shape=None):
     _check_const_str_dtype("empty_like", dtype)
     if not is_nonelike(dtype):
         nb_dtype = ty_parse_dtype(dtype)
-    elif isinstance(arr, types.Array):
-        nb_dtype = arr.dtype
+    elif isinstance(prototype, types.Array):
+        nb_dtype = prototype.dtype
     else:
-        nb_dtype = arr
-    if nb_dtype is not None:
-        if isinstance(arr, types.Array):
-            layout = arr.layout if arr.layout != 'A' else 'C'
-            retty = arr.copy(dtype=nb_dtype, layout=layout, readonly=False)
+        nb_dtype = prototype
+    if nb_dtype is None:
+        msg = ("Cannot parse input types to function "
+               f"np.empty_like({prototype}, {dtype}, {order}, {subok}, "
+               f"{shape})")
+        raise errors.TypingError(msg)
+    # order='K' is NumPy's default and the only order Numba implements
+    # (via the prototype's static layout); subok is accepted but ignored
+    # as Numba has no ndarray subclasses.
+    if not (is_nonelike(order) or
+            (isinstance(order, types.StringLiteral) and
+             order.literal_value == 'K')):
+        raise errors.TypingError("np.empty_like() only supports "
+                                 "order='K'")
+    if is_nonelike(shape):
+        if isinstance(prototype, types.Array):
+            layout = prototype.layout if prototype.layout != 'A' else 'C'
+            retty = prototype.copy(dtype=nb_dtype, layout=layout,
+                                   readonly=False)
         else:
             retty = types.Array(nb_dtype, 0, 'C')
     else:
-        msg = ("Cannot parse input types to function "
-               f"np.empty_like({arr}, {dtype})")
-        raise errors.TypingError(msg)
+        ndim = ty_parse_shape(shape)
+        if ndim is None:
+            msg = ("Cannot parse input types to function "
+                   f"np.empty_like({prototype}, {dtype}, {order}, {subok}, "
+                   f"{shape})")
+            raise errors.TypingError(msg)
+        # NumPy's 'K' keeps the input's layout only if the number of
+        # dimensions matches; otherwise the result is C-ordered.
+        if (isinstance(prototype, types.Array) and prototype.ndim == ndim
+                and prototype.layout != 'A'):
+            layout = prototype.layout
+        else:
+            layout = 'C'
+        retty = types.Array(nb_dtype, ndim, layout)
 
-    def impl(arr, dtype=None):
-        return numpy_empty_like_nd(arr, dtype, retty)
+    def impl(prototype, dtype=None, order=None, subok=None, shape=None):
+        return numpy_empty_like_nd(prototype, dtype, shape, retty)
     return impl
 
 
