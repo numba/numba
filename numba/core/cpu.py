@@ -138,11 +138,11 @@ class CPUContext(BaseContext):
         self.install_registry(jitclassimpl.class_impl_registry)
 
         if config.NUMPY_AVAILABLE:
-            from numba.np.npyimpl import init as npyimpl_init
+            from numba.np.np_init import np_init
             # Installed explicitly here. In future, this may be handled via
             # the standard extension mechanism once core numba is
             # numpy-exclusive.
-            npyimpl_init()
+            np_init()
 
         # load 3rd party extensions
         numba.core.entrypoints.init_all()
