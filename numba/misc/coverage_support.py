@@ -57,6 +57,26 @@ class NotifyLocBase(ABC):
         pass
 
 
+def _get_lock_functions(collector):
+    """Return the ``(lock_data, unlock_data)`` callables for a tracer.
+
+    coverage < 7.17.5 provides ``Collector.lock_data`` and
+    ``Collector.unlock_data``. Later versions removed them and give tracers
+    the methods of ``Collector.data_lock`` directly, or no-ops if there is no
+    lock.
+    """
+    if hasattr(collector, "lock_data"):
+        return collector.lock_data, collector.unlock_data
+    lock = getattr(collector, "data_lock", None)
+    if lock is None:
+        return _noop, _noop
+    return lock.acquire, lock.release
+
+
+def _noop():
+    pass
+
+
 class NotifyCompilerCoverage(NotifyLocBase):
     """
     Use to notify ``coverage`` about compiled lines.
@@ -70,11 +90,12 @@ class NotifyCompilerCoverage(NotifyLocBase):
 
         # see https://github.com/nedbat/coveragepy/blob/e7c05fe91ee36c0c94e144bb88d25db4fc3d02fd/coverage/collector.py#L261 # noqa E501
         tracer_kwargs = collector.core.tracer_kwargs.copy()
+        lock_data, unlock_data = _get_lock_functions(collector)
         tracer_kwargs.update(
             dict(
                 data=collector.data,
-                lock_data=collector.lock_data,
-                unlock_data=collector.unlock_data,
+                lock_data=lock_data,
+                unlock_data=unlock_data,
                 trace_arcs=collector.branch,
                 should_trace=collector.should_trace,
                 should_trace_cache=collector.should_trace_cache,
