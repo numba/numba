@@ -357,6 +357,37 @@ Compilation options
    by default on Sandy Bridge and Ivy Bridge architectures as it can sometimes
    result in slower code on those platforms.
 
+.. envvar:: NUMBA_VECLIB
+
+   Select a vector math library for LLVM to use when compiling a function with
+   ``@jit(enable_veclib=True)``. Set this variable before importing Numba.
+   Please note that this feature is experimental and using vector math libraries
+   can change the accuracy of results.
+
+   The value selects how a library is chosen:
+
+   * ``auto`` tries compatible libraries in order and selects the first one
+     that can be loaded. If none can be loaded, it selects ``none``.
+   * ``none`` disables vector library selection through this mechanism.
+   * A library name explicitly selects that library. Names are case-sensitive
+     and must be supported for the current platform and architecture.
+
+   Currently, macOS arm64 supports ``darwin_libsystem_m`` and ``accelerate``,
+   which ``auto`` tries in that order. On other platforms, ``auto`` selects
+   ``none``.
+
+   Numba checks that a library exports the symbols LLVM may use before selecting
+   it. A discovered library may be rejected if it lacks required symbols.
+   Symbol availability alone does not establish ABI compatibility.
+
+   An unrecognized value will raise ``ValueError``. An explicit library that is
+   unsupported, cannot be found, or cannot be loaded raises ``RuntimeError``.
+
+   Passing ``enable_veclib=True`` without setting this variable selects ``none``;
+   it does not enable automatic library selection.
+
+   *Default value:* None
+
 .. envvar:: NUMBA_DISABLE_INTEL_SVML
 
     If set to non-zero and Intel SVML is available, the use of SVML will be

@@ -202,6 +202,35 @@ Execution times are as follows, ``fastmath`` again improves performance.
 | ``do_sum_parallel_fast``|      5.37 ms    |
 +-------------------------+-----------------+
 
+.. _vector-math-libraries:
+
+Vector math libraries
+---------------------
+
+Numba can configure LLVM to use a vector math library for a function.
+Choose a library using :envvar:`NUMBA_VECLIB`, for example::
+
+    NUMBA_VECLIB=auto python example.py
+
+Then opt in when compiling the identity example from above::
+
+    import numpy as np
+    from numba import jit
+
+    @jit(enable_veclib=True)
+    def ident_veclib(x):
+        return np.cos(x) ** 2 + np.sin(x) ** 2
+
+``auto`` selects the first available library supported on the current platform,
+falling back to ``none`` if no library can be loaded. To request a library
+explicitly, set :envvar:`NUMBA_VECLIB` to its name instead. See the environment
+variable reference for current platform support and errors.
+
+Enabling a library allows LLVM to use its vector math functions where suitable;
+vectorization and vector calls are not guaranteed. Vector math
+libraries can change the accuracy of results, so check their numerical behavior
+for your application.
+
 .. _intel-svml:
 
 Intel SVML

@@ -7,7 +7,7 @@ JIT functions
 -------------
 
 
-.. decorator:: numba.jit(signature_or_function=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False, inline="never", forceinline=False)
+.. decorator:: numba.jit(signature_or_function=None, nopython=False, nogil=False, cache=False, forceobj=False, parallel=False, error_model='python', fastmath=False, locals={}, boundscheck=False, inline="never", forceinline=False, enable_veclib=False)
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters are optional.
@@ -95,6 +95,15 @@ JIT functions
    Further, if :ref:`Intel SVML <intel-svml>` is installed faster but less
    accurate versions of some math intrinsics are used (answers to within
    ``4 ULP``).
+
+   .. _jit-decorator-veclib:
+
+   If true, *enable_veclib* allows LLVM to use the vector math library selected
+   by :envvar:`NUMBA_VECLIB` for compilation. The environment variable
+   must also be set, this option alone does not select a library. The default is
+   false. Please note that this feature is experimental and using vector math libraries 
+   can change the accuracy of results. Also, enabling a library does not guarantee that
+   LLVM will vectorize a loop or emit vector math calls.
 
    .. _jit-decorator-boundscheck:
 

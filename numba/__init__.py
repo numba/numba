@@ -196,6 +196,8 @@ def _try_enable_svml():
     """
     Tries to enable SVML if configuration permits use and the library is found.
     """
+    if config.VECLIB is not None:
+        return False
     if not config.DISABLE_INTEL_SVML:
         try:
             if sys.platform.startswith('linux'):

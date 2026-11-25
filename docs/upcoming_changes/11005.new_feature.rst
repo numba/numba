@@ -1,0 +1,9 @@
+Vector math library support
+---------------------------
+
+Numba can now use vector math libraries for suitable operations in
+vectorized loops. Opt in by setting ``enable_veclib=True`` on a function's
+``@jit`` decorator, and select a library through :envvar:`NUMBA_VECLIB`.
+Use ``auto`` to try the libraries supported on the current platform in
+order, or name a library explicitly.
+If no candidate can be loaded, ``auto`` falls back to ``none``.

@@ -87,6 +87,7 @@ class DefaultOptions:
 
     parallel = _mapping("auto_parallel")
     fastmath = _mapping("fastmath")
+    enable_veclib = _mapping("enable_veclib")
     error_model = _mapping("error_model")
     inline = _mapping("inline")
     forceinline = _mapping("forceinline")

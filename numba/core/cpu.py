@@ -217,6 +217,8 @@ class CPUContext(BaseContext):
         return dictobject.build_map(self, builder, dict_type, item_types, items)
 
     def post_lowering(self, mod, library):
+        if self.veclib is not None:
+            library._vector_library = self.veclib
         if self.fastmath:
             fastmathpass.rewrite_module(mod, self.fastmath)
 
@@ -328,6 +330,7 @@ _options_mixin = include_default_options(
     "no_cfunc_wrapper",
     "parallel",
     "fastmath",
+    "enable_veclib",
     "error_model",
     "inline",
     "forceinline",
@@ -338,6 +341,12 @@ _options_mixin = include_default_options(
 
 class CPUTargetOptions(_options_mixin, TargetOptions):
     def finalize(self, flags, options):
+        if config.VECLIB is not None:
+            from numba.core import vector_library
+            resolved, _ = vector_library.resolve(config.VECLIB)
+            flags.veclib = resolved if flags.enable_veclib else 'none'
+        elif flags.is_set('enable_veclib'):
+            flags.veclib = 'none'
         if not flags.is_set("enable_pyobject"):
             flags.enable_pyobject = True
 
