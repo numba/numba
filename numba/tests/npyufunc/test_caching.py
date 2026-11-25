@@ -70,9 +70,22 @@ class UfuncCacheTest(BaseCacheTest):
 
 class TestUfuncCacheTest(UfuncCacheTest):
 
-    def test_direct_ufunc_cache(self, **kwargs):
+    def test_filename_prefix(self):
+        mod = self.import_module()
+        with capture_cache_log() as out:
+            mod.direct_ufunc_cache_usecase()
+        cachelog = out.getvalue()
+        fmt1 = _fix_raw_path(r'/__pycache__/uf-{}')
+        prefixed = re.findall(fmt1.format(self.modname), cachelog)
+        fmt2 = _fix_raw_path(r'/__pycache__/{}')
+        normal = re.findall(fmt2.format(self.modname), cachelog)
+        self.assertGreater(len(normal), 2)
+        self.assertEqual(len(normal), len(prefixed))
+
+    def test_direct_ufunc_cache(self, n_overloads=2 + 2, **kwargs):
+        # 2 cache entries for the overloads and 2 for the ufunc wrappers
         new_ufunc, cached_ufunc = self.check_ufunc_cache(
-            "direct_ufunc_cache_usecase", n_overloads=2, **kwargs)
+            "direct_ufunc_cache_usecase", n_overloads=n_overloads, **kwargs)
         # Test the cached and original versions
         inp = np.random.random(10).astype(np.float64)
         np.testing.assert_equal(new_ufunc(inp), cached_ufunc(inp))
@@ -83,7 +96,8 @@ class TestUfuncCacheTest(UfuncCacheTest):
         self.test_direct_ufunc_cache(forceobj=True)
 
     def test_direct_ufunc_cache_parallel(self):
-        self.test_direct_ufunc_cache(target='parallel')
+        # The parallel wrapper is not cached
+        self.test_direct_ufunc_cache(n_overloads=2, target='parallel')
 
     def test_indirect_ufunc_cache(self, **kwargs):
         new_ufunc, cached_ufunc = self.check_ufunc_cache(
@@ -101,7 +115,7 @@ class TestUfuncCacheTest(UfuncCacheTest):
 class TestDUfuncCacheTest(UfuncCacheTest):
     # Note: DUFunc doesn't support parallel target yet
 
-    def check_dufunc_usecase(self, usecase_name):
+    def check_dufunc_usecase(self, usecase_name, n_entries):
         mod = self.import_module()
         usecase = getattr(mod, usecase_name)
         # Create dufunc
@@ -111,20 +125,21 @@ class TestDUfuncCacheTest(UfuncCacheTest):
         # Compile & cache
         with capture_cache_log() as out:
             ufunc(np.arange(10))
-        self.check_cache_saved(out.getvalue(), count=1)
+        self.check_cache_saved(out.getvalue(), count=n_entries)
         self.check_cache_loaded(out.getvalue(), count=0)
         # Use cached
         with capture_cache_log() as out:
             ufunc = usecase()
             ufunc(np.arange(10))
-        self.check_cache_loaded(out.getvalue(), count=1)
+        self.check_cache_loaded(out.getvalue(), count=n_entries)
 
     def test_direct_dufunc_cache(self):
         # We don't test for objmode because DUfunc don't support it.
-        self.check_dufunc_usecase('direct_dufunc_cache_usecase')
+        # kernel and ufunc wrapper
+        self.check_dufunc_usecase('direct_dufunc_cache_usecase', 2)
 
     def test_indirect_dufunc_cache(self):
-        self.check_dufunc_usecase('indirect_dufunc_cache_usecase')
+        self.check_dufunc_usecase('indirect_dufunc_cache_usecase', 1)
 
 
 def _fix_raw_path(rstr):

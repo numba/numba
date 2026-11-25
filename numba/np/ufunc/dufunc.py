@@ -364,7 +364,8 @@ class DUFunc(serialize.ReduceMixin, _internal._DUFunc, UfuncBase):
         actual_sig = ufuncbuilder._finalize_ufunc_signature(
             cres, argtys, return_type)
         dtypenums, ptr, env = ufuncbuilder._build_element_wise_ufunc_wrapper(
-            cres, actual_sig)
+            cres, actual_sig,
+            ufuncbuilder._ufunc_wrapper_cache(self._dispatcher, cres))
         self._add_loop(int(ptr), dtypenums)
         self._keepalive.append((ptr, cres.library, env))
         self._lower_me.libs.append(cres.library)
