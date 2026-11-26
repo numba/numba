@@ -145,8 +145,23 @@ def check_is_integer(v: int | types.Integer, name: str) -> None: ...
 def lt_floats(a: float | np.floating[Any], b: float | np.floating[Any]) -> bool: ...
 
 # undocumented
+def lt_temporal(
+    a: np.datetime64 | np.timedelta64, b: np.datetime64 | np.timedelta64
+) -> bool: ...
+
+# undocumented
 def lt_complex(
     a: complex | np.complexfloating[Any, Any], b: complex | np.complexfloating[Any, Any]
+) -> bool: ...
+
+# undocumented
+def le_complex(
+    a: complex | np.complexfloating[Any, Any], b: complex | np.complexfloating[Any, Any]
+) -> bool: ...
+
+# undocumented
+def le_temporal(
+    a: np.datetime64 | np.timedelta64, b: np.datetime64 | np.timedelta64
 ) -> bool: ...
 
 #

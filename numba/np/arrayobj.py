@@ -18,7 +18,7 @@ from numba.core import types, typing, errors, cgutils, extending
 from numba.np.numpy_support import (as_dtype, from_dtype, carray, farray,
                                     is_contiguous, is_fortran,
                                     check_is_integer, type_is_scalar,
-                                    lt_complex, lt_floats)
+                                    lt_complex, lt_floats, lt_temporal)
 from numba.np.numpy_support import type_can_asarray, is_nonelike, numpy_version
 from numba.core.imputils import (lower_builtin, lower_getattr,
                                  lower_getattr_generic,
@@ -7051,6 +7051,8 @@ def lt_implementation(dtype):
         return lt_floats
     elif isinstance(dtype, types.Complex):
         return lt_complex
+    elif isinstance(dtype, (types.NPDatetime, types.NPTimedelta)):
+        return lt_temporal
     else:
         return default_lt
 
