@@ -4772,7 +4772,8 @@ def np_histogram(a, bins=10, range=None):
                     bin_ratio = bins / (bin_max - bin_min)
                     for view in np.nditer(a):
                         v = view.item()
-                        b = math.floor((v - bin_min) * bin_ratio)
+                        b = (v - bin_min) * bin_ratio
+                        # NaN fails both comparisons and is ignored
                         if 0 <= b < bins:
                             hist[int(b)] += 1
                         elif v == bin_max:

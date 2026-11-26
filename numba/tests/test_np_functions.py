@@ -1920,6 +1920,17 @@ class TestNPFunctions(MemoryLeakMixin, TestCase):
 
         check_values(values)
 
+    def test_histogram_nan_with_range(self):
+        pyfunc = histogram
+        cfunc = jit(nopython=True)(pyfunc)
+        values = np.array([np.nan, 1.0, 2.0, np.nan, 3.0, np.inf, -np.inf])
+        for bins in (1, 3, 7):
+            for rng in ((0.0, 3.0), (-1.0, 1.0)):
+                pyhist, pybins = pyfunc(values, bins, rng)
+                chist, cbins = cfunc(values, bins, rng)
+                self.assertPreciseEqual(pyhist, chist)
+                self.assertPreciseEqual(pybins, cbins, prec='double', ulps=2)
+
     def _test_correlate_convolve(self, pyfunc):
         cfunc = jit(nopython=True)(pyfunc)
         # only 1d arrays are accepted, test varying lengths
