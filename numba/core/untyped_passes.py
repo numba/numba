@@ -713,6 +713,13 @@ class TransformLiteralUnrollConstListToTuple(FunctionPass):
                                     if not isinstance(ty, self._accepted_types):
                                         extra = "operation %s" % to_unroll.op
                                         loc = to_unroll.loc
+                                else:
+                                    # e.g. literal_unroll(range(n)): valid only
+                                    # if the call produces a tuple or a list
+                                    ty = state.typemap.get(unroll_var.name)
+                                    if not isinstance(ty, self._accepted_types):
+                                        extra = "operation %s" % to_unroll.op
+                                        loc = to_unroll.loc
                             elif isinstance(to_unroll, ir.Arg):
                                 extra = "non-const argument %s" % to_unroll.name
                                 loc = to_unroll.loc
