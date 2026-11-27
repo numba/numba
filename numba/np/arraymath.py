@@ -573,16 +573,55 @@ def _numpy_sum_axis(typingctx, aryty, axisty, dtype):
             add_funcfn = context.get_function(fnty, fn_sig)
 
         mask = get_mask(context, builder, aryty.ndim, axis)
-        # Loop on source and copy to destination
-        with ArrayIterator(
-            context, builder, aryty, ary, (mask,), (res,), order='K'
-        ) as (ary_iter_ptr, res_ptr_tup):
-            res_ptr = res_ptr_tup[0]
-            val = load_item(context, builder, aryty, ary_iter_ptr)
-            res_val = add_funcfn(builder, (
-                load_item(context, builder, sig.return_type, res_ptr),
-                context.cast(builder, val, aryty.dtype, sig.return_type.dtype)))
-            store_item(context, builder, sig.return_type, res_val, res_ptr)
+        contiguous_axis = cgutils.false_bit
+        if (aryty.layout in 'CF' and isinstance(axisty, types.Integer)
+                and isinstance(ret_dtype, (types.Number, types.Boolean))):
+            inner_axis = aryty.ndim - 1 if aryty.layout == 'C' else 0
+            contiguous_axis = builder.not_(
+                builder.extract_value(mask, inner_axis))
+            with builder.if_then(contiguous_axis):
+                shape = cgutils.unpack_tuple(builder, ary.shape)
+                out_shape = cgutils.unpack_tuple(builder, res_shape)
+                intp = context.get_value_type(types.intp)
+                zero = context.get_constant(ret_dtype, 0)
+                acc = cgutils.alloca_once_value(builder, zero)
+                # Keep the accumulator local so each input does not require
+                # a load/store through a potentially aliased output pointer.
+                with cgutils.loop_nest(
+                    builder, out_shape, intp, order=aryty.layout
+                ) as indices:
+                    source_indices = list(indices)
+                    source_indices.insert(inner_axis, intp(0))
+                    source = cgutils.get_item_pointer2(
+                        context, builder, ary.data, shape, None,
+                        aryty.layout, source_indices)
+                    builder.store(zero, acc)
+                    with cgutils.for_range(builder, shape[inner_axis]) as loop:
+                        val = load_item(context, builder, aryty,
+                                        builder.gep(source, [loop.index]))
+                        val = context.cast(builder, val, aryty.dtype, ret_dtype)
+                        total = add_funcfn(builder, (builder.load(acc), val))
+                        if not isinstance(ret_dtype, types.Boolean):
+                            total = context.cast(
+                                builder, total, fn_sig.return_type, ret_dtype)
+                        builder.store(total, acc)
+                    dest = cgutils.get_item_pointer2(
+                        context, builder, res.data, out_shape, None,
+                        'C', indices)
+                    store_item(context, builder, sig.return_type,
+                               builder.load(acc), dest)
+
+        with builder.if_then(builder.not_(contiguous_axis)):
+            with ArrayIterator(
+                context, builder, aryty, ary, (mask,), (res,), order='K'
+            ) as (ary_iter_ptr, res_ptr_tup):
+                res_ptr = res_ptr_tup[0]
+                val = load_item(context, builder, aryty, ary_iter_ptr)
+                res_val = add_funcfn(builder, (
+                    load_item(context, builder, sig.return_type, res_ptr),
+                    context.cast(builder, val, aryty.dtype,
+                                 sig.return_type.dtype)))
+                store_item(context, builder, sig.return_type, res_val, res_ptr)
 
         return impl_ret_new_ref(
             context, builder, sig.return_type, res._getvalue()
