@@ -4,8 +4,6 @@ import itertools
 import weakref
 from functools import cached_property
 
-import numpy as np
-
 from numba.core.utils import get_hashable_key
 
 # Types are added to a global registry (_typecache) in order to assign
@@ -249,19 +247,8 @@ class Number(Hashable):
     """
     Base class for number types.
     """
-
-    def unify(self, typingctx, other):
-        """
-        Unify the two number types using Numpy's rules.
-        """
-        from numba.np import numpy_support
-        if isinstance(other, Number):
-            # XXX: this can produce unsafe conversions,
-            # e.g. would unify {int64, uint64} to float64
-            a = numpy_support.as_dtype(self)
-            b = numpy_support.as_dtype(other)
-            sel = np.promote_types(a, b)
-            return numpy_support.from_dtype(sel)
+    # TODO: Needs a Numba specific unify method to
+    # unify with other number types.
 
 
 class Callable(Type):

@@ -13,7 +13,7 @@ import numpy as np
 
 from numba import cfunc, carray, farray, njit
 from numba.core import types, typing, utils
-import numba.core.typing.cffi_utils as cffi_support
+import numba.cffi.cffi_utils as cffi_support
 from numba.tests.support import (TestCase, skip_unless_cffi, tag,
                                  captured_stderr)
 import unittest
