@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 import traceback
+from types import ModuleType
 
 from numba import jit, njit
 from numba.core import types, errors, utils
@@ -295,6 +296,22 @@ class TestRaising(TestCase):
         with self.assertRaises(errors.UnsupportedError) as raises:
             foo()
         self.assertIn(msg, str(raises.exception))
+
+    def test_raise_missing_module_attribute_nopython(self):
+        # gh-10754: a missing module attribute in a raise statement should
+        # be reported as an AttributeError, not a ConstantInferenceError.
+        mod = ModuleType("mod_without_exceptions")
+
+        @njit
+        def foo():
+            raise mod.exceptions.AxisError("bad axis")
+
+        with self.assertRaises(AttributeError) as raises:
+            foo()
+        msg = str(raises.exception)
+        self.assertIn("module 'mod_without_exceptions' has no attribute "
+                      "'exceptions'", msg)
+        self.assertIn('raise mod.exceptions.AxisError("bad axis")', msg)
 
     def check_assert_statement(self, flags):
         pyfunc = assert_usecase
