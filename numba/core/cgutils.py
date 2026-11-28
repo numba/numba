@@ -788,6 +788,19 @@ def get_item_pointer2(context, builder, data, shape, strides, layout, inds,
         return ptr
     else:
         # Any layout
+        if len(indices) == 1:
+            # Split the stride into a multiple of two bytes plus a byte
+            # remainder.
+            # A purely byte-wise getelementptr with a runtime stride makes
+            # LLVM treat the access as a symbolic-stride access
+            chunk = intp_t(2)
+            q = builder.mul(builder.udiv(strides[0], chunk), indices[0])
+            r = builder.mul(builder.urem(strides[0], chunk), indices[0])
+            p = builder.bitcast(data, ir.IntType(16).as_pointer())
+            p = builder.gep(p, [q])
+            p = builder.bitcast(p, int8_t.as_pointer())
+            p = builder.gep(p, [r])
+            return builder.bitcast(p, data.type)
         dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
         offset = functools.reduce(builder.add, dimoffs)
         return pointer_add(builder, data, offset)

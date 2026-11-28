@@ -55,7 +55,7 @@ class EntireIterator():
 
     def __init__(self, context, builder, aryty, ary, dim, ary_int_ptr,
                  extra_variations=None, extra_strides=None,
-                 extra_iter_ptrs=None):
+                 extra_iter_ptrs=None, flat=False):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -66,6 +66,7 @@ class EntireIterator():
         self.extra_variations = extra_variations if extra_variations else []
         self.extra_strides = extra_strides if extra_strides else []
         self.extra_iter_ptrs = extra_iter_ptrs if extra_iter_ptrs else []
+        self.flat = flat
 
     def _has_static_unit_stride(self):
         return (self.dim == self.aryty.ndim - 1 and self.aryty.layout == 'C' or
@@ -73,15 +74,22 @@ class EntireIterator():
 
     def prepare(self):
         builder = self.builder
-        self.size = builder.extract_value(self.ary.shape, self.dim)
-        if self._has_static_unit_stride():
+        if self.flat:
+            self.size = self.ary.nitems
             itemsize = self.context.get_abi_sizeof(
                 self.context.get_data_type(self.aryty.dtype))
             self.dim_stride = self.context.get_constant(
                 types.intp, itemsize)
         else:
-            self.dim_stride = builder.extract_value(
-                self.ary.strides, self.dim)
+            self.size = builder.extract_value(self.ary.shape, self.dim)
+            if self._has_static_unit_stride():
+                itemsize = self.context.get_abi_sizeof(
+                    self.context.get_data_type(self.aryty.dtype))
+                self.dim_stride = self.context.get_constant(
+                    types.intp, itemsize)
+            else:
+                self.dim_stride = builder.extract_value(
+                    self.ary.strides, self.dim)
         self.index = cgutils.alloca_once(builder, self.ll_intp)
         self.extra_dim_strides = [
             builder.extract_value(self.extra_strides[i], self.dim)
@@ -152,7 +160,7 @@ class EntireIterator():
 
 class ArrayIterator:
     def __init__(self, context, builder, aryty, ary,
-                 extra_masks=None, extra_arys=None, order='C'):
+                 extra_masks=None, extra_arys=None, order='C', flatten=False):
         self.context = context
         self.builder = builder
         self.aryty = aryty
@@ -190,19 +198,36 @@ class ArrayIterator:
         else:
             dims = range(aryty.ndim)
 
-        self.indexers = [
-            EntireIterator(
-                context,
-                builder,
-                aryty,
-                ary,
-                dim,
-                self.iter_ptr,
-                self.extra_variations,
-                self.extra_strides,
-                self.extra_iter_ptrs,
-            ) for dim in dims
-        ]
+        if flatten and not extra_masks and aryty.ndim > 0 \
+                and aryty.layout in ('C', 'F'):
+            self.indexers = [
+                EntireIterator(
+                    context,
+                    builder,
+                    aryty,
+                    ary,
+                    0,
+                    self.iter_ptr,
+                    self.extra_variations,
+                    self.extra_strides,
+                    self.extra_iter_ptrs,
+                    flat=True,
+                )
+            ]
+        else:
+            self.indexers = [
+                EntireIterator(
+                    context,
+                    builder,
+                    aryty,
+                    ary,
+                    dim,
+                    self.iter_ptr,
+                    self.extra_variations,
+                    self.extra_strides,
+                    self.extra_iter_ptrs,
+                ) for dim in dims
+            ]
 
     def make_stride_from_mask(self, context, builder, mask, strides):
         # Create resulting tuple type
@@ -518,7 +543,7 @@ def _numpy_sum(typingctx, aryty, axisty, dtype):
 
         # Loop on source and copy to destination
         with ArrayIterator(context, builder, aryty, ary,
-                           order='K') as iter_val_ptr:
+                           order='K', flatten=True) as iter_val_ptr:
             val = load_item(context, builder, aryty, iter_val_ptr)
             res_val = add_funcfn(builder, (
                 builder.load(result),
@@ -643,10 +668,26 @@ def array_sum(a, axis=None, dtype=None):
         elif is_nonelike(axis) or a.ndim <= (
             axis.count if isinstance(
                 axis, (types.Tuple, types.UniTuple)) else 1):
-            def array_sum_impl(a, axis=None, dtype=None):
-                check_axis_bounds(a, axis)
-                check_duplicates(axis, a.ndim)
-                return _numpy_sum(a, axis, dtype)
+            if a.layout in ('C', 'F'):
+                def array_sum_impl(a, axis=None, dtype=None):
+                    check_axis_bounds(a, axis)
+                    check_duplicates(axis, a.ndim)
+                    return _numpy_sum(a, axis, dtype)
+            else:
+                # Fallback for A ordered cases
+                # TODO: Ideally Arrayiterator ought to be able to vectorize
+                # Non-contiguous: ArrayIterator's nested pointer walk does not
+                # vectorize the inner loop, so use the flat nditer walk instead.
+                acc_init = get_accumulator(
+                    as_dtype(get_ret_dtype_if_any(a, dtype)), 0)
+
+                def array_sum_impl(a, axis=None, dtype=None):
+                    check_axis_bounds(a, axis)
+                    check_duplicates(axis, a.ndim)
+                    c = acc_init
+                    for v in np.nditer(a):
+                        c += v.item()
+                    return c
         else:
             def array_sum_impl(a, axis=None, dtype=None):
                 check_axis_bounds(a, axis)
