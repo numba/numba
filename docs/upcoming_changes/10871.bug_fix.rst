@@ -1,0 +1,10 @@
+Fix on-disk cache reuse across different code generation settings.
+------------------------------------------------------------------
+
+The on-disk cache index key now includes the ``NUMBA_OPT``,
+``NUMBA_LOOP_VECTORIZE``, ``NUMBA_SLP_VECTORIZE``, ``NUMBA_DEBUGINFO`` and
+``NUMBA_BOUNDSCHECK`` configuration settings. Previously, functions compiled
+with ``cache=True`` under one value of these settings were silently reused by
+processes running with a different value, e.g. a function cached without
+bounds checking would not raise ``IndexError`` when run with
+``NUMBA_BOUNDSCHECK=1``.
