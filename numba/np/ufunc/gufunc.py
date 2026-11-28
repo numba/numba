@@ -266,6 +266,10 @@ class GUFunc(serialize.ReduceMixin, UfuncBase):
             args += (kwargs.pop("out"),)
 
         if self._num_args_match(*args) is False:
+            if len(args) > self.nargs:
+                msg = (f"Too many arguments for function '{self.__name__}'. "
+                       f"Expected {self.nargs}, got {len(args)}.")
+                raise TypeError(msg)
             # It is not allowed to call a dynamic gufunc without
             # providing all the arguments
             # see: https://github.com/numba/numba/pull/5938#discussion_r506429392  # noqa: E501
