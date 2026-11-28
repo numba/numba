@@ -311,7 +311,7 @@ class BaseContext(object):
         """
         if envname not in module.globals:
             gv = llvmir.GlobalVariable(module, cgutils.voidptr_t, name=envname)
-            gv.linkage = 'common'
+            gv.linkage = 'linkonce'
             gv.initializer = cgutils.get_null_value(gv.type.pointee)
 
         return module.globals[envname]
