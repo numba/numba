@@ -60,6 +60,20 @@ class TestCTypesTypes(TestCase):
         self.assertIn("Cannot convert Numba type '...' to ctypes type",
                       str(raises.exception))
 
+    def test_typeof_ctypes(self):
+        """
+        Test typeof() support for ctypes values and pointers (#10501).
+        """
+        from numba import typeof
+
+        # Primitive ctypes value test
+        val = c_int(42)
+        self.assertEqual(typeof(val), types.intc)
+
+        # Ctypes pointer test
+        ptr = POINTER(c_int)(val)
+        self.assertEqual(typeof(ptr), types.CPointer(types.intc))
+
 
 class TestCTypesUseCases(MemoryLeakMixin, TestCase):
 
