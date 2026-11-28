@@ -394,6 +394,15 @@ extern "C" void NRT_MemInfo_acquire(NRT_MemInfo *mi) {
     mi->refct++;
 }
 
+extern "C" NRT_MemInfo* NRT_MemInfo_from_data(void *data_ptr) {
+    if (!data_ptr) {
+        return NULL;
+    }
+    char *base = static_cast<char*>(data_ptr);
+    base -= sizeof(NRT_MemInfo);
+    return reinterpret_cast<NRT_MemInfo*>(base);
+}
+
 extern "C" void NRT_MemInfo_call_dtor(NRT_MemInfo *mi) {
     NRT_Debug(nrt_debug_print("NRT_MemInfo_call_dtor %p\n", mi));
     if (mi->dtor && !TheMSys.shutting)

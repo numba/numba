@@ -172,6 +172,13 @@ VISIBILITY_HIDDEN
 void NRT_MemInfo_release(NRT_MemInfo* mi);
 
 /*
+ * Compute the MemInfo pointer given a payload pointer returned by
+ * NRT_MemInfo_data().
+ */
+VISIBILITY_HIDDEN
+NRT_MemInfo* NRT_MemInfo_from_data(void *data_ptr);
+
+/*
  * Internal/Compiler API.
  * Invoke the registered destructor of a MemInfo.
  */
