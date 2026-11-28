@@ -132,6 +132,8 @@ _GLOBAL_INT_FOR_TESTING1 = 17
 _GLOBAL_INT_FOR_TESTING2 = 5
 
 TestNamedTuple = namedtuple('TestNamedTuple', ('part0', 'part1'))
+TestNamedTupleArrays = namedtuple('TestNamedTupleArrays',
+                                  ('a_sorted', 'edges', 'one', 'two', 'three'))
 
 
 def null_comparer(a, b):
@@ -2180,6 +2182,101 @@ class TestParfors(TestParforsBase):
                    check_arg_equality=[np.testing.assert_almost_equal,
                                        lambda x, y: x == y])
         self.assertEqual(arr.sum(), 10.0)
+
+    def test_prange_optional_value(self):
+        # Test for issue #10966: an optional value used inside a prange body
+        # must reach the gufunc with its "is None" flag intact.
+        @njit
+        def callee(size):
+            if size < 0:
+                return None
+            return size
+
+        def test_impl(size):
+            n = callee(size)
+            if n is None:
+                return -1.0
+            total = 0
+            for i in prange(4):
+                total += i * n
+            return total
+
+        self.check(test_impl, 4)
+
+    def test_prange_optional_bool_tuple(self):
+        # Test for issue #10966: the optional value is passed to the gufunc
+        # as is.  A payload whose value and data representations differ
+        # (booleans) cannot survive being unpacked by the caller.
+        @njit
+        def callee(gi):
+            if gi.size < 10:
+                return None
+            return (True, False, True, False, True)
+
+        def test_impl(gi):
+            setup = callee(gi)
+            if setup is None:
+                return -1.0
+            total = 0
+            for i in prange(4):
+                if setup[i % 2]:
+                    total += i
+            return total
+
+        gi = np.ones(100, dtype=np.int64)
+        self.check(test_impl, gi)
+
+    def test_prange_optional_tuple(self):
+        # Test for issue #10966: reading a field of an optional tuple inside
+        # a prange body.
+        @njit
+        def callee(gi):
+            if gi.size < 10:
+                return None
+            edges = np.zeros(2, dtype=np.intp)
+            edges[1] = gi.size // 2
+            a = gi.astype(np.float64)
+            return TestNamedTupleArrays(a, edges, a, a, a)
+
+        def test_impl(gi):
+            setup = callee(gi)
+            if setup is None:
+                return -1.0
+            total = 0.0
+            for c in prange(setup.edges.size - 1):
+                for g in range(setup.edges[c], setup.edges[c + 1]):
+                    total += (setup.a_sorted[g] + setup.one[g] +
+                              setup.two[g] + setup.three[g])
+            return total
+
+        gi = np.ones(100, dtype=np.int64)
+        self.check(test_impl, gi)
+
+    def test_prange_optional_tuple_getitem(self):
+        # Test for issue #10966: indexing an optional tuple inside a prange
+        # body.
+        @njit
+        def callee(gi):
+            if gi.size < 10:
+                return None
+            edges = np.zeros(2, dtype=np.intp)
+            edges[1] = gi.size // 2
+            a = gi.astype(np.float64)
+            return (a, edges, a, a, a)
+
+        def test_impl(gi):
+            setup = callee(gi)
+            if setup is None:
+                return -1.0
+            total = 0.0
+            for c in prange(setup[1].size - 1):
+                for g in range(setup[1][c], setup[1][c + 1]):
+                    total += (setup[0][g] + setup[2][g] +
+                              setup[3][g] + setup[4][g])
+            return total
+
+        gi = np.ones(100, dtype=np.int64)
+        self.check(test_impl, gi)
 
     def test_untraced_value_tuple(self):
         # This is a test for issue #6478.
