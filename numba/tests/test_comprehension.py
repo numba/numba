@@ -300,6 +300,17 @@ class TestArrayComprehension(unittest.TestCase):
 
         self.check(comp_with_array_noinline, 5, assert_allocate_list=True)
 
+    def test_array_conversion_after_multiple_loops(self):
+        def multiple_loops(a):
+            data = []
+            for _ in range(1):
+                data.append(a[0])
+            for _ in range(1):
+                data.append(a[-1])
+            return np.array(data)
+
+        self.check(multiple_loops, np.arange(4), assert_allocate_list=True)
+
     def test_comp_nest_with_array(self):
         def comp_nest_with_array(n):
             l = np.array([[i * j for j in range(n)] for i in range(n)])
