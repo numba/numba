@@ -6,30 +6,16 @@ variables:
   TEST_COUNT: 21
 
 jobs:
-# Mac and Linux use the same template with different matrixes
-# NOTE: Mac jobs have been commented out because Numba no longer support osx-64
-#       and Azure does not support osx-arm64.
-# - template: buildscripts/azure/azure-linux-macos.yml
-#   parameters:
-#     name: macOS
-#     vmImage: macos-15
-#     matrix:
-#       py310_np123:
-#         PYTHON: '3.10'
-#         NUMPY: '1.23'
-#         CONDA_ENV: 'azure_ci'
-#         TEST_THREADING: 'tbb'
-#         TEST_START_INDEX: 0
-#       py312_np126:
-#         PYTHON: '3.12'
-#         NUMPY: '1.26'
-#         CONDA_ENV: 'azure_ci'
-#         TEST_START_INDEX: 1
-#       py313_np23:
-#         PYTHON: '3.13'
-#         NUMPY: '2.3'
-#         CONDA_ENV: 'azure_ci'
-#         TEST_START_INDEX: 2
+- template: buildscripts/azure/azure-linux-macos.yml
+  parameters:
+    name: macOS
+    vmImage: macos-latest
+    matrix:
+      py313_np23:
+        PYTHON: '3.13'
+        NUMPY: '2.3'
+        CONDA_ENV: azure_ci
+        TEST_START_INDEX: 0
 
 - template: buildscripts/azure/azure-linux-macos.yml
   parameters:
