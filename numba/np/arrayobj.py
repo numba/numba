@@ -1933,6 +1933,30 @@ def numpy_broadcast_arrays(*args):
     return impl
 
 
+class _DeferredAxisError(ValueError):
+    """Format axis context in Python, returning the public ValueError type."""
+
+    def __new__(cls, axis, ndim):
+        return ValueError(f"axis {axis} is out of bounds for array of "
+                          f"dimension {ndim}")
+
+
+class _DeferredShapeAssignmentError(ValueError):
+    """Format shapes in Python, returning the public base ValueError type."""
+
+    def __new__(cls, src_shapes, index_shape):
+        if len(src_shapes) == 1:
+            source = f"({src_shapes[0]},)"
+        else:
+            source = f"({', '.join(str(x) for x in src_shapes)})"
+        if len(index_shape) == 1:
+            index = f"({index_shape[0]},)"
+        else:
+            index = f"({', '.join(str(x) for x in index_shape)})"
+        return ValueError(f"cannot assign slice of shape {index} from input of "
+                          f"shape {source}")
+
+
 def raise_with_shape_context(src_shapes, index_shape):
     """Targets should implement this if they wish to specialize the error
     handling/messages. The overload implementation takes two tuples as arguments
@@ -1962,17 +1986,7 @@ def ol_raise_with_shape_context_cpu(src_shapes, index_shape):
             isinstance(src_shapes.dtype, types.Integer)):
 
         def impl(src_shapes, index_shape):
-            if len(src_shapes) == 1:
-                shape_str = f"({src_shapes[0]},)"
-            else:
-                shape_str = f"({', '.join([str(x) for x in src_shapes])})"
-            if len(index_shape) == 1:
-                index_str = f"({index_shape[0]},)"
-            else:
-                index_str = f"({', '.join([str(x) for x in index_shape])})"
-            msg = (f"cannot assign slice of shape {index_str} from input of "
-                   f"shape {shape_str}")
-            raise ValueError(msg)
+            raise _DeferredShapeAssignmentError(src_shapes, index_shape)
         return impl
 
 
@@ -5249,9 +5263,7 @@ def numpy_take(a, indices, axis=None):
                     axis += a.ndim
 
                 if axis < 0 or axis >= a.ndim:
-                    msg = (f"axis {ax} is out of bounds for array "
-                           f"of dimension {a.ndim}")
-                    raise ValueError(msg)
+                    raise _DeferredAxisError(ax, a.ndim)
 
                 shape = tuple_setitem(a.shape, axis, len(indices))
                 out = np.empty(shape, dtype=a.dtype)
