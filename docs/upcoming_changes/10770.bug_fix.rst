@@ -1,0 +1,6 @@
+Support complex types in the CFFI type mapping
+----------------------------------------------
+
+``numba.core.typing.cffi_utils.map_type`` now maps the CFFI complex types
+``float _Complex`` and ``double _Complex`` to ``complex64`` and ``complex128``
+respectively, instead of raising a ``TypeError``.
