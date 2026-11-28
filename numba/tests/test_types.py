@@ -246,6 +246,16 @@ class TestTypes(TestCase):
             self.assertTrue(isinstance(l_int, types.List))
             self.assertTrue(isinstance(l_int[0], type(listty)))
 
+    def test_namedtuple_instance_class(self):
+        self.assertEqual(
+            types.BaseNamedTuple.__annotations__['instance_class'],
+            type[tuple],
+        )
+        for ty in (types.NamedUniTuple(types.intp, 2, Point),
+                   types.NamedTuple((types.intp, types.float64), Point)):
+            self.assertIsInstance(ty, types.BaseNamedTuple)
+            self.assertIs(ty.instance_class, Point)
+
     def test_function_incompatible_templates(self):
         # issue 4345
         def func_stub():

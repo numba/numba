@@ -377,6 +377,8 @@ class StarArgUniTuple(_StarArgTupleMixin, UniTuple):
 
 
 class BaseNamedTuple(BaseTuple):
+    instance_class: type[tuple]
+
     def can_convert_to(self, typingctx, other):
         if not isinstance(other, BaseNamedTuple):
             return

@@ -1,0 +1,6 @@
+Declare instance_class on BaseNamedTuple
+----------------------------------------
+
+``BaseNamedTuple`` now declares ``instance_class`` as ``type[tuple]``,
+allowing static type checkers to recognize the attribute provided by
+its concrete subclasses.
