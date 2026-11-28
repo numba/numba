@@ -774,7 +774,16 @@ class CPUCallConv(BaseCallConv):
         excptr = self._get_excinfo_argument(builder.function)
         builder.store(status.excinfoptr, excptr)
         with builder.if_then(builder.not_(trystatus.in_try)):
-            self._return_errcode_raw(builder, status.code)
+
+            # If the lowering registered an exception cleanup for this
+            # frame, route the error return through it so that owned
+            # references are released (see issue #10783).
+            frame_cleanup = getattr(builder, '_frame_exception_cleanup', None)
+
+            if frame_cleanup is not None:
+                frame_cleanup(status)
+            else:
+                self._return_errcode_raw(builder, status.code)
 
     def _return_errcode_raw(self, builder, code):
         builder.ret(code)
