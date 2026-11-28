@@ -1,5 +1,5 @@
 import abc
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from collections import defaultdict, namedtuple
 from functools import partial
 from copy import copy
@@ -66,18 +66,27 @@ def fallback_context(state, msg):
 
 
 def type_inference_stage(typingctx, targetctx, interp, args, return_type,
-                         locals=None, raise_errors=True):
+                         locals=None, raise_errors=True, warnings=None):
+    """
+    If *warnings* (a WarningsFixer) is given, the warnings raised during
+    typing are stored in it and the caller is responsible for flushing it.
+    Otherwise they are emitted when typing finishes.
+    """
     if locals is None:
         locals = {}
     if len(args) != interp.arg_count:
         raise TypeError("Mismatch number of argument types")
-    warnings = errors.WarningsFixer(errors.NumbaWarning)
+    if warnings is None:
+        warnings = errors.WarningsFixer(errors.NumbaWarning)
+        flush_ctx = warnings
+    else:
+        flush_ctx = nullcontext()
 
     infer = typeinfer.TypeInferer(typingctx, interp, warnings)
     callstack_ctx = typingctx.callstack.register(targetctx.target, infer,
                                                  interp.func_id, args)
     # Setup two contexts: 1) callstack setup/teardown 2) flush warnings
-    with callstack_ctx, warnings:
+    with callstack_ctx, flush_ctx:
         # Seed argument types
         for index, (name, ty) in enumerate(zip(interp.arg_names, args)):
             infer.seed_argument(name, index, ty)
@@ -108,17 +117,41 @@ class BaseTypeInference(FunctionPass):
         """
         Type inference and legalization
         """
+        # Partial type inference runs before dead branch pruning, so it can
+        # type code that is never compiled (e.g. the untaken side of an
+        # ``isinstance`` check). Its warnings are held back until full type
+        # inference and only emitted for statements still in the IR; typing
+        # results are cached, so full inference may not raise them again.
+        deferred = getattr(state, 'partial_typing_warnings', None)
+        if self._raise_errors:
+            warnings = errors.WarningsFixer(errors.NumbaWarning)
+            if deferred is not None:
+                live = {(inst.loc.filename, inst.loc.line)
+                        for blk in state.func_ir.blocks.values()
+                        for inst in blk.body}
+                warnings.extend(deferred,
+                                keep=lambda fname, line: (fname, line) in live)
+                state.partial_typing_warnings = None
+        else:
+            if deferred is None:
+                deferred = errors.WarningsFixer(errors.NumbaWarning)
+                state.partial_typing_warnings = deferred
+            warnings = deferred
+
         with fallback_context(state, 'Function "%s" failed type inference'
                               % (state.func_id.func_name,)):
             # Type inference
-            typemap, return_type, calltypes, errs = type_inference_stage(
-                state.typingctx,
-                state.targetctx,
-                state.func_ir,
-                state.args,
-                state.return_type,
-                state.locals,
-                raise_errors=self._raise_errors)
+            flush_ctx = warnings if self._raise_errors else nullcontext()
+            with flush_ctx:
+                typemap, return_type, calltypes, errs = type_inference_stage(
+                    state.typingctx,
+                    state.targetctx,
+                    state.func_ir,
+                    state.args,
+                    state.return_type,
+                    state.locals,
+                    raise_errors=self._raise_errors,
+                    warnings=warnings)
             state.typemap = typemap
             # save errors in case of partial typing
             state.typing_errors = errs
