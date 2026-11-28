@@ -388,7 +388,19 @@ class TestUFuncs(BasicUFuncTest, TestCase):
                               additional_inputs=additional_inputs)
 
     def test_fmod_ufunc(self):
-        self.basic_ufunc_test(np.fmod)
+        additional_inputs = []
+        for dtype in (np.int8, np.int16, np.int32, np.int64):
+            min_int = np.iinfo(dtype).min
+            a = np.array([-4, 7, -7, 5, min_int, min_int], dtype=dtype)
+            b = np.array([10, -2, -2, 0, -1, 3], dtype=dtype)
+            additional_inputs.append(((a, b), typeof(a)))
+        for dtype in (np.uint8, np.uint32, np.uint64):
+            max_uint = np.iinfo(dtype).max
+            a = np.array([20, max_uint, 5], dtype=dtype)
+            b = np.array([max_uint, 16, 0], dtype=dtype)
+            additional_inputs.append(((a, b), typeof(a)))
+        self.basic_ufunc_test(np.fmod, kinds='ifcu',
+                              additional_inputs=additional_inputs)
 
     def test_abs_ufunc(self, ufunc=np.abs):
         additional_inputs = [
