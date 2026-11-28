@@ -1079,6 +1079,20 @@ def to_scalar_from_0d(x):
             return x.dtype
     return x
 
+def _remove_dels_recursive(blocks):
+    """Remove ir.Del nodes from blocks, including the init_block and loop_body
+    of any nested Parfor. PostProcessor inserts dels into nested parfors via
+    parfor_insert_dels, and the gufunc pipeline lowers those nested parfors
+    sequentially, so any del left in them becomes a top-level del.
+    """
+    remove_dels(blocks)
+    for block in blocks.values():
+        for stmt in block.body:
+            if isinstance(stmt, parfor.Parfor):
+                _remove_dels_recursive({0: stmt.init_block})
+                _remove_dels_recursive(stmt.loop_body)
+
+
 def _create_gufunc_for_parfor_body(
         lowerer,
         parfor,
@@ -1111,7 +1125,7 @@ def _create_gufunc_for_parfor_body(
     # legal parameter names.  If we don't copy then the Vars in the main function also
     # would incorrectly change their name.
     loop_body = copy.copy(parfor.loop_body)
-    remove_dels(loop_body)
+    _remove_dels_recursive(loop_body)
 
     parfor_dim = len(parfor.loop_nests)
     loop_indices = [l.index_variable.name for l in parfor.loop_nests]
