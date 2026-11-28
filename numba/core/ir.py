@@ -180,7 +180,10 @@ class Loc(object):
                 ret.append(_termcolor.highlight(selected[-1]))
 
                 # point at the problem with a caret
-                spaces = count_spaces(selected[-1])
+                if (self.col is not None):
+                    spaces = self.col
+                else:
+                    spaces = count_spaces(selected[-1])
                 ret.append(' '*(spaces) + _termcolor.indicate("^"))
 
         # if in the REPL source may not be available
