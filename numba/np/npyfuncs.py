@@ -125,6 +125,13 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
 # right now (and in any case, it won't be handled by these functions
 # either)
 
+def _is_min_int_div_overflow(context, builder, num, den, ty):
+    MINUS_ONE = context.get_constant(ty, -1)
+    MIN_INT = context.get_constant(ty, 1 << (den.type.width - 1))
+    return builder.and_(builder.icmp_unsigned('==', MINUS_ONE, den),
+                        builder.icmp_unsigned('==', MIN_INT, num))
+
+
 def np_int_sdiv_impl(context, builder, sig, args):
     # based on the actual code in NumPy loops.c.src for signed integer types
     _check_arity_and_homogeneity(sig, args, 2)
@@ -134,15 +141,15 @@ def np_int_sdiv_impl(context, builder, sig, args):
 
     ZERO = context.get_constant(ty, 0)
     MINUS_ONE = context.get_constant(ty, -1)
-    MIN_INT = context.get_constant(ty, 1 << (den.type.width-1))
+    MIN_INT = context.get_constant(ty, 1 << (den.type.width - 1))
     den_is_zero = builder.icmp_unsigned('==', ZERO, den)
-    den_is_minus_one = builder.icmp_unsigned('==', MINUS_ONE, den)
-    num_is_min_int = builder.icmp_unsigned('==', MIN_INT, num)
-    could_cause_sigfpe = builder.and_(den_is_minus_one, num_is_min_int)
-    force_zero = builder.or_(den_is_zero, could_cause_sigfpe)
-    with builder.if_else(force_zero, likely=False) as (then, otherwise):
+    is_min_int_div_overflow = _is_min_int_div_overflow(
+        context, builder, num, den, ty)
+    force_exceptional = builder.or_(den_is_zero, is_min_int_div_overflow)
+    with builder.if_else(force_exceptional, likely=False) as (then, otherwise):
         with then:
             bb_then = builder.basic_block
+            result_then = builder.select(den_is_zero, ZERO, MIN_INT)
         with otherwise:
             bb_otherwise = builder.basic_block
             div = builder.sdiv(num, den)
@@ -156,7 +163,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
             result_otherwise = builder.add(div, fix_value)
 
     result = builder.phi(ZERO.type)
-    result.add_incoming(ZERO, bb_then)
+    result.add_incoming(result_then, bb_then)
     result.add_incoming(result_otherwise, bb_otherwise)
 
     return result
@@ -170,11 +177,13 @@ def np_int_srem_impl(context, builder, sig, args):
     ty = sig.args[0]  # any arg type will do, homogeneous
 
     ZERO = context.get_constant(ty, 0)
+    is_overflow = _is_min_int_div_overflow(context, builder, num, den, ty)
     den_not_zero = builder.icmp_unsigned('!=', ZERO, den)
+    safe_to_remainder = builder.and_(den_not_zero, builder.not_(is_overflow))
     bb_no_if = builder.basic_block
-    with cgutils.if_unlikely(builder, den_not_zero):
+    with cgutils.if_unlikely(builder, safe_to_remainder):
         bb_if = builder.basic_block
-        mod = builder.srem(num,den)
+        mod = builder.srem(num, den)
         num_gt_zero = builder.icmp_signed('>', num, ZERO)
         den_gt_zero = builder.icmp_signed('>', den, ZERO)
         not_same_sign = builder.xor(num_gt_zero, den_gt_zero)
