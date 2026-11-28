@@ -88,3 +88,32 @@ class TestViewIntFloat(TestCase):
     def test_exceptions64(self):
         for pair in ((np.int32, np.int64), (np.int64, np.int32)):
             self.do_testing_exceptions(pair)
+
+
+class TestBitCount(TestCase):
+    """Tests the 'bit_count' method on integers and booleans."""
+
+    def test_int_bit_count(self):
+        @njit
+        def impl(x):
+            return x.bit_count()
+
+        dtypes = (np.int8, np.uint8, np.int16, np.uint16,
+                  np.int32, np.uint32, np.int64, np.uint64)
+        for dt in dtypes:
+            info = np.iinfo(dt)
+            values = [0, 1, 2, 5, 127, info.max]
+            if info.min < 0:
+                values += [-1, -2, info.min]
+            for v in values:
+                x = dt(v)
+                expected = bin(abs(int(x))).count('1')
+                self.assertEqual(impl(x), expected)
+
+    def test_boolean_bit_count(self):
+        @njit
+        def impl(x):
+            return x.bit_count()
+
+        self.assertEqual(impl(True), 1)
+        self.assertEqual(impl(False), 0)
