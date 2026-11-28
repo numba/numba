@@ -7,7 +7,7 @@ import numpy as np
 from contextlib import contextmanager
 
 import numba
-from numba import njit, stencil
+from numba import jit, njit, stencil
 from numba.core import types, registry
 from numba.core.compiler import compile_extra, Flags
 from numba.core.cpu import ParallelOptions
@@ -322,6 +322,290 @@ class TestStencil(TestStencilBase):
 
         n = 5
         self.check(test_impl_seq, test_seq, n)
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_constants(self):
+        """Resolve whole argument names from each supported constant form."""
+        def make_impl(names):
+            def impl(a, b):
+                def kernel(x, weights):
+                    return x[-1] * weights[0] + x[0] * weights[1]
+                return stencil(kernel, standard_indexing=names)(a, b)
+            return impl
+
+        a = np.arange(10, dtype=np.int64)
+        b = np.array([3, 7], dtype=np.int64)
+        expected = np.zeros_like(a)
+        expected[1:] = a[:-1] * b[0] + a[1:] * b[1]
+        for names in ('weights', ('weights',), ['weights']):
+            for parallel in (False, True):
+                with self.subTest(names=names, parallel=parallel):
+                    impl = jit(parallel=parallel)(make_impl(names))
+                    np.testing.assert_array_equal(impl(a, b), expected)
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_multiple_arrays(self):
+        """Names select auxiliary arrays independently of their shapes."""
+        def impl(a, b, c):
+            def kernel(x, weights, bias):
+                return x[0] * weights[0] + x[1] * weights[1] + bias[0]
+            names = ('weights', 'bias')
+            alias = names
+            return stencil(kernel, standard_indexing=alias)(a, b, c)
+
+        a = np.arange(10, dtype=np.int64)
+        b = np.array([3, 7], dtype=np.int64)
+        c = np.array([5], dtype=np.int64)
+        expected = np.zeros_like(a)
+        expected[:-1] = a[:-1] * b[0] + a[1:] * b[1] + c[0]
+        for parallel in (False, True):
+            with self.subTest(parallel=parallel):
+                compiled = jit(parallel=parallel)(impl)
+                np.testing.assert_array_equal(compiled(a, b, c), expected)
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_dynamic_neighborhood(self):
+        """Static indexing modes must still allow bounds to vary by call."""
+        def impl(a, b):
+            def kernel(x, weights):
+                total = 0
+                for i in range(weights.size):
+                    total += x[i] * weights[i]
+                return total
+            return stencil(kernel, neighborhood=((0, b.size - 1),),
+                           standard_indexing=('weights',))(a, b)
+
+        compiled = jit(parallel=True)(impl)
+        a = np.arange(10, dtype=np.int64)
+        for size in (1, 3, 5):
+            with self.subTest(size=size):
+                b = np.arange(1, size + 1, dtype=np.int64)
+                expected = np.zeros_like(a)
+                for i in range(a.size - b.size + 1):
+                    expected[i] = np.dot(a[i:i + b.size], b)
+                np.testing.assert_array_equal(compiled(a, b), expected)
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_empty(self):
+        """An empty option must leave every argument relatively indexed."""
+        def impl(a, b):
+            def kernel(x, y):
+                return x[0] + y[1]
+            return stencil(kernel, standard_indexing=())(a, b)
+
+        a = np.arange(10, dtype=np.int64)
+        b = a + 3
+        expected = np.zeros_like(a)
+        expected[:-1] = a[:-1] + b[1:]
+        for parallel in (False, True):
+            with self.subTest(parallel=parallel):
+                compiled = jit(parallel=parallel)(impl)
+                np.testing.assert_array_equal(compiled(a, b), expected)
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_invalid(self):
+        """Reject unsupported representations before lowering interprets names.
+
+        Even iterable or empty containers must satisfy the supported type
+        contract; checking only their elements would accept invalid options.
+        """
+        def make_impl(names):
+            def impl(a, b):
+                def kernel(x, weights):
+                    return x[0] + weights[0]
+                return stencil(kernel, standard_indexing=names)(a, b)
+            return impl
+
+        a = np.arange(10, dtype=np.int64)
+        b = np.array([3], dtype=np.int64)
+        invalid_options = (
+            None, True, 1, 1.0, 1j,
+            b'weights', bytearray(b'weights'), memoryview(b'weights'),
+            range(1), {}, {'weights': None}, {'weights': None}.keys(),
+            set(), {'weights'}, frozenset(), frozenset({'weights'}),
+            iter(('weights',)), (name for name in ('weights',)),
+            np.array(['weights']), numba.typed.List(['weights']),
+            (1,), ['weights', 1], (b'weights',),
+            (['weights'],), [['weights']], (('weights',),),
+        )
+        for names in invalid_options:
+            for parallel in (False, True):
+                with self.subTest(names=names, parallel=parallel):
+                    compiled = jit(parallel=parallel)(make_impl(names))
+                    with self.assertRaisesRegex(
+                            NumbaValueError,
+                            'standard_indexing option must be a compile-time'):
+                        compiled(a, b)
+        for names, message in (
+                (('missing',), 'not present in the stencil kernel definition'),
+                (('x',), 'must use relative indexing')):
+            for parallel in (False, True):
+                with self.subTest(names=names, parallel=parallel):
+                    compiled = jit(parallel=parallel)(make_impl(names))
+                    with self.assertRaisesRegex(NumbaValueError, message):
+                        compiled(a, b)
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_subclasses(self):
+        """Subclass hooks must not run while validating compile-time names."""
+        class CustomString(str):
+            pass
+
+        class CustomTuple(tuple):
+            def __iter__(self):
+                raise AssertionError('custom iteration must not run')
+
+        class CustomList(list):
+            def __iter__(self):
+                raise AssertionError('custom iteration must not run')
+
+        def make_impl(names):
+            def impl(a, b):
+                def kernel(x, weights):
+                    return x[0] + weights[0]
+                return stencil(kernel, standard_indexing=names)(a, b)
+            return impl
+
+        a = np.arange(10, dtype=np.int64)
+        b = np.array([3], dtype=np.int64)
+        invalid_options = (
+            CustomString('weights'), CustomTuple(('weights',)),
+            CustomList(['weights']), (CustomString('weights'),),
+            [CustomString('weights')], np.str_('weights'),
+            (np.str_('weights'),),
+        )
+        for names in invalid_options:
+            for parallel in (False, True):
+                with self.subTest(names=names, parallel=parallel):
+                    compiled = jit(parallel=parallel)(make_impl(names))
+                    with self.assertRaisesRegex(
+                            NumbaValueError,
+                            'standard_indexing option must be a compile-time'):
+                        compiled(a, b)
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_runtime_option(self):
+        """Access rewriting cannot depend on names chosen at runtime."""
+        def impl(a, b, names):
+            def kernel(x, weights):
+                return x[0] + weights[0]
+            return stencil(kernel, standard_indexing=names)(a, b)
+
+        a = np.arange(10, dtype=np.int64)
+        b = np.array([3], dtype=np.int64)
+        for parallel in (False, True):
+            with self.subTest(parallel=parallel):
+                compiled = jit(parallel=parallel)(impl)
+                with self.assertRaisesRegex(
+                        NumbaValueError,
+                        'standard_indexing option must be a compile-time'):
+                    compiled(a, b, ('weights',))
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_local_list(self):
+        """Alias-only uses preserve the list constant needed for rewriting."""
+        def impl(a, b):
+            def kernel(x, weights):
+                return x[0] + weights[0]
+            names = ['weights']
+            alias = names
+            another_alias = alias
+            return stencil(kernel, standard_indexing=another_alias)(a, b)
+
+        a = np.arange(10, dtype=np.int64)
+        b = np.array([3], dtype=np.int64)
+        for parallel in (False, True):
+            with self.subTest(parallel=parallel):
+                compiled = jit(parallel=parallel)(impl)
+                np.testing.assert_array_equal(compiled(a, b), a + b[0])
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_immutable_uses(self):
+        """Other uses cannot invalidate immutable names and should work."""
+        def make_impl(names):
+            def impl(a, b):
+                def kernel(x, weights):
+                    return x[0] + weights[0]
+                result = stencil(kernel, standard_indexing=names)(a, b)
+                return result, len(names)
+            return impl
+
+        a = np.arange(10, dtype=np.int64)
+        b = np.array([3], dtype=np.int64)
+        for names in ('weights', ('weights',)):
+            for parallel in (False, True):
+                with self.subTest(names=names, parallel=parallel):
+                    compiled = jit(parallel=parallel)(make_impl(names))
+                    result, count = compiled(a, b)
+                    np.testing.assert_array_equal(result, a + b[0])
+                    self.assertEqual(count, len(names))
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_2d(self):
+        """Absolute auxiliary indices must remain absolute on both axes."""
+        def impl(a, b):
+            def kernel(x, weights):
+                return x[-1, 0] * weights[0, 0] + x[0, 1] * weights[0, 1]
+            return stencil(kernel, standard_indexing=('weights',))(a, b)
+
+        a = np.arange(30, dtype=np.int64).reshape(5, 6)
+        b = np.array([[3, 7]], dtype=np.int64)
+        expected = np.zeros_like(a)
+        expected[1:, :-1] = a[:-1, :-1] * b[0, 0] + a[1:, 1:] * b[0, 1]
+        for parallel in (False, True):
+            with self.subTest(parallel=parallel):
+                compiled = jit(parallel=parallel)(impl)
+                np.testing.assert_array_equal(compiled(a, b), expected)
+
+    @skip_unsupported
+    def test_inline_stencil_standard_indexing_mutated_list(self):
+        """Mutation or escape must not silently change the inferred names."""
+        def setitem(a, b):
+            def kernel(x, weights):
+                return x[0] + weights[0]
+            names = ['weights']
+            alias = names
+            alias[0] = 'x'
+            return stencil(kernel, standard_indexing=names)(a, b)
+
+        def append(a, b):
+            def kernel(x, weights):
+                return x[0] + weights[0]
+            names = ['weights']
+            names.append('x')
+            return stencil(kernel, standard_indexing=names)(a, b)
+
+        def conditional_setitem(a, b):
+            def kernel(x, weights):
+                return x[0] + weights[0]
+            names = ['weights']
+            alias = names
+            another_alias = alias
+            if a[0] == 0:
+                another_alias[0] = 'x'
+            return stencil(kernel, standard_indexing=names)(a, b)
+
+        @jit
+        def mutate(names):
+            names[0] = 'x'
+
+        def escape(a, b):
+            def kernel(x, weights):
+                return x[0] + weights[0]
+            names = ['weights']
+            mutate(names)
+            return stencil(kernel, standard_indexing=names)(a, b)
+
+        a = np.arange(10, dtype=np.int64)
+        b = np.array([3], dtype=np.int64)
+        for impl in (setitem, append, conditional_setitem, escape):
+            for parallel in (False, True):
+                with self.subTest(impl=impl.__name__, parallel=parallel):
+                    compiled = jit(parallel=parallel)(impl)
+                    with self.assertRaisesRegex(
+                            NumbaValueError,
+                            'standard_indexing list must be used only'):
+                        compiled(a, b)
 
     @skip_unsupported
     def test_stencil_multiple_inputs(self):
